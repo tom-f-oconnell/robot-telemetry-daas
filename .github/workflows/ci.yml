@@ -25,7 +25,7 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: pip install ruff
-      - run: ruff check --output-format=github rtdaas tests
+      - run: bash scripts/ci-annotate.sh "ruff check" -- ruff check --output-format=concise rtdaas tests
       - run: bash scripts/ci-annotate.sh "ruff format" -- ruff format --check --diff rtdaas tests
 
   unit:

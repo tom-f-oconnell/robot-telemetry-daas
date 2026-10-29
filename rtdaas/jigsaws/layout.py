@@ -22,7 +22,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd

@@ -18,11 +18,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3-colcon-common-extensions python3-pip python3-numpy \
   && rm -rf /var/lib/apt/lists/*
 
-# avro-cpp from source (static-free, installs to /usr/local)
+# avro-cpp from source (installs to /usr/local). 1.11.3 compiles with -Werror and Boost 1.83 emits a
+# '#warning' about C++14 under C++11, so build as C++17 and leave -Wcpp out of -Werror.
 RUN curl -fsSL "https://archive.apache.org/dist/avro/avro-${AVRO_VERSION}/cpp/avro-cpp-${AVRO_VERSION}.tar.gz" \
       -o /tmp/avro-cpp.tar.gz \
   && mkdir -p /tmp/avro-cpp && tar -xzf /tmp/avro-cpp.tar.gz -C /tmp/avro-cpp --strip-components=1 \
-  && cmake -S /tmp/avro-cpp -B /tmp/avro-cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+  && sed -i 's/-std=c++11/-std=c++17/g; s/CMAKE_CXX_STANDARD 11/CMAKE_CXX_STANDARD 17/' /tmp/avro-cpp/CMakeLists.txt \
+  && cmake -S /tmp/avro-cpp -B /tmp/avro-cpp/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 \
+       -DCMAKE_CXX_FLAGS="-Wno-cpp -Wno-error=cpp" \
   && cmake --build /tmp/avro-cpp/build -j"$(nproc)" \
   && cmake --install /tmp/avro-cpp/build \
   && ldconfig && rm -rf /tmp/avro-cpp /tmp/avro-cpp.tar.gz

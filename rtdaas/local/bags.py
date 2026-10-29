@@ -13,9 +13,10 @@ this module can be imported, and the rest of the local pipeline used, without th
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import pandas as pd
 
@@ -55,7 +56,7 @@ RAW_KEYS: dict[str, list[str]] = {
 
 
 def ns_to_datetime(t_ns: int) -> datetime:
-    return datetime.fromtimestamp(t_ns / NS, tz=timezone.utc)
+    return datetime.fromtimestamp(t_ns / NS, tz=UTC)
 
 
 def stamp_to_datetime(stamp: dict | None) -> datetime | None:

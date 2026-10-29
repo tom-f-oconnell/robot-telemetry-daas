@@ -22,7 +22,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from rtdaas.config import DEFAULT_AVRO_DIR, DEFAULT_MSGS_DIR, DEFAULT_REGISTRY_YML, configure_logging
+from rtdaas.config import (
+    DEFAULT_AVRO_DIR,
+    DEFAULT_MSGS_DIR,
+    DEFAULT_REGISTRY_YML,
+    configure_logging,
+)
 from rtdaas.contracts import avro_gen, compat
 from rtdaas.contracts.msgspec import MsgRegistry
 from rtdaas.contracts.registry import RegistryClient, subject_for_topic

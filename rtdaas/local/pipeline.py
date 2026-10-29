@@ -9,11 +9,10 @@ Spark jobs use, so the SQLite mirror is a faithful small-scale stand-in for the 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
-import numpy as np
 import pandas as pd
 import yaml
 
@@ -65,7 +64,7 @@ FRAME_COLUMNS = ["trial_id", "task", "frame_idx", "t_s", "mean_intensity", "moti
 
 
 def _utcnow() -> pd.Timestamp:
-    return pd.Timestamp(datetime.now(timezone.utc))
+    return pd.Timestamp(datetime.now(UTC))
 
 
 def default_suites() -> list[Path]:
@@ -234,7 +233,7 @@ def run_procedures(store: SqliteStore, jigsaws_dir: Path, pipeline_version: str 
 
 def run_quality(store: SqliteStore, suites: Iterable[Path], partition_value: str | None = None, run_id: str | None = None) -> tuple[str, pd.DataFrame, bool]:
     run_id = run_id or new_run_id()
-    run_ts = datetime.now(timezone.utc)
+    run_ts = datetime.now(UTC)
     adapter = SqliteAdapter(store.conn)
     results = []
     for path in suites:
