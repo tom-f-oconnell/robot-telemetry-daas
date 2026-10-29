@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+ && apt-get install -y --no-install-recommends ca-certificates libgl1 libglib2.0-0 \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 rtdaas \
  && useradd --uid 10001 --gid rtdaas --create-home --shell /usr/sbin/nologin rtdaas
@@ -20,7 +20,8 @@ COPY pyproject.toml README.md ./
 COPY rtdaas ./rtdaas
 COPY contracts ./contracts
 COPY quality ./quality
-RUN pip install "/opt/rtdaas[kafka]" \
+# video extra so `rtdaas-jigsaws synth` (used by scripts/demo.sh) can render videos in this image
+RUN pip install "/opt/rtdaas[kafka,video]" \
  && mkdir -p /data && chown -R rtdaas:rtdaas /data /opt/rtdaas
 
 VOLUME ["/data"]
