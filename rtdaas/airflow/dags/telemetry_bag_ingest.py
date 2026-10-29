@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 RAW_BUCKET = rtdaas_env().get("S3_BUCKET_RAW", "rtdaas-raw")
 # {{ ds }} is YYYY-MM-DD; the landing layout is bags/<robot>/<yyyy>/<mm>/<dd>/<session>.mcap
-BAG_KEY_PATTERN = "bags/*/{{ ds[:4] }}/{{ ds[5:8] }}{{ ds[8:10] }}/*.mcap".replace("{{ ds[5:8] }}", "{{ ds[5:7] }}/")
+BAG_KEY_PATTERN = "bags/*/{{ ds[:4] }}/{{ ds[5:7] }}/{{ ds[8:10] }}/*.mcap"
 
 
 def _verify_sessions_indexed(ds: str, **_) -> int:
