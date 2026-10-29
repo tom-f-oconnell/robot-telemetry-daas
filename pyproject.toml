@@ -40,6 +40,8 @@ spark = [
   "snowflake-connector-python>=3.10",
   "duckdb>=1.1",
   "fastavro>=1.9",
+  "zstandard>=0.22",
+  "lz4>=4.3",
 ]
 video = [
   "opencv-python-headless>=4.9",

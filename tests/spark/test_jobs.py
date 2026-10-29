@@ -49,6 +49,8 @@ def test_kpi_aggregate_on_static_frame(spark):
 
 
 def test_decode_bag_through_spark(spark, tmp_path, msg_registry):
+    from pyspark.sql import functions as F
+
     from rtdaas.contracts.cdr import CdrCodec
     from rtdaas.sim.cli import main as sim_main
     from rtdaas.spark import ddl
