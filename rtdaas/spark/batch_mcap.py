@@ -30,6 +30,7 @@ import os
 import posixpath
 import sys
 from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -45,6 +46,9 @@ from rtdaas.spark.common import (
     rows_as_dicts,
 )
 from rtdaas.spark.decode import decode_bag
+
+if TYPE_CHECKING:  # pyspark is imported lazily at runtime (see build_spark)
+    from pyspark.sql import DataFrame
 
 log = logging.getLogger(__name__)
 
@@ -86,7 +90,7 @@ def bag_glob(input_uri: str, date: dt.date, robot: str | None) -> str:
     return f"{input_uri.rstrip('/')}/{robot or '*'}/{date:%Y}/{date:%m}/{date:%d}/*.mcap"
 
 
-def load_raw(spark, pattern: str, min_partitions: int = 8) -> dict[str, "pyspark.sql.DataFrame"]:  # noqa: F821
+def load_raw(spark, pattern: str, min_partitions: int = 8) -> dict[str, DataFrame]:
     """Decode every bag matching ``pattern`` into one DataFrame per raw table."""
     decoded = spark.sparkContext.binaryFiles(pattern, minPartitions=min_partitions).mapPartitions(decode_partition)
     decoded = decoded.persist()
@@ -274,7 +278,7 @@ def run(spark, settings: Settings, date: dt.date, robot: str | None, input_uri: 
     pattern = bag_glob(input_uri, date, robot)
     log.info("reading bags: %s", pattern)
     frames = load_raw(spark, pattern)
-    for short, df in frames.items():
+    for df in frames.values():
         df.persist()
 
     counts = {}

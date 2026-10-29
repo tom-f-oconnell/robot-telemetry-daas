@@ -15,7 +15,7 @@ from rtdaas.jigsaws.layout import (
     parse_trial_id,
 )
 from rtdaas.jigsaws.synth import generate_dataset
-from rtdaas.jigsaws.video import frame_features, video_info
+from rtdaas.jigsaws.video import VideoReadError, frame_features, video_info
 from rtdaas.metrics.gestures import gesture_metrics
 
 
@@ -71,7 +71,7 @@ def test_transcription_and_labels(dataset):
     kin = label_frames(parse_kinematics(t.kinematics_path), tr)
     first = tr.iloc[0]
     assert kin.loc[kin["frame_idx"] == first["start_frame"] - 1, "gesture"].iloc[0] == first["gesture"]
-    assert kin["gesture"].notna().sum() == sum(int(e - s + 1) for s, e in zip(tr["start_frame"], tr["end_frame"]))
+    assert kin["gesture"].notna().sum() == sum(int(e - s + 1) for s, e in zip(tr["start_frame"], tr["end_frame"], strict=True))
 
 
 def test_frame_features_track_motion(dataset):
@@ -100,5 +100,5 @@ def test_end_to_end_gesture_metrics(dataset):
 
 
 def test_frame_features_missing_file(tmp_path):
-    with pytest.raises(Exception):
+    with pytest.raises(VideoReadError):
         frame_features(tmp_path / "nope.mp4")

@@ -56,7 +56,9 @@ def test_event_and_heartbeat_structure():
 
 
 def test_deterministic_given_seed():
-    dump = lambda m: json.dumps(m, sort_keys=True)  # NaN-safe comparison (ECM has no jaw)
+    def dump(m):  # NaN-safe comparison (ECM has no jaw)
+        return json.dumps(m, sort_keys=True)
+
     a = dump(_run(seconds=1.0, seed=7))
     b = dump(_run(seconds=1.0, seed=7))
     assert a == b

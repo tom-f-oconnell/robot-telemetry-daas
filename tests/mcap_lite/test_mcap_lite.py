@@ -5,7 +5,7 @@ import struct
 import pytest
 
 from rtdaas.mcap_lite import McapWriter, read_messages, read_summary
-from rtdaas.mcap_lite.reader import iter_record_boundaries, read_header
+from rtdaas.mcap_lite.reader import McapFormatError, iter_record_boundaries, read_header
 
 MAGIC = b"\x89MCAP0\r\n"
 
@@ -65,5 +65,5 @@ def test_reads_from_bytes(tmp_path):
 def test_rejects_non_mcap(tmp_path):
     bad = tmp_path / "bad.mcap"
     bad.write_bytes(b"not an mcap file")
-    with pytest.raises(Exception):
+    with pytest.raises(McapFormatError):
         list(read_messages(bad))

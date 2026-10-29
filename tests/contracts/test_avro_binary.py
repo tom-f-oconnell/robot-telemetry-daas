@@ -126,6 +126,6 @@ def test_every_simulator_message_validates_against_its_schema(msg_registry: MsgR
             ab.validate(schemas[kafka_topic], msg)
             env = {"robot_id": "dv-001", "ros_topic": ros_topic, "recv_time_ns": t0, "msg": msg}
             assert ab.decode_pure(envelopes[kafka_topic], ab.encode_pure(envelopes[kafka_topic], env))["msg"]["header"] == msg["header"]
-    for kafka_topic, ros_topic, msg in sim.end(t0 + 41 * 50_000_000):
+    for kafka_topic, _ros_topic, msg in sim.end(t0 + 41 * 50_000_000):
         ab.validate(schemas[kafka_topic], msg)
     assert seen == set(TOPIC_TYPES)

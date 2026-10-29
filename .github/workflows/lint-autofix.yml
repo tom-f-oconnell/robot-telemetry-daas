@@ -1,0 +1,33 @@
+name: lint-autofix
+
+# Manually dispatched: applies ruff's safe autofixes and formatting, then commits the result to
+# the branch it ran on. Useful after large merges; day-to-day, run `make format` locally.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check --fix rtdaas tests || true
+      - run: ruff format rtdaas tests
+      - name: Report what is left
+        run: bash scripts/ci-annotate.sh "ruff remaining" -- ruff check --output-format=concise rtdaas tests || true
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then echo "nothing to fix"; exit 0; fi
+          git add -A
+          git commit -m "style: ruff autofix + format"
+          git push
