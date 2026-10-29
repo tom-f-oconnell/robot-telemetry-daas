@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import re
 
+import pytest
 import yaml
 
-from rtdaas.serving.app import OPENAPI_PATH, documented_routes
+pytest.importorskip("starlette", reason="serving tests need the 'api' extra")
+
+from rtdaas.serving.app import OPENAPI_PATH, documented_routes  # noqa: E402
 
 
 def test_health(client):

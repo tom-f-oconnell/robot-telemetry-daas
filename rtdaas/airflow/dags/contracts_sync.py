@@ -19,10 +19,15 @@ from airflow.decorators import task
 from airflow.operators.bash import BashOperator
 
 try:
-    from rtdaas.airflow.dags._common import DEFAULT_ARGS, RTDAAS_ROOT, TAGS, notify_failure, rtdaas_env
+    from rtdaas.airflow.dags._common import (
+        DEFAULT_ARGS,
+        RTDAAS_ROOT,
+        TAGS,
+        notify_failure,
+        rtdaas_env,
+    )
 except ImportError:  # plain dags folder (no rtdaas package on the path)
     from _common import DEFAULT_ARGS, RTDAAS_ROOT, TAGS, notify_failure, rtdaas_env
-
 log = logging.getLogger(__name__)
 
 AVRO_DIR = f"{RTDAAS_ROOT}/contracts/avro"

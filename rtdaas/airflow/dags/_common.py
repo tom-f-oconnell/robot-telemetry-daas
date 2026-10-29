@@ -127,7 +127,9 @@ def _k8s_name(task_id: str) -> str:
 def spark_task(task_id: str, app_file: str, args: list[str], executors: int = 2, **kwargs):
     """Operator running ``rtdaas/spark/<app_file>`` with ``args`` in the configured mode."""
     if spark_mode() == "k8s":
-        from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import SparkKubernetesOperator
+        from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import (
+            SparkKubernetesOperator,
+        )
 
         return SparkKubernetesOperator(
             task_id=task_id,
@@ -157,7 +159,9 @@ def spark_task_mapped(task_id: str, app_file: str, arg_lists, executors: int = 2
     """Dynamically mapped variant: one task instance per element of ``arg_lists`` (XCom)."""
     if spark_mode() == "k8s":
         from airflow.decorators import task
-        from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import SparkKubernetesOperator
+        from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import (
+            SparkKubernetesOperator,
+        )
 
         @task(task_id=f"{task_id}_specs")
         def specs(lists: list[list[str]]) -> list[dict]:

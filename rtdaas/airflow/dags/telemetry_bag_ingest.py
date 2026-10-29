@@ -15,11 +15,26 @@ from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
 
 try:
     from rtdaas.airflow.dags._common import (
-        DEFAULT_ARGS, S3_CONN_ID, TAGS, es_doc_count, notify_failure, rtdaas_env, spark_task, suite_path,
+        DEFAULT_ARGS,
+        S3_CONN_ID,
+        TAGS,
+        es_doc_count,
+        notify_failure,
+        rtdaas_env,
+        spark_task,
+        suite_path,
     )
 except ImportError:  # plain dags folder (no rtdaas package on the path)
-    from _common import DEFAULT_ARGS, S3_CONN_ID, TAGS, es_doc_count, notify_failure, rtdaas_env, spark_task, suite_path
-
+    from _common import (
+        DEFAULT_ARGS,
+        S3_CONN_ID,
+        TAGS,
+        es_doc_count,
+        notify_failure,
+        rtdaas_env,
+        spark_task,
+        suite_path,
+    )
 log = logging.getLogger(__name__)
 
 RAW_BUCKET = rtdaas_env().get("S3_BUCKET_RAW", "rtdaas-raw")

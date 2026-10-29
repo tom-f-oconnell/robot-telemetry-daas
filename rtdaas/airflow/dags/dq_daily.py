@@ -18,11 +18,22 @@ from airflow.utils.trigger_rule import TriggerRule
 
 try:
     from rtdaas.airflow.dags._common import (
-        DEFAULT_ARGS, TAGS, notify_failure, spark_task, spark_task_mapped, suite_path,
+        DEFAULT_ARGS,
+        TAGS,
+        notify_failure,
+        spark_task,
+        spark_task_mapped,
+        suite_path,
     )
 except ImportError:
-    from _common import DEFAULT_ARGS, TAGS, notify_failure, spark_task, spark_task_mapped, suite_path
-
+    from _common import (
+        DEFAULT_ARGS,
+        TAGS,
+        notify_failure,
+        spark_task,
+        spark_task_mapped,
+        suite_path,
+    )
 SUITES = ("telemetry.yml", "procedures.yml", "streaming.yml")
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("starlette", reason="serving tests need the 'api' extra")
+
 
 @pytest.fixture(scope="session")
 def fixture_db(tmp_path_factory):

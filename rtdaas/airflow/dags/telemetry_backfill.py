@@ -17,12 +17,24 @@ from airflow.utils.trigger_rule import TriggerRule
 
 try:
     from rtdaas.airflow.dags._common import (
-        DEFAULT_ARGS, TAGS, day_range, notify_failure, spark_task, spark_task_mapped, suite_path,
+        DEFAULT_ARGS,
+        TAGS,
+        day_range,
+        notify_failure,
+        spark_task,
+        spark_task_mapped,
+        suite_path,
     )
 except ImportError:
-    from _common import DEFAULT_ARGS, TAGS, day_range, notify_failure, spark_task, spark_task_mapped, suite_path
-
-
+    from _common import (
+        DEFAULT_ARGS,
+        TAGS,
+        day_range,
+        notify_failure,
+        spark_task,
+        spark_task_mapped,
+        suite_path,
+    )
 with DAG(
     dag_id="telemetry_backfill",
     description="Reprocess bags for a date range: batch_mcap + quality gate per date, then one publish.",
