@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential cmake git curl ca-certificates pkg-config \
       librdkafka-dev libcurl4-openssl-dev nlohmann-json3-dev libyaml-cpp-dev \
-      libboost-filesystem-dev libboost-iostreams-dev libboost-program-options-dev libboost-system-dev \
+      libboost-filesystem-dev libboost-iostreams-dev libboost-program-options-dev libboost-regex-dev libboost-system-dev \
       libsnappy-dev zlib1g-dev \
       ros-jazzy-rosbag2-cpp ros-jazzy-rosidl-typesupport-introspection-cpp ros-jazzy-rmw-cyclonedds-cpp \
       ros-jazzy-sensor-msgs ros-jazzy-geometry-msgs ros-jazzy-std-msgs \
@@ -41,7 +41,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CYCLONEDDS_URI=file:///config/cyclonedds.xml
 RUN apt-get update && apt-get install -y --no-install-recommends \
       librdkafka++1 librdkafka1 libcurl4 libyaml-cpp0.8 \
-      libboost-filesystem1.83.0 libboost-iostreams1.83.0 libboost-program-options1.83.0 libboost-system1.83.0 \
+      libboost-filesystem1.83.0 libboost-iostreams1.83.0 libboost-program-options1.83.0 libboost-regex1.83.0 libboost-system1.83.0 \
       libsnappy1v5 \
       ros-jazzy-rosbag2-cpp ros-jazzy-rosidl-typesupport-introspection-cpp ros-jazzy-rmw-cyclonedds-cpp \
       ros-jazzy-sensor-msgs ros-jazzy-geometry-msgs ros-jazzy-std-msgs python3-numpy \
