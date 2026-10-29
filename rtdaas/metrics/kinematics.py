@@ -49,8 +49,16 @@ def _to_ns(ts: pd.Series | np.ndarray | list) -> np.ndarray:
 
 
 def _ts_seconds(ts: pd.Series) -> np.ndarray:
-    """UTC timestamps -> float seconds since epoch."""
-    return _to_ns(ts) / 1e9
+    """UTC timestamps -> float seconds relative to the first sample.
+
+    Differences are taken on int64 nanoseconds before converting to float: float64 seconds
+    since the epoch only resolve ~0.2 us at 1.7e9 s, which would put ~1e-5 relative error on
+    50 Hz finite differences.
+    """
+    ns = _to_ns(ts)
+    if len(ns) == 0:
+        return ns.astype(np.float64)
+    return (ns - ns[0]) / 1e9
 
 
 def _stamp_ns(t: pd.Timestamp) -> int:

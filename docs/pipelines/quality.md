@@ -24,7 +24,7 @@ All checks are YAML suites under `quality/checks/`, evaluated by `rtdaas.quality
 | `sample_rate` | `ts_column`, `group_by`, `expected_hz`, `tolerance_fraction` | median rate per group within tolerance |
 | `schema_match` | `expected: spec` | all spec columns present (extra columns are reported, not failed) |
 | `freshness` | `ts_column`, `max_age_hours` | max(ts) within the window |
-| `sql` | `query` with `{table}`, `op`, `threshold` | scalar result satisfies the comparison |
+| `sql` | `query` with `{table}` and optional `{partition}` placeholders, `op`, `threshold` | scalar result satisfies the comparison (the query decides its own partition filter) |
 
 Each check has `severity: blocking | warning`. Results are rows in `dq.check_results`
 (`run_id, suite, table_name, check_name, severity, status, observed, threshold, partition_value,
