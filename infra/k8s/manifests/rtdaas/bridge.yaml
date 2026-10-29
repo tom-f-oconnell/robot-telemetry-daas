@@ -1,0 +1,107 @@
+# ROS 2 -> Kafka bridge for a real (or simulated) dVRK robot. The bridge must share
+# a DDS domain with the robot's ROS 2 nodes. Two supported layouts:
+#   1. Robot ROS 2 stack runs inside the cluster (e.g. the dvrk sim pod): pod network
+#      is fine; CycloneDDS is configured below to use the pod's interface and
+#      multicast-free peer discovery via ROS_STATIC_PEERS-style peer list.
+#   2. Robot on a physical host: run the bridge with hostNetwork: true on a node that
+#      can reach the robot's subnet, and add the robot host to the peers list.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rtdaas-bridge-config
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/part-of: rtdaas
+data:
+  # Topic mapping consumed by `kafka_bridge --ros-args --params-file /config/bridge.yaml`.
+  bridge.yaml: |
+    kafka_bridge:
+      ros__parameters:
+        robot_id: dv-001
+        kafka_bootstrap: rtdaas-kafka-bootstrap.kafka.svc.cluster.local:9092
+        schema_registry_url: http://apicurio.rtdaas.svc.cluster.local:8080/apis/ccompat/v7
+        config_file: /config/topics.yaml
+        flush_interval_ms: 500
+        queue_max_messages: 100000
+  topics.yaml: |
+    topics:
+      - { ros_topic: /dv-001/PSM1/measured_js,        kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
+      - { ros_topic: /dv-001/PSM2/measured_js,        kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
+      - { ros_topic: /dv-001/ECM/measured_js,         kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
+      - { ros_topic: /dv-001/PSM1/rtdaas/tool_pose,   kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
+      - { ros_topic: /dv-001/PSM2/rtdaas/tool_pose,   kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
+      - { ros_topic: /dv-001/ECM/rtdaas/tool_pose,    kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
+      - { ros_topic: /dv-001/rtdaas/events,           kafka_topic: rtdaas.telemetry.events,       type: rtdaas_msgs/msg/SystemEvent, qos: reliable }
+      - { ros_topic: /dv-001/rtdaas/heartbeat,        kafka_topic: rtdaas.telemetry.heartbeat,    type: rtdaas_msgs/msg/Heartbeat,   qos: reliable }
+  # CycloneDDS: no multicast on most CNIs, so discovery uses an explicit peer list.
+  cyclonedds.xml: |
+    <?xml version="1.0" encoding="UTF-8" ?>
+    <CycloneDDS xmlns="https://cdds.io/config">
+      <Domain Id="any">
+        <General>
+          <Interfaces>
+            <NetworkInterface autodetermine="true" priority="default" multicast="false"/>
+          </Interfaces>
+          <AllowMulticast>false</AllowMulticast>
+        </General>
+        <Discovery>
+          <ParticipantIndex>auto</ParticipantIndex>
+          <MaxAutoParticipantIndex>64</MaxAutoParticipantIndex>
+          <Peers>
+            <!-- Add the robot / dvrk-sim pod or host addresses here. -->
+            <Peer address="dvrk-sim.rtdaas.svc.cluster.local"/>
+          </Peers>
+        </Discovery>
+      </Domain>
+    </CycloneDDS>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rtdaas-bridge
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/name: rtdaas-bridge
+    app.kubernetes.io/part-of: rtdaas
+spec:
+  # One bridge per robot; scale by adding a Deployment per robot_id (or a
+  # StatefulSet with per-ordinal robot ids). 0 until a ROS 2 source exists.
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rtdaas-bridge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rtdaas-bridge
+        app.kubernetes.io/part-of: rtdaas
+    spec:
+      # hostNetwork: true   # uncomment for layout 2 (robot on a physical host)
+      containers:
+        - name: bridge
+          image: ghcr.io/OWNER/rtdaas-bridge:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: RMW_IMPLEMENTATION
+              value: rmw_cyclonedds_cpp
+            - name: CYCLONEDDS_URI
+              value: file:///config/cyclonedds.xml
+            - name: ROS_DOMAIN_ID
+              value: "0"
+          envFrom:
+            - configMapRef:
+                name: rtdaas-config
+            - configMapRef:
+                name: rtdaas-env-overlay
+                optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: config
+          configMap:
+            name: rtdaas-bridge-config

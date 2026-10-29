@@ -1,0 +1,16 @@
+#!/bin/bash
+# Minimal first-boot prep; everything else is done by Ansible.
+set -euxo pipefail
+hostnamectl set-hostname "${hostname}"
+echo "127.0.1.1 ${hostname}" >> /etc/hosts
+swapoff -a || true
+sed -i '/\sswap\s/d' /etc/fstab
+cat >/etc/sysctl.d/99-rtdaas.conf <<'EOF'
+fs.inotify.max_user_instances = 8192
+fs.inotify.max_user_watches = 1048576
+net.ipv4.ip_forward = 1
+vm.max_map_count = 262144
+EOF
+sysctl --system
+apt-get update -y
+DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-apt curl open-iscsi nfs-common

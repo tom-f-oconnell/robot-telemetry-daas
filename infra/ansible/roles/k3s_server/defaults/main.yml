@@ -1,0 +1,5 @@
+---
+k3s_version: "v1.31.2+k3s1"
+k3s_server_args: "--disable traefik --write-kubeconfig-mode 644"
+k3s_node_ip: "{{ ansible_default_ipv4.address }}"
+local_artifacts_dir: "{{ playbook_dir }}/artifacts"

@@ -1,0 +1,75 @@
+site_name: robot-telemetry-daas
+site_description: Robot telemetry Data-as-a-Service — ROS 2 → Kafka/Spark/Airflow → Iceberg/Elasticsearch/Snowflake
+repo_url: https://github.com/tom-f-oconnell/robot-telemetry-daas
+docs_dir: docs
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - toc.integrate
+  palette:
+    - scheme: default
+      primary: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - scheme: slate
+      primary: deep purple
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+nav:
+  - Overview: index.md
+  - Architecture:
+      - System design: architecture/overview.md
+      - Engineering spec: architecture/spec.md
+      - Data contracts: architecture/data-contracts.md
+      - Data products & catalog: architecture/data-products.md
+  - Pipelines:
+      - Streaming KPIs: pipelines/streaming.md
+      - Batch bag ingestion: pipelines/batch-bags.md
+      - JIGSAWS kinematics + video: pipelines/jigsaws.md
+      - Quality gates: pipelines/quality.md
+      - Publishing to Snowflake: pipelines/publish.md
+  - Serving:
+      - Data API: serving/api.md
+      - Web UI: serving/ui.md
+  - Infrastructure:
+      - Local (docker compose): infra/compose.md
+      - Multi-node (Terraform + Ansible + k3s): infra/kubernetes.md
+      - CI/CD: infra/cicd.md
+      - ROS 2 bridge & dVRK simulation: infra/ros2.md
+  - Runbooks:
+      - Backfill & reprocess: runbooks/backfill.md
+      - Schema change: runbooks/schema-change.md
+      - Streaming job incident: runbooks/streaming-incident.md
+  - Development:
+      - Developer guide: dev/guide.md
+      - Verification status: dev/verification.md
+  - ADRs:
+      - adr/0001-pure-python-core.md
+      - adr/0002-ros-msgs-as-contracts.md
+      - adr/0003-wire-format-and-registry.md
+      - adr/0004-iceberg-lakehouse.md
+      - adr/0005-batch-wins-idempotent-reprocessing.md
+      - adr/0006-streaming-approximations.md
+      - adr/0007-serving-stores.md
+      - adr/0008-k3s-argocd-on-vms.md
+      - adr/0009-starlette-api.md
+      - adr/0010-mcap-lite-and-cdr.md
+      - adr/0011-quality-gates-as-yaml.md

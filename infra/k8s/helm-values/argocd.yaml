@@ -1,0 +1,60 @@
+# argo/argo-cd chart 7.6.x values (installed by Ansible roles/argocd).
+global:
+  domain: argocd.rtdaas.local
+
+configs:
+  params:
+    # TLS is terminated by ingress-nginx (or port-forward in dev); run the API server plain.
+    server.insecure: true
+  cm:
+    timeout.reconciliation: 120s
+    # Kustomize + Helm multi-source apps are used in apps/*.yaml.
+    kustomize.buildOptions: --enable-helm
+    resource.customizations.ignoreDifferences.apps_Deployment: |
+      jsonPointers:
+        - /spec/replicas
+  repositories:
+    rtdaas:
+      url: https://github.com/<owner>/robot-telemetry-daas.git
+      type: git
+    strimzi:
+      url: quay.io/strimzi-helm
+      type: helm
+      name: strimzi
+      enableOCI: "true"
+
+server:
+  replicas: 1
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: argocd.rtdaas.local
+    tls: false
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+controller:
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 1536Mi }
+
+repoServer:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+
+redis:
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+applicationSet:
+  enabled: true
+
+notifications:
+  enabled: false
+
+dex:
+  enabled: false

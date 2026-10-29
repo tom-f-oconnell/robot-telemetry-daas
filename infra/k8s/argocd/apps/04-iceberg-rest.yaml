@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: iceberg-rest
+  namespace: argocd
+  annotations:
+    # Same wave as `rtdaas`: the catalog reads S3 credentials from rtdaas-secrets
+    # (manifests/rtdaas). The pod sits in CreateContainerConfigError until the
+    # secret exists and then starts on its own.
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<owner>/robot-telemetry-daas.git
+    targetRevision: main
+    path: infra/k8s/manifests/iceberg-rest
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rtdaas
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

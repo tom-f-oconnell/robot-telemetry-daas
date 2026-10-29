@@ -1,0 +1,18 @@
+# This is a reference copy of the template Terraform renders into hosts.ini
+# (see infra/terraform/modules/*/templates/inventory.ini.tftpl). hosts.ini is
+# generated and git-ignored.
+[k3s_server]
+${server_name} ansible_host=${server_ip}
+
+[k3s_agent]
+%{ for a in agents ~}
+${a.name} ansible_host=${a.ip}
+%{ endfor ~}
+
+[k3s_cluster:children]
+k3s_server
+k3s_agent
+
+[all:vars]
+ansible_user=${ssh_user}
+ansible_python_interpreter=/usr/bin/python3

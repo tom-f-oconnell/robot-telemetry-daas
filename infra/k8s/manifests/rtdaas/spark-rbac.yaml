@@ -1,0 +1,67 @@
+# Service account used by the streaming SparkApplication driver (the spark-operator
+# chart creates `spark-operator-spark` in each job namespace; this one is explicit
+# so the manifest does not depend on chart defaults) and the Role that lets Airflow's
+# `airflow-worker` service account create/watch SparkApplication CRs in this namespace
+# (referenced from helm-values/airflow.yaml).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rtdaas-spark
+  namespace: rtdaas
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rtdaas-spark-driver
+  namespace: rtdaas
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete", "deletecollection", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods/log", "pods/status"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rtdaas-spark-driver
+  namespace: rtdaas
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rtdaas-spark-driver
+subjects:
+  - kind: ServiceAccount
+    name: rtdaas-spark
+    namespace: rtdaas
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: airflow-sparkapplications
+  namespace: rtdaas
+rules:
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications", "sparkapplications/status"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: airflow-sparkapplications
+  namespace: rtdaas
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: airflow-sparkapplications
+subjects:
+  - kind: ServiceAccount
+    name: airflow-worker
+    namespace: rtdaas
+  - kind: ServiceAccount
+    name: airflow
+    namespace: rtdaas

@@ -1,0 +1,84 @@
+# Long-running Structured Streaming job (spec §5.1), managed by the Kubeflow
+# spark-operator. The image bakes the Iceberg/Kafka/Avro/S3A jars, so no
+# `spark.jars.packages` resolution happens at submit time.
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: streaming-kpis
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/name: streaming-kpis
+    app.kubernetes.io/part-of: rtdaas
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: ghcr.io/OWNER/rtdaas-spark:latest
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: local:///opt/rtdaas/rtdaas/spark/streaming_kpis.py
+  arguments:
+    - --trigger
+    - 30 seconds
+  sparkVersion: 3.5.3
+  restartPolicy:
+    type: Always
+    onFailureRetries: 1000
+    onFailureRetryInterval: 30
+    onSubmissionFailureRetries: 10
+    onSubmissionFailureRetryInterval: 30
+  sparkConf:
+    spark.sql.session.timeZone: UTC
+    spark.sql.shuffle.partitions: "24"
+    spark.sql.streaming.metricsEnabled: "true"
+    spark.kubernetes.driver.reusePersistentVolumeClaim: "true"
+    spark.ui.prometheus.enabled: "true"
+    spark.metrics.conf.*.sink.prometheusServlet.class: org.apache.spark.metrics.sink.PrometheusServlet
+    spark.metrics.conf.*.sink.prometheusServlet.path: /metrics/prometheus
+  hadoopConf:
+    fs.s3a.path.style.access: "true"
+    fs.s3a.connection.ssl.enabled: "false"
+  driver:
+    cores: 1
+    coreLimit: "1200m"
+    memory: 1500m
+    serviceAccount: rtdaas-spark
+    labels:
+      app.kubernetes.io/name: streaming-kpis
+      app.kubernetes.io/component: driver
+    envFrom:
+      - configMapRef:
+          name: rtdaas-config
+      - configMapRef:
+          name: rtdaas-env-overlay
+          optional: true
+      - secretRef:
+          name: rtdaas-secrets
+    securityContext:
+      runAsUser: 185
+      runAsNonRoot: true
+  executor:
+    cores: 1
+    instances: 2
+    memory: 2g
+    labels:
+      app.kubernetes.io/name: streaming-kpis
+      app.kubernetes.io/component: executor
+    envFrom:
+      - configMapRef:
+          name: rtdaas-config
+      - configMapRef:
+          name: rtdaas-env-overlay
+          optional: true
+      - secretRef:
+          name: rtdaas-secrets
+    securityContext:
+      runAsUser: 185
+      runAsNonRoot: true
+  dynamicAllocation:
+    enabled: false
+  monitoring:
+    exposeDriverMetrics: true
+    exposeExecutorMetrics: true
+    prometheus:
+      jmxExporterJar: /prometheus/jmx_prometheus_javaagent-0.11.0.jar
+      port: 8090

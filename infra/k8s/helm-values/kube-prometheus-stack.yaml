@@ -1,0 +1,60 @@
+# prometheus-community/kube-prometheus-stack 65.x — small footprint for a 4-node k3s cluster.
+fullnameOverride: kps
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    # Pick up ServiceMonitors/PodMonitors from every namespace, regardless of the
+    # `release` label (rtdaas ServiceMonitor lives in the rtdaas namespace).
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 250m, memory: 1Gi }
+      limits: { memory: 2Gi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 30Gi
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+grafana:
+  enabled: true
+  adminPassword: admin
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.rtdaas.local
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+# k3s has no separate kube-controller-manager / scheduler / etcd endpoints to scrape.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true

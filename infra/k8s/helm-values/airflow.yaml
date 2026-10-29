@@ -1,0 +1,161 @@
+# apache-airflow/airflow chart 1.15.x values for the rtdaas namespace.
+# DAGs are git-synced from this repository; the image carries the rtdaas package.
+airflowVersion: "2.10.3"
+defaultAirflowRepository: ghcr.io/<owner>/rtdaas-airflow
+defaultAirflowTag: latest
+images:
+  airflow:
+    repository: ghcr.io/<owner>/rtdaas-airflow
+    tag: latest
+    pullPolicy: Always
+
+executor: KubernetesExecutor
+
+createUserJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+migrateDatabaseJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+
+# Admin user for the demo (change in real deployments).
+webserver:
+  defaultUser:
+    enabled: true
+    role: Admin
+    username: airflow
+    email: admin@example.com
+    firstName: admin
+    lastName: user
+    password: airflow
+  service:
+    type: ClusterIP
+  resources:
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { memory: 2Gi }
+
+ingress:
+  web:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - name: airflow.rtdaas.local
+
+scheduler:
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { memory: 1536Mi }
+
+triggerer:
+  enabled: true
+
+workers:
+  # KubernetesExecutor: pods are created per task from this template.
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }
+  serviceAccount:
+    create: true
+    name: airflow-worker
+
+dags:
+  gitSync:
+    enabled: true
+    repo: https://github.com/<owner>/robot-telemetry-daas.git
+    branch: main
+    subPath: rtdaas/airflow/dags
+    period: 60s
+    depth: 1
+
+logs:
+  persistence:
+    enabled: false
+
+# Metadata DB: chart-managed PostgreSQL for the demo; point `data.metadataConnection`
+# at RDS/CloudSQL in production.
+postgresql:
+  enabled: true
+  primary:
+    persistence:
+      size: 20Gi
+
+config:
+  core:
+    load_examples: "False"
+    default_timezone: utc
+  api:
+    auth_backends: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+  webserver:
+    expose_config: "True"
+  kubernetes_executor:
+    namespace: rtdaas
+    delete_worker_pods: "True"
+  scheduler:
+    min_file_process_interval: "30"
+
+# spec §9 settings, in-cluster hostnames. Secrets come from rtdaas-secrets.
+env:
+  - name: KAFKA_BOOTSTRAP
+    value: rtdaas-kafka-bootstrap.kafka.svc.cluster.local:9092
+  - name: SCHEMA_REGISTRY_URL
+    value: http://apicurio.rtdaas.svc.cluster.local:8080/apis/ccompat/v7
+  - name: ES_URL
+    value: http://rtdaas-es-http.rtdaas.svc.cluster.local:9200
+  - name: S3_ENDPOINT
+    value: http://minio.minio.svc.cluster.local:9000
+  - name: S3_BUCKET_RAW
+    value: rtdaas-raw
+  - name: S3_BUCKET_LAKE
+    value: rtdaas-lake
+  - name: ICEBERG_REST_URI
+    value: http://iceberg-rest.rtdaas.svc.cluster.local:8181
+  - name: ICEBERG_WAREHOUSE
+    value: s3a://rtdaas-lake/warehouse
+  - name: AWS_REGION
+    value: us-east-1
+  - name: AIRFLOW_VAR_RTDAAS_SPARK_MODE
+    value: k8s
+  - name: AIRFLOW_VAR_RTDAAS_SPARK_IMAGE
+    value: ghcr.io/<owner>/rtdaas-spark:latest
+  - name: AIRFLOW_VAR_RTDAAS_SPARK_NAMESPACE
+    value: rtdaas
+  - name: AIRFLOW_VAR_RTDAAS_HOME
+    value: /opt/rtdaas
+  - name: AIRFLOW_VAR_RTDAAS_QUALITY_CHECKS_DIR
+    value: /opt/rtdaas/quality/checks
+  - name: AIRFLOW_VAR_RTDAAS_PUBLISH_TARGET
+    value: duckdb
+  - name: AIRFLOW_CONN_RTDAAS_S3
+    value: 'aws://minioadmin:minioadmin@/?endpoint_url=http%3A%2F%2Fminio.minio.svc.cluster.local%3A9000&region_name=us-east-1'
+
+extraEnvFrom: |
+  - secretRef:
+      name: rtdaas-secrets
+      optional: true
+  - configMapRef:
+      name: rtdaas-env-overlay
+      optional: true
+
+# Airflow needs to create SparkApplication CRs and pods in the rtdaas namespace.
+rbac:
+  create: true
+  createSCCRoleBinding: false
+# The extra permissions (SparkApplication CRs) are granted by a plain Role +
+# RoleBinding in manifests/rtdaas/airflow-spark-rbac.yaml.
+
+serviceAccount:
+  create: true
+  name: airflow
+
+statsd:
+  enabled: false
+
+pgbouncer:
+  enabled: false
+
+redis:
+  enabled: false
+
+flower:
+  enabled: false

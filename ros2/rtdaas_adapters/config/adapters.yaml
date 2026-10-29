@@ -1,0 +1,26 @@
+# Parameters for the adapter nodes of one robot. The fleet launch file overrides
+# robot_id / source_namespace per robot; this file is for running the nodes by hand:
+#   ros2 run rtdaas_adapters tool_pose_adapter --ros-args --params-file adapters.yaml
+#   ros2 run rtdaas_adapters fleet_monitor     --ros-args --params-file adapters.yaml
+/**:
+  tool_pose_adapter:
+    ros__parameters:
+      robot_id: dv-001
+      arms: [PSM1, PSM2, ECM]
+      rate_hz: 50.0
+      # "" = dVRK nodes in the root namespace (plain `ros2 launch dvrk_model arm.launch.py`)
+      source_namespace: ""
+      speed_filter_alpha: 0.3
+  fleet_monitor:
+    ros__parameters:
+      robot_id: dv-001
+      arms: [PSM1, PSM2, ECM]
+      source_namespace: ""
+      software_version: dvrk-sim-2.3
+      joint_limit_margin: 0.05
+      joint_limit_cooldown_s: 5.0
+      heartbeat_hz: 1.0
+      joint_limits:
+        outer_insertion:
+          min: 0.0
+          max: 0.24

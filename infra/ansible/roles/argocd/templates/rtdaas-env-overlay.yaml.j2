@@ -1,0 +1,24 @@
+# Environment-specific values layered on top of infra/k8s/manifests/rtdaas/configmap.yaml.
+# Argo CD owns rtdaas-config; this separate ConfigMap is referenced second in envFrom
+# so its keys win. Rendered by Ansible from the Terraform-generated inventory.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rtdaas-env-overlay
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/part-of: rtdaas
+    rtdaas.io/managed-by: ansible
+data:
+  RTDAAS_CLOUD: "{{ rtdaas_cloud }}"
+  S3_BUCKET_RAW: "{{ rtdaas_s3_bucket_raw }}"
+  S3_BUCKET_LAKE: "{{ rtdaas_s3_bucket_lake }}"
+  ICEBERG_WAREHOUSE: "s3a://{{ rtdaas_s3_bucket_lake }}/warehouse"
+{% if rtdaas_cloud == 'aws' %}
+  # Real S3: no custom endpoint, regional signing.
+  S3_ENDPOINT: "https://s3.{{ rtdaas_aws_region }}.amazonaws.com"
+  AWS_REGION: "{{ rtdaas_aws_region }}"
+{% else %}
+  S3_ENDPOINT: "http://minio.minio.svc.cluster.local:9000"
+  AWS_REGION: "us-east-1"
+{% endif %}

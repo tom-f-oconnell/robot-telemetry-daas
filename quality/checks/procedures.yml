@@ -1,0 +1,137 @@
+# Data-quality suite for the procedures namespace (JIGSAWS-style trials).
+suite: procedures
+tables:
+  - table: procedures.trials
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: row_count_min
+        type: row_count
+        min: 1
+        severity: blocking
+      - name: unique_trial
+        type: unique
+        columns: [trial_id]
+        severity: blocking
+      - name: known_task
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE task NOT IN ('Suturing', 'Knot_Tying', 'Needle_Passing')"
+        op: "=="
+        threshold: 0
+        severity: warning
+      - name: known_skill_level
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE skill_level NOT IN ('novice', 'intermediate', 'expert')"
+        op: "=="
+        threshold: 0
+        severity: warning
+      - name: sample_rate_30hz
+        type: value_range
+        column: sample_rate_hz
+        min: 29
+        max: 31
+        severity: warning
+      - name: has_gestures
+        type: value_range
+        column: n_gestures
+        min: 1
+        severity: warning
+
+  - table: procedures.kinematics
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: not_null_trial
+        type: not_null
+        column: trial_id
+        severity: blocking
+      - name: unique_frame
+        type: unique
+        columns: [trial_id, frame_idx]
+        severity: blocking
+      - name: psml_workspace
+        type: value_range
+        column: psml_x
+        min: -0.5
+        max: 0.5
+        max_violation_fraction: 0.0
+        severity: warning
+      - name: gripper_range
+        type: value_range
+        column: psml_gripper
+        min: -0.5
+        max: 1.6
+        max_violation_fraction: 0.001
+        severity: warning
+      - name: labelled_fraction
+        type: not_null
+        column: gesture
+        max_null_fraction: 0.5
+        severity: warning
+
+  - table: procedures.gestures
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: row_count_min
+        type: row_count
+        min: 1
+        severity: blocking
+      - name: unique_segment
+        type: unique
+        columns: [trial_id, start_frame]
+        severity: blocking
+      - name: frames_ordered
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE end_frame < start_frame"
+        op: "=="
+        threshold: 0
+        severity: blocking
+      - name: gesture_code_format
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE gesture NOT LIKE 'G%'"
+        op: "=="
+        threshold: 0
+        severity: warning
+      - name: duration_positive
+        type: value_range
+        column: duration_s
+        min: 0
+        max: 600
+        severity: warning
+
+  - table: procedures.frame_features
+    optional: true
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: unique_frame
+        type: unique
+        columns: [trial_id, frame_idx]
+        severity: blocking
+      - name: intensity_unit_interval
+        type: value_range
+        column: mean_intensity
+        min: 0
+        max: 1
+        severity: blocking
+      - name: motion_energy_unit_interval
+        type: value_range
+        column: motion_energy
+        min: 0
+        max: 1
+        severity: blocking
+      - name: not_black_video
+        type: sql
+        query: "SELECT COALESCE(AVG(mean_intensity), 1) FROM {table}"
+        op: ">"
+        threshold: 0.01
+        severity: warning

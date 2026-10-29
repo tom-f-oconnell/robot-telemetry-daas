@@ -1,0 +1,82 @@
+---
+- name: Check whether k3s is already installed at the desired version
+  ansible.builtin.command: /usr/local/bin/k3s --version
+  register: k3s_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download k3s installer
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /usr/local/bin/k3s-install.sh
+    mode: "0755"
+  when: k3s_installed.rc != 0 or k3s_version not in (k3s_installed.stdout | default(''))
+
+- name: Install k3s server
+  ansible.builtin.command: /usr/local/bin/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    INSTALL_K3S_EXEC: "server {{ k3s_server_args }} --node-ip {{ k3s_node_ip }} --node-external-ip {{ ansible_host }} --tls-san {{ ansible_host }}"
+  when: k3s_installed.rc != 0 or k3s_version not in (k3s_installed.stdout | default(''))
+  changed_when: true
+
+- name: Ensure k3s service is running
+  ansible.builtin.systemd:
+    name: k3s
+    enabled: true
+    state: started
+
+- name: Wait for the API server
+  ansible.builtin.wait_for:
+    port: 6443
+    host: 127.0.0.1
+    timeout: 300
+
+- name: Wait for the node to be Ready
+  ansible.builtin.command: /usr/local/bin/k3s kubectl wait --for=condition=Ready node/{{ inventory_hostname }} --timeout=300s
+  changed_when: false
+  retries: 5
+  delay: 10
+  register: node_ready
+  until: node_ready.rc == 0
+
+- name: Read node token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: node_token_raw
+
+- name: Expose node token as a fact for agents
+  ansible.builtin.set_fact:
+    k3s_node_token: "{{ node_token_raw.content | b64decode | trim }}"
+    k3s_server_url: "https://{{ k3s_node_ip }}:6443"
+
+- name: Create local artifacts directory
+  ansible.builtin.file:
+    path: "{{ local_artifacts_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Fetch kubeconfig
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ local_artifacts_dir }}/kubeconfig.yaml"
+    flat: true
+
+- name: Point the fetched kubeconfig at the server's reachable address
+  ansible.builtin.replace:
+    path: "{{ local_artifacts_dir }}/kubeconfig.yaml"
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: "https://{{ ansible_host }}:6443"
+  delegate_to: localhost
+  become: false
+
+- name: Save node token locally
+  ansible.builtin.copy:
+    content: "{{ k3s_node_token }}\n"
+    dest: "{{ local_artifacts_dir }}/node-token"
+    mode: "0600"
+  delegate_to: localhost
+  become: false

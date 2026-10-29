@@ -1,0 +1,91 @@
+{
+  "type": "record",
+  "name": "SystemEventRecord",
+  "namespace": "rtdaas.kafka",
+  "doc": "Kafka value for topic rtdaas.telemetry.events: bridge envelope around rtdaas_msgs.SystemEvent.",
+  "fields": [
+    {
+      "name": "robot_id",
+      "type": "string",
+      "doc": "Fleet-wide robot identifier, e.g. dv-001."
+    },
+    {
+      "name": "ros_topic",
+      "type": "string",
+      "doc": "Fully-qualified ROS 2 topic the message came from."
+    },
+    {
+      "name": "recv_time_ns",
+      "type": "long",
+      "doc": "bridge receive time, UNIX ns"
+    },
+    {
+      "name": "msg",
+      "type": {
+        "type": "record",
+        "name": "SystemEvent",
+        "namespace": "rtdaas_msgs",
+        "doc": "Generated from ROS 2 message rtdaas_msgs/SystemEvent. Constants: SEVERITY_DEBUG=0, SEVERITY_INFO=1, SEVERITY_WARN=2, SEVERITY_ERROR=3, SEVERITY_FATAL=4.",
+        "fields": [
+          {
+            "name": "header",
+            "type": {
+              "type": "record",
+              "name": "Header",
+              "namespace": "std_msgs",
+              "doc": "Generated from ROS 2 message std_msgs/Header.",
+              "fields": [
+                {
+                  "name": "stamp",
+                  "type": {
+                    "type": "record",
+                    "name": "Time",
+                    "namespace": "builtin_interfaces",
+                    "doc": "Generated from ROS 2 message builtin_interfaces/Time.",
+                    "fields": [
+                      {
+                        "name": "sec",
+                        "type": "int",
+                        "doc": "Time indicates a specific point in time, relative to a clock's 0 point. The seconds component, valid over all int32 values."
+                      },
+                      {
+                        "name": "nanosec",
+                        "type": "long",
+                        "doc": "The nanoseconds component, valid in the range [0, 10e9)."
+                      }
+                    ]
+                  },
+                  "doc": "Standard metadata for higher-level stamped data types. Two-integer timestamp that is expressed as seconds and nanoseconds."
+                },
+                {
+                  "name": "frame_id",
+                  "type": "string",
+                  "doc": "Transform frame with which this data is associated."
+                }
+              ]
+            }
+          },
+          {
+            "name": "arm",
+            "type": "string",
+            "doc": "Arm the event relates to, or \"\" for system-wide events."
+          },
+          {
+            "name": "severity",
+            "type": "int"
+          },
+          {
+            "name": "code",
+            "type": "string",
+            "doc": "Machine-readable code, e.g. SESSION_START, SESSION_END, JOINT_LIMIT_WARN, INSTRUMENT_SWAP, CLUTCH_ENGAGED, ESTOP, HEARTBEAT_LOST."
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "doc": "Human-readable detail."
+          }
+        ]
+      }
+    }
+  ]
+}

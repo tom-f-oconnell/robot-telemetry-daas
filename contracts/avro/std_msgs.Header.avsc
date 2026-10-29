@@ -1,0 +1,35 @@
+{
+  "type": "record",
+  "name": "Header",
+  "namespace": "std_msgs",
+  "doc": "Generated from ROS 2 message std_msgs/Header.",
+  "fields": [
+    {
+      "name": "stamp",
+      "type": {
+        "type": "record",
+        "name": "Time",
+        "namespace": "builtin_interfaces",
+        "doc": "Generated from ROS 2 message builtin_interfaces/Time.",
+        "fields": [
+          {
+            "name": "sec",
+            "type": "int",
+            "doc": "Time indicates a specific point in time, relative to a clock's 0 point. The seconds component, valid over all int32 values."
+          },
+          {
+            "name": "nanosec",
+            "type": "long",
+            "doc": "The nanoseconds component, valid in the range [0, 10e9)."
+          }
+        ]
+      },
+      "doc": "Standard metadata for higher-level stamped data types. Two-integer timestamp that is expressed as seconds and nanoseconds."
+    },
+    {
+      "name": "frame_id",
+      "type": "string",
+      "doc": "Transform frame with which this data is associated."
+    }
+  ]
+}

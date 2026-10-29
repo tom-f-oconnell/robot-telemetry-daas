@@ -1,0 +1,96 @@
+{
+  "uid": "rtdaas-platform",
+  "title": "rtdaas platform",
+  "tags": ["rtdaas"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "templating": {"list": []},
+  "annotations": {"list": []},
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Kafka consumer lag by group",
+      "datasource": {"type": "prometheus", "uid": "rtdaas-prom"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (consumergroup, topic) (kafka_consumergroup_lag)",
+          "legendFormat": "{{consumergroup}} / {{topic}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Kafka messages in per topic (msg/s)",
+      "datasource": {"type": "prometheus", "uid": "rtdaas-prom"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (topic) (rate(kafka_topic_partition_current_offset{topic=~\"rtdaas.*\"}[1m]))",
+          "legendFormat": "{{topic}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "API request rate (req/s) by route and status",
+      "datasource": {"type": "prometheus", "uid": "rtdaas-prom"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (path, status) (rate(rtdaas_http_requests_total[1m]))",
+          "legendFormat": "{{path}} {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "API latency p95 (s)",
+      "datasource": {"type": "prometheus", "uid": "rtdaas-prom"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, path) (rate(rtdaas_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{path}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Kafka brokers up",
+      "datasource": {"type": "prometheus", "uid": "rtdaas-prom"},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "none"},
+      "targets": [{"refId": "A", "expr": "kafka_brokers"}]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "API up",
+      "datasource": {"type": "prometheus", "uid": "rtdaas-prom"},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 16},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "none"},
+      "targets": [{"refId": "A", "expr": "up{job=\"rtdaas-api\"}"}]
+    }
+  ]
+}

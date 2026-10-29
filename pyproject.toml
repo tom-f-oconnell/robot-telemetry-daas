@@ -36,12 +36,14 @@ spark = [
   "pyarrow>=14",
   "elasticsearch>=8.12,<9",
   "opencv-python-headless>=4.9",
+  "imageio-ffmpeg>=0.5",
   "snowflake-connector-python>=3.10",
   "duckdb>=1.1",
   "fastavro>=1.9",
 ]
 video = [
   "opencv-python-headless>=4.9",
+  "imageio-ffmpeg>=0.5",
 ]
 airflow = [
   "apache-airflow==2.10.3",

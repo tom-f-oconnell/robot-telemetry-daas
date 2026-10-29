@@ -1,0 +1,59 @@
+# ROS 2 parameters for the kafka_bridge node, robot dv-001.
+#   ros2 run rtdaas_kafka_bridge kafka_bridge --ros-args --params-file bridge.yaml
+# The `/**` wildcard lets the same file apply whether the node runs in the root
+# namespace or under /dv-001 (as the fleet launch file does).
+/**:
+  kafka_bridge:
+    ros__parameters:
+      robot_id: dv-001
+      kafka_bootstrap: kafka:9092
+      schema_registry_url: http://apicurio:8080/apis/ccompat/v7
+      flush_interval_ms: 100
+      queue_max_messages: 100000
+      compression: lz4
+      stats_period_s: 10.0
+      registry_connect_retries: 30
+      registry_retry_delay_ms: 2000
+      # Alternative to the parameter tree below: a plain YAML list (see topics.example.yaml).
+      config_file: ""
+      topics:
+        psm1_joint_states:
+          ros_topic: /dv-001/PSM1/measured_js
+          kafka_topic: rtdaas.telemetry.joint_states
+          type: sensor_msgs/msg/JointState
+          qos: best_effort
+        psm2_joint_states:
+          ros_topic: /dv-001/PSM2/measured_js
+          kafka_topic: rtdaas.telemetry.joint_states
+          type: sensor_msgs/msg/JointState
+          qos: best_effort
+        ecm_joint_states:
+          ros_topic: /dv-001/ECM/measured_js
+          kafka_topic: rtdaas.telemetry.joint_states
+          type: sensor_msgs/msg/JointState
+          qos: best_effort
+        psm1_tool_pose:
+          ros_topic: /dv-001/PSM1/rtdaas/tool_pose
+          kafka_topic: rtdaas.telemetry.tool_pose
+          type: rtdaas_msgs/msg/ToolPose
+          qos: best_effort
+        psm2_tool_pose:
+          ros_topic: /dv-001/PSM2/rtdaas/tool_pose
+          kafka_topic: rtdaas.telemetry.tool_pose
+          type: rtdaas_msgs/msg/ToolPose
+          qos: best_effort
+        ecm_tool_pose:
+          ros_topic: /dv-001/ECM/rtdaas/tool_pose
+          kafka_topic: rtdaas.telemetry.tool_pose
+          type: rtdaas_msgs/msg/ToolPose
+          qos: best_effort
+        events:
+          ros_topic: /dv-001/rtdaas/events
+          kafka_topic: rtdaas.telemetry.events
+          type: rtdaas_msgs/msg/SystemEvent
+          qos: reliable
+        heartbeat:
+          ros_topic: /dv-001/rtdaas/heartbeat
+          kafka_topic: rtdaas.telemetry.heartbeat
+          type: rtdaas_msgs/msg/Heartbeat
+          qos: reliable

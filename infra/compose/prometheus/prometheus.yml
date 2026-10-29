@@ -1,0 +1,36 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # rtdaas serving API exposes Prometheus text format at /metrics (spec §4.10).
+  - job_name: rtdaas-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8080"]
+        labels:
+          service: rtdaas-api
+
+  # Consumer-group lag, topic sizes, broker health.
+  - job_name: kafka
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+        labels:
+          service: kafka
+
+  # Spark master exposes a Prometheus servlet when spark.ui.prometheus.enabled=true
+  # (set in rtdaas.spark.common.build_spark); the standalone master JSON endpoint is
+  # scraped here only for liveness.
+  - job_name: spark-master
+    metrics_path: /metrics/master/prometheus
+    static_configs:
+      - targets: ["spark-master:8080"]
+        labels:
+          service: spark
+
+  # Airflow statsd/otel is out of scope for the compose profile; the webserver
+  # /health endpoint is probed by compose itself.

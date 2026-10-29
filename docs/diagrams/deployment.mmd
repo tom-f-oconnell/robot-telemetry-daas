@@ -1,0 +1,35 @@
+flowchart TB
+    subgraph tf["Terraform"]
+        lv["envs/local: libvirt<br/>1 server + 3 agents (Ubuntu 24.04, cloud-init)"]
+        aws["envs/aws: EC2 + S3 buckets + IAM"]
+    end
+    inv["Ansible inventory<br/>(rendered by Terraform)"]
+    subgraph ans["Ansible site.yml"]
+        common["common: packages, sysctl, no swap"]
+        k3s["k3s server + agents (v1.31)"]
+        argo["Argo CD (Helm) + root app-of-apps"]
+    end
+    subgraph k8s["Kubernetes (k3s)"]
+        strimzi["Strimzi → Kafka KRaft ×3<br/>+ 4 KafkaTopic CRs"]
+        apic["Apicurio registry"]
+        sop["spark-operator → SparkApplication<br/>streaming-kpis"]
+        afl["Airflow (KubernetesExecutor,<br/>git-sync DAGs)"]
+        eck["ECK → Elasticsearch"]
+        minio["MinIO + Iceberg REST"]
+        prom["kube-prometheus-stack"]
+        rt["rtdaas: api (×2) · sim · bridge<br/>ConfigMap · Secret · Ingress · ServiceMonitor"]
+    end
+    gha["GitHub Actions<br/>ci · contracts · images → GHCR · deploy (kustomize set image)"]
+
+    lv --> inv
+    aws --> inv
+    inv --> common --> k3s --> argo
+    argo --> strimzi
+    argo --> apic
+    argo --> sop
+    argo --> afl
+    argo --> eck
+    argo --> minio
+    argo --> prom
+    argo --> rt
+    gha -. "commit image tags, Argo CD syncs" .-> rt

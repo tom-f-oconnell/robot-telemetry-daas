@@ -1,0 +1,196 @@
+# Data-quality suite for the telemetry namespace (bag + stream ingest).
+# Run by: the quality_gate Spark job after batch_mcap, the dq_daily DAG, and the local pipeline.
+# Row-count minimums are deliberately small so a one-robot demo dataset passes; tighten in prod.
+suite: telemetry
+tables:
+  - table: telemetry.tool_pose_raw
+    partition_column: ts
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: not_null_ts
+        type: not_null
+        column: ts
+        severity: blocking
+      - name: not_null_robot_id
+        type: not_null
+        column: robot_id
+        severity: blocking
+      - name: not_null_arm
+        type: not_null
+        column: arm
+        severity: blocking
+      - name: row_count_min
+        type: row_count
+        min: 100
+        severity: blocking
+      - name: unique_key
+        type: unique
+        columns: [robot_id, arm, ts]
+        severity: blocking
+      - name: speed_range
+        type: value_range
+        column: speed
+        min: 0
+        max: 2.0
+        max_violation_fraction: 0.001
+        severity: warning
+      - name: position_in_workspace
+        type: value_range
+        column: x
+        min: -0.5
+        max: 0.5
+        max_violation_fraction: 0.0
+        severity: warning
+      - name: jaw_angle_range
+        type: value_range
+        column: jaw_angle
+        min: -0.2
+        max: 1.6
+        max_violation_fraction: 0.001
+        severity: warning
+      - name: sample_rate
+        type: sample_rate
+        ts_column: ts
+        group_by: [robot_id, arm]
+        expected_hz: 50
+        tolerance_fraction: 0.15
+        severity: warning
+      - name: source_is_known
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE source NOT IN ('stream', 'bag')"
+        op: "=="
+        threshold: 0
+        severity: blocking
+
+  - table: telemetry.joint_states_raw
+    partition_column: ts
+    optional: true
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: not_null_ts
+        type: not_null
+        column: ts
+        severity: blocking
+      - name: unique_key
+        type: unique
+        columns: [robot_id, arm, ts]
+        severity: blocking
+
+  - table: telemetry.events_raw
+    partition_column: ts
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: not_null_code
+        type: not_null
+        column: code
+        severity: blocking
+      - name: severity_range
+        type: value_range
+        column: severity
+        min: 0
+        max: 4
+        severity: blocking
+      - name: no_estop_spike
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE code = 'ESTOP'"
+        op: "<="
+        threshold: 5
+        severity: warning
+      - name: sessions_are_balanced
+        type: sql
+        query: "SELECT ABS(SUM(CASE WHEN code = 'SESSION_START' THEN 1 ELSE 0 END) - SUM(CASE WHEN code = 'SESSION_END' THEN 1 ELSE 0 END)) FROM {table}"
+        op: "<="
+        threshold: 1
+        severity: warning
+
+  - table: telemetry.heartbeat_raw
+    partition_column: ts
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: not_null_state
+        type: not_null
+        column: state
+        severity: warning
+      - name: heartbeat_rate
+        type: sample_rate
+        ts_column: ts
+        group_by: [robot_id]
+        expected_hz: 1
+        tolerance_fraction: 0.25
+        severity: warning
+      - name: known_states
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE state NOT IN ('idle', 'homing', 'ready', 'teleop', 'fault')"
+        op: "=="
+        threshold: 0
+        severity: warning
+
+  - table: telemetry.sessions
+    partition_column: start_ts
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: row_count_min
+        type: row_count
+        min: 1
+        severity: blocking
+      - name: unique_session_arm
+        type: unique
+        columns: [session_id, arm]
+        severity: blocking
+      - name: duration_positive
+        type: value_range
+        column: duration_s
+        min: 0.001
+        max: 86400
+        severity: blocking
+      - name: idle_fraction_unit_interval
+        type: value_range
+        column: idle_fraction
+        min: 0
+        max: 1
+        severity: blocking
+      - name: plausible_mean_speed
+        type: value_range
+        column: mean_speed_mps
+        min: 0
+        max: 1.0
+        max_violation_fraction: 0.01
+        severity: warning
+
+  - table: telemetry.kpi_1m
+    partition_column: window_start
+    checks:
+      - name: schema
+        type: schema_match
+        expected: spec
+        severity: blocking
+      - name: unique_window
+        type: unique
+        columns: [robot_id, arm, window_start]
+        severity: blocking
+      - name: n_samples_positive
+        type: value_range
+        column: n_samples
+        min: 1
+        severity: blocking
+      - name: computed_by_known
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE computed_by NOT IN ('stream', 'batch')"
+        op: "=="
+        threshold: 0
+        severity: blocking

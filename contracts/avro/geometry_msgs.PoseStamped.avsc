@@ -1,0 +1,115 @@
+{
+  "type": "record",
+  "name": "PoseStamped",
+  "namespace": "geometry_msgs",
+  "doc": "Generated from ROS 2 message geometry_msgs/PoseStamped.",
+  "fields": [
+    {
+      "name": "header",
+      "type": {
+        "type": "record",
+        "name": "Header",
+        "namespace": "std_msgs",
+        "doc": "Generated from ROS 2 message std_msgs/Header.",
+        "fields": [
+          {
+            "name": "stamp",
+            "type": {
+              "type": "record",
+              "name": "Time",
+              "namespace": "builtin_interfaces",
+              "doc": "Generated from ROS 2 message builtin_interfaces/Time.",
+              "fields": [
+                {
+                  "name": "sec",
+                  "type": "int",
+                  "doc": "Time indicates a specific point in time, relative to a clock's 0 point. The seconds component, valid over all int32 values."
+                },
+                {
+                  "name": "nanosec",
+                  "type": "long",
+                  "doc": "The nanoseconds component, valid in the range [0, 10e9)."
+                }
+              ]
+            },
+            "doc": "Standard metadata for higher-level stamped data types. Two-integer timestamp that is expressed as seconds and nanoseconds."
+          },
+          {
+            "name": "frame_id",
+            "type": "string",
+            "doc": "Transform frame with which this data is associated."
+          }
+        ]
+      },
+      "doc": "A Pose with reference coordinate frame and timestamp"
+    },
+    {
+      "name": "pose",
+      "type": {
+        "type": "record",
+        "name": "Pose",
+        "namespace": "geometry_msgs",
+        "doc": "Generated from ROS 2 message geometry_msgs/Pose.",
+        "fields": [
+          {
+            "name": "position",
+            "type": {
+              "type": "record",
+              "name": "Point",
+              "namespace": "geometry_msgs",
+              "doc": "Generated from ROS 2 message geometry_msgs/Point.",
+              "fields": [
+                {
+                  "name": "x",
+                  "type": "double",
+                  "doc": "This contains the position of a point in free space"
+                },
+                {
+                  "name": "y",
+                  "type": "double"
+                },
+                {
+                  "name": "z",
+                  "type": "double"
+                }
+              ]
+            },
+            "doc": "A representation of pose in free space, composed of position and orientation."
+          },
+          {
+            "name": "orientation",
+            "type": {
+              "type": "record",
+              "name": "Quaternion",
+              "namespace": "geometry_msgs",
+              "doc": "Generated from ROS 2 message geometry_msgs/Quaternion.",
+              "fields": [
+                {
+                  "name": "x",
+                  "type": "double",
+                  "doc": "This represents an orientation in free space in quaternion form.",
+                  "default": 0.0
+                },
+                {
+                  "name": "y",
+                  "type": "double",
+                  "default": 0.0
+                },
+                {
+                  "name": "z",
+                  "type": "double",
+                  "default": 0.0
+                },
+                {
+                  "name": "w",
+                  "type": "double",
+                  "default": 1.0
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

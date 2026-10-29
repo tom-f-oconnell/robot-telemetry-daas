@@ -1,0 +1,45 @@
+name: contracts
+
+# Data-contract gate (spec §2.4 / §8): generated Avro must be committed and
+# every change must be BACKWARD compatible with what is on main.
+on:
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "rtdaas/contracts/**"
+      - "ros2/rtdaas_msgs/msg/**"
+      - ".github/workflows/contracts.yml"
+
+jobs:
+  compatibility:
+    name: generate + backward-compatibility check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # needed for `git show origin/main:...`
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e .
+      - name: ROS package copies match contracts/msgs
+        run: bash ros2/check-msgs-in-sync.sh
+      - name: Regenerate Avro from .msg and require it to be committed
+        run: |
+          python -m rtdaas.contracts.cli gen
+          git diff --exit-code -- contracts/avro || {
+            echo "::error::contracts/avro is stale — run 'rtdaas-contracts gen' and commit the result"; exit 1; }
+      - name: Backward compatibility against origin/main
+        run: |
+          git fetch origin main --depth=1
+          python -m rtdaas.contracts.cli check --base origin/main --head contracts/avro --mode BACKWARD
+      - name: Human-readable diff for the PR
+        if: always()
+        run: python -m rtdaas.contracts.cli diff --base origin/main --head contracts/avro | tee contracts-diff.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contracts-diff
+          path: contracts-diff.txt

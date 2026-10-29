@@ -1,0 +1,18 @@
+# Template rendered by rtdaas_launch (str.format) into a per-robot params file for the
+# kafka_bridge node. Placeholders: {robot_id} {kafka_bootstrap} {schema_registry_url}
+# {topics_block} (indented `topics:` parameter tree generated from the arm list).
+/**:
+  kafka_bridge:
+    ros__parameters:
+      robot_id: {robot_id}
+      kafka_bootstrap: {kafka_bootstrap}
+      schema_registry_url: {schema_registry_url}
+      flush_interval_ms: 100
+      queue_max_messages: 100000
+      compression: lz4
+      stats_period_s: 10.0
+      registry_connect_retries: 60
+      registry_retry_delay_ms: 2000
+      config_file: ""
+      topics:
+{topics_block}

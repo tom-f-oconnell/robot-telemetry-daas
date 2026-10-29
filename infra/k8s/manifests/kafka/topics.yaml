@@ -1,0 +1,68 @@
+# Partition counts and retention mirror contracts/registry.yml (source of truth).
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: rtdaas.telemetry.joint-states
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: rtdaas
+spec:
+  topicName: rtdaas.telemetry.joint_states
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: "604800000"
+    cleanup.policy: delete
+    compression.type: zstd
+    min.insync.replicas: "2"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: rtdaas.telemetry.tool-pose
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: rtdaas
+spec:
+  topicName: rtdaas.telemetry.tool_pose
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: "604800000"
+    cleanup.policy: delete
+    compression.type: zstd
+    min.insync.replicas: "2"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: rtdaas.telemetry.events
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: rtdaas
+spec:
+  topicName: rtdaas.telemetry.events
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: "2592000000"
+    cleanup.policy: delete
+    compression.type: zstd
+    min.insync.replicas: "2"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: rtdaas.telemetry.heartbeat
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: rtdaas
+spec:
+  topicName: rtdaas.telemetry.heartbeat
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: "2592000000"
+    cleanup.policy: delete
+    compression.type: zstd
+    min.insync.replicas: "2"

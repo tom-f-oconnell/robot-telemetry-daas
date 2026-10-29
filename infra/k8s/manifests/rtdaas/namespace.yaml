@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rtdaas
+  labels:
+    app.kubernetes.io/part-of: rtdaas
+    # Strimzi/Apicurio/ES/Airflow apps also target this namespace (see argocd/apps).
+    pod-security.kubernetes.io/enforce: baseline

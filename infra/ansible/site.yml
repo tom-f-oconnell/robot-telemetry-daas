@@ -1,0 +1,30 @@
+---
+# Bring a fresh set of Ubuntu 24.04 hosts to: k3s cluster + Argo CD + root app.
+#
+#   ansible-playbook -i inventory/hosts.ini site.yml
+#   export KUBECONFIG=$PWD/artifacts/kubeconfig.yaml
+
+- name: Common node preparation
+  hosts: k3s_cluster
+  become: true
+  roles:
+    - common
+
+- name: k3s control plane
+  hosts: k3s_server
+  become: true
+  roles:
+    - k3s_server
+
+- name: k3s agents
+  hosts: k3s_agent
+  become: true
+  serial: "100%"
+  roles:
+    - k3s_agent
+
+- name: Argo CD and the rtdaas root application
+  hosts: k3s_server
+  become: true
+  roles:
+    - argocd

@@ -1,0 +1,591 @@
+openapi: 3.0.3
+info:
+  title: rtdaas data API
+  version: 0.1.0
+  description: |
+    Data-as-a-Service API for robot telemetry. Serves the published Iceberg tables
+    (telemetry sessions and KPIs, JIGSAWS procedures and gestures), the data catalog,
+    data-quality results, the schema contracts, and a reprocess endpoint that triggers
+    Airflow. All timestamps are ISO-8601 UTC. Errors are `{"error", "detail"}` objects.
+tags:
+  - name: meta
+  - name: telemetry
+  - name: procedures
+  - name: quality
+  - name: jobs
+paths:
+  /api/health:
+    get:
+      tags: [meta]
+      summary: Service health, backend type and table freshness
+      responses:
+        "200":
+          description: OK
+          content: {application/json: {schema: {$ref: "#/components/schemas/Health"}}}
+  /api/catalog:
+    get:
+      tags: [meta]
+      summary: Data products with owner, SLA, columns, row count and freshness
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tables: {type: array, items: {$ref: "#/components/schemas/CatalogEntry"}}
+  /api/contracts:
+    get:
+      tags: [meta]
+      summary: Kafka subjects, registered versions and Avro schemas
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contracts: {type: array, items: {$ref: "#/components/schemas/Contract"}}
+  /api/robots:
+    get:
+      tags: [telemetry]
+      summary: Robots with first/last seen and session counts
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  robots: {type: array, items: {$ref: "#/components/schemas/Robot"}}
+  /api/sessions:
+    get:
+      tags: [telemetry]
+      summary: List sessions (one row per session, aggregated over arms)
+      parameters:
+        - {name: robot_id, in: query, schema: {type: string}}
+        - {name: start, in: query, schema: {type: string, format: date-time}, description: inclusive lower bound on start_ts}
+        - {name: end, in: query, schema: {type: string, format: date-time}, description: inclusive upper bound on start_ts (a bare date means end of day)}
+        - {name: limit, in: query, schema: {type: integer, default: 200, minimum: 1, maximum: 5000}}
+        - {name: offset, in: query, schema: {type: integer, default: 0}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions: {type: array, items: {$ref: "#/components/schemas/Session"}}
+                  count: {type: integer}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/sessions/{session_id}:
+    get:
+      tags: [telemetry]
+      summary: One session with per-arm metrics and its events
+      parameters: [{$ref: "#/components/parameters/SessionId"}]
+      responses:
+        "200":
+          description: OK
+          content: {application/json: {schema: {$ref: "#/components/schemas/SessionDetail"}}}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/sessions/{session_id}/trajectory:
+    get:
+      tags: [telemetry]
+      summary: Tool-tip trajectory of one arm for replay
+      parameters:
+        - {$ref: "#/components/parameters/SessionId"}
+        - {name: arm, in: query, schema: {type: string, enum: [PSM1, PSM2, PSM3, ECM, MTML, MTMR], default: PSM1}}
+        - {name: downsample, in: query, schema: {type: integer, default: 1, minimum: 1}, description: keep every n-th sample}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id: {type: string}
+                  arm: {type: string}
+                  points: {type: array, items: {$ref: "#/components/schemas/TrajectoryPoint"}}
+                  count: {type: integer}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/sessions/{session_id}/kpis:
+    get:
+      tags: [telemetry]
+      summary: One-minute KPI rows within the session
+      parameters: [{$ref: "#/components/parameters/SessionId"}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id: {type: string}
+                  kpis: {type: array, items: {$ref: "#/components/schemas/Kpi"}}
+                  count: {type: integer}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/events:
+    get:
+      tags: [telemetry]
+      summary: Search system events (Elasticsearch in production, SQLite locally)
+      parameters:
+        - {name: q, in: query, schema: {type: string}, description: free text over code and message}
+        - {name: robot_id, in: query, schema: {type: string}}
+        - {name: severity_min, in: query, schema: {type: integer, minimum: 0, maximum: 4}}
+        - {name: start, in: query, schema: {type: string, format: date-time}}
+        - {name: end, in: query, schema: {type: string, format: date-time}}
+        - {name: limit, in: query, schema: {type: integer, default: 200, minimum: 1, maximum: 5000}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events: {type: array, items: {$ref: "#/components/schemas/Event"}}
+                  count: {type: integer}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/trials:
+    get:
+      tags: [procedures]
+      summary: JIGSAWS trials
+      parameters:
+        - {name: task, in: query, schema: {type: string, enum: [Suturing, Knot_Tying, Needle_Passing]}}
+        - {name: skill_level, in: query, schema: {type: string, enum: [novice, intermediate, expert]}}
+        - {name: subject, in: query, schema: {type: string}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trials: {type: array, items: {$ref: "#/components/schemas/Trial"}}
+                  count: {type: integer}
+  /api/trials/{trial_id}:
+    get:
+      tags: [procedures]
+      summary: One trial with its gesture segments and a frame-feature summary
+      parameters: [{$ref: "#/components/parameters/TrialId"}]
+      responses:
+        "200":
+          description: OK
+          content: {application/json: {schema: {$ref: "#/components/schemas/TrialDetail"}}}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/trials/{trial_id}/kinematics:
+    get:
+      tags: [procedures]
+      summary: Kinematic samples for the selected arms (30 Hz, downsampled on request)
+      parameters:
+        - {$ref: "#/components/parameters/TrialId"}
+        - {name: arms, in: query, schema: {type: string, default: "psml,psmr"}, description: comma-separated subset of mtml,mtmr,psml,psmr}
+        - {name: downsample, in: query, schema: {type: integer, default: 1, minimum: 1}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trial_id: {type: string}
+                  arms: {type: array, items: {type: string}}
+                  samples: {type: array, items: {$ref: "#/components/schemas/KinematicSample"}}
+                  count: {type: integer}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/trials/{trial_id}/frames:
+    get:
+      tags: [procedures]
+      summary: Per-frame video features
+      parameters: [{$ref: "#/components/parameters/TrialId"}]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trial_id: {type: string}
+                  frames: {type: array, items: {$ref: "#/components/schemas/FrameFeature"}}
+                  count: {type: integer}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/trials/{trial_id}/video:
+    get:
+      tags: [procedures]
+      summary: The trial's video file (supports HTTP Range requests for seeking)
+      parameters:
+        - {$ref: "#/components/parameters/TrialId"}
+        - {name: Range, in: header, schema: {type: string}, description: e.g. bytes=0-1023}
+      responses:
+        "200": {description: full file, content: {video/mp4: {schema: {type: string, format: binary}}}}
+        "206": {description: partial content, content: {video/mp4: {schema: {type: string, format: binary}}}}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "416": {description: range not satisfiable}
+  /api/gestures:
+    get:
+      tags: [procedures]
+      summary: Search gesture segments across trials
+      parameters:
+        - {name: task, in: query, schema: {type: string}}
+        - {name: gesture, in: query, schema: {type: string}, description: gesture code, e.g. G4}
+        - {name: skill_level, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, default: 500, minimum: 1, maximum: 10000}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gestures: {type: array, items: {$ref: "#/components/schemas/Gesture"}}
+                  count: {type: integer}
+  /api/quality/runs:
+    get:
+      tags: [quality]
+      summary: Data-quality runs with pass/fail counts
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, default: 50}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runs: {type: array, items: {$ref: "#/components/schemas/QualityRun"}}
+                  count: {type: integer}
+  /api/quality/results:
+    get:
+      tags: [quality]
+      summary: Individual check results
+      parameters:
+        - {name: run_id, in: query, schema: {type: string}}
+        - {name: table_name, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string, enum: [pass, fail, error, skipped]}}
+        - {name: limit, in: query, schema: {type: integer, default: 500}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results: {type: array, items: {$ref: "#/components/schemas/CheckResult"}}
+                  count: {type: integer}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/jobs:
+    get:
+      tags: [jobs]
+      summary: Reprocess requests and their Airflow run ids
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, default: 50}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs: {type: array, items: {$ref: "#/components/schemas/Job"}}
+                  count: {type: integer}
+  /api/jobs/reprocess:
+    post:
+      tags: [jobs]
+      summary: Trigger reprocessing of a session, a trial or a whole date via Airflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, target]
+              properties:
+                kind: {type: string, enum: [session, trial, date]}
+                target: {type: string, description: "session_id, trial_id or YYYY-MM-DD"}
+            examples:
+              date: {value: {kind: date, target: "2026-10-28"}}
+              session: {value: {kind: session, target: dv-001-20261028T100000}}
+      responses:
+        "202":
+          description: accepted (triggered, or queued locally when Airflow is unreachable)
+          content: {application/json: {schema: {$ref: "#/components/schemas/Job"}}}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /openapi.json:
+    get:
+      tags: [meta]
+      summary: This document
+      responses:
+        "200": {description: OK}
+  /docs:
+    get:
+      tags: [meta]
+      summary: Swagger UI
+      responses:
+        "200": {description: HTML}
+  /metrics:
+    get:
+      tags: [meta]
+      summary: Prometheus metrics (request counts and latency per route)
+      responses:
+        "200": {description: text exposition format}
+  /:
+    get:
+      tags: [meta]
+      summary: Web UI
+      responses:
+        "200": {description: HTML}
+components:
+  parameters:
+    SessionId: {name: session_id, in: path, required: true, schema: {type: string}, example: dv-001-20261028T100000}
+    TrialId: {name: trial_id, in: path, required: true, schema: {type: string}, example: Suturing_B001}
+  responses:
+    BadRequest:
+      description: invalid parameter or body
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    NotFound:
+      description: unknown id
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+  schemas:
+    Error:
+      type: object
+      properties: {error: {type: string}, detail: {type: string}}
+    Health:
+      type: object
+      properties:
+        status: {type: string}
+        backend: {type: string, enum: [sqlite, duckdb]}
+        version: {type: string}
+        media_root: {type: string}
+        tables:
+          type: object
+          additionalProperties:
+            type: object
+            properties: {rows: {type: integer}, last_updated: {type: string, nullable: true}, fresh: {type: boolean}}
+    CatalogEntry:
+      type: object
+      properties:
+        name: {type: string, example: telemetry.sessions}
+        owner: {type: string}
+        description: {type: string}
+        sla_hours: {type: number}
+        contract: {type: string, description: "Kafka subject for raw tables, derived otherwise"}
+        pii: {type: boolean}
+        columns:
+          type: array
+          items: {type: object, properties: {name: {type: string}, type: {type: string}, description: {type: string}}}
+        row_count: {type: integer}
+        last_updated: {type: string, nullable: true}
+        freshness_ok: {type: boolean}
+    Contract:
+      type: object
+      properties:
+        subject: {type: string, example: rtdaas.telemetry.tool_pose-value}
+        topic: {type: string}
+        version: {type: integer, nullable: true, description: registry version when reachable}
+        schema_id: {type: integer, nullable: true}
+        schema: {type: object, description: Avro envelope schema}
+        fields: {type: array, items: {type: object, properties: {path: {type: string}, type: {type: string}}}}
+    Robot:
+      type: object
+      properties:
+        robot_id: {type: string}
+        first_seen: {type: string}
+        last_seen: {type: string}
+        n_sessions: {type: integer}
+    Session:
+      type: object
+      properties:
+        session_id: {type: string}
+        robot_id: {type: string}
+        start_ts: {type: string}
+        end_ts: {type: string}
+        duration_s: {type: number}
+        n_arms: {type: integer}
+        n_samples: {type: integer}
+        path_length_m: {type: number, description: sum over arms}
+        mean_speed_mps: {type: number}
+        idle_fraction: {type: number}
+        jaw_cycles: {type: integer}
+        warn_events: {type: integer}
+        error_events: {type: integer}
+        instrument_swaps: {type: integer}
+        bag_file: {type: string}
+        pipeline_version: {type: string}
+        processed_at: {type: string}
+        arms: {type: array, items: {type: string}}
+    SessionArm:
+      type: object
+      properties:
+        arm: {type: string}
+        duration_s: {type: number}
+        n_samples: {type: integer}
+        path_length_m: {type: number}
+        mean_speed_mps: {type: number}
+        idle_fraction: {type: number}
+        jaw_cycles: {type: integer}
+        warn_events: {type: integer}
+        error_events: {type: integer}
+        instrument_swaps: {type: integer}
+    SessionDetail:
+      allOf:
+        - {$ref: "#/components/schemas/Session"}
+        - type: object
+          properties:
+            per_arm: {type: array, items: {$ref: "#/components/schemas/SessionArm"}}
+            events: {type: array, items: {$ref: "#/components/schemas/Event"}}
+    TrajectoryPoint:
+      type: object
+      properties:
+        ts: {type: string}
+        x: {type: number}
+        y: {type: number}
+        z: {type: number}
+        jaw_angle: {type: number}
+        speed: {type: number}
+    Kpi:
+      type: object
+      properties:
+        robot_id: {type: string}
+        arm: {type: string}
+        window_start: {type: string}
+        window_end: {type: string}
+        n_samples: {type: integer}
+        mean_speed_mps: {type: number}
+        max_speed_mps: {type: number}
+        path_length_m: {type: number}
+        idle_fraction: {type: number}
+        jaw_cycles: {type: integer}
+        warn_events: {type: integer}
+        error_events: {type: integer}
+        heartbeat_gap_s: {type: number, nullable: true}
+        computed_by: {type: string, enum: [stream, batch]}
+        computed_at: {type: string}
+    Event:
+      type: object
+      properties:
+        robot_id: {type: string}
+        arm: {type: string}
+        ts: {type: string}
+        recv_ts: {type: string}
+        severity: {type: integer}
+        severity_name: {type: string}
+        code: {type: string}
+        message: {type: string}
+        source: {type: string, enum: [stream, bag]}
+        bag_file: {type: string, nullable: true}
+    Trial:
+      type: object
+      properties:
+        trial_id: {type: string}
+        task: {type: string}
+        subject: {type: string}
+        repetition: {type: integer}
+        skill_level: {type: string}
+        grs_total: {type: integer, nullable: true}
+        duration_s: {type: number}
+        n_frames: {type: integer}
+        n_kinematic_samples: {type: integer}
+        sample_rate_hz: {type: number}
+        video_path: {type: string}
+        kinematics_path: {type: string}
+        transcription_path: {type: string}
+        n_gestures: {type: integer}
+        processed_at: {type: string}
+        pipeline_version: {type: string}
+    TrialDetail:
+      allOf:
+        - {$ref: "#/components/schemas/Trial"}
+        - type: object
+          properties:
+            gestures: {type: array, items: {$ref: "#/components/schemas/Gesture"}}
+            frame_summary: {type: object, additionalProperties: true}
+    KinematicSample:
+      type: object
+      description: frame_idx, t_s, gesture plus <arm>_<field> columns for the requested arms
+      properties:
+        frame_idx: {type: integer}
+        t_s: {type: number}
+        gesture: {type: string, nullable: true}
+      additionalProperties: {type: number}
+    FrameFeature:
+      type: object
+      properties:
+        frame_idx: {type: integer}
+        t_s: {type: number}
+        mean_intensity: {type: number}
+        motion_energy: {type: number}
+        sharpness: {type: number}
+        gesture: {type: string, nullable: true}
+    Gesture:
+      type: object
+      properties:
+        trial_id: {type: string}
+        task: {type: string}
+        subject: {type: string}
+        skill_level: {type: string}
+        gesture: {type: string}
+        start_frame: {type: integer}
+        end_frame: {type: integer}
+        duration_s: {type: number}
+        path_length_psml: {type: number}
+        path_length_psmr: {type: number}
+        mean_speed_psml: {type: number}
+        mean_speed_psmr: {type: number}
+        gripper_cycles: {type: integer}
+        motion_energy_mean: {type: number, nullable: true}
+        n_frames: {type: integer}
+    QualityRun:
+      type: object
+      properties:
+        run_id: {type: string}
+        run_ts: {type: string}
+        suite: {type: string}
+        n_checks: {type: integer}
+        n_pass: {type: integer}
+        n_blocking_fail: {type: integer}
+        n_warn_fail: {type: integer}
+        n_error: {type: integer}
+        n_skipped: {type: integer}
+        partition_value: {type: string, nullable: true}
+    CheckResult:
+      type: object
+      properties:
+        run_id: {type: string}
+        suite: {type: string}
+        table_name: {type: string}
+        check_name: {type: string}
+        severity: {type: string, enum: [blocking, warning]}
+        status: {type: string, enum: [pass, fail, error, skipped]}
+        observed: {type: number, nullable: true}
+        threshold: {type: string}
+        partition_value: {type: string, nullable: true}
+        run_ts: {type: string}
+        message: {type: string}
+    Job:
+      type: object
+      properties:
+        job_id: {type: string}
+        kind: {type: string, enum: [session, trial, date]}
+        target: {type: string}
+        requested_at: {type: string}
+        status: {type: string, enum: [triggered, queued_local, failed]}
+        dag_run_id: {type: string, nullable: true}
+        dag_id: {type: string}
+        conf: {type: object, additionalProperties: true}
+        note: {type: string}

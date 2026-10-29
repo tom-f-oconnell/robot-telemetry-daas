@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and edit.
+ssh_public_key = "ssh-ed25519 AAAA... you@laptop"
+node_count     = 4      # 1 server + 3 agents
+memory_mb      = 8192
+vcpu           = 4
+disk_gb        = 60
+# libvirt_uri  = "qemu:///system"
+# network_cidr = "10.42.100.0/24"

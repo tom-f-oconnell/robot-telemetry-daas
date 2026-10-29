@@ -1,0 +1,135 @@
+---
+# Installs helm, ingress-nginx, Argo CD, and applies the app-of-apps. Everything
+# after this point is GitOps: Argo CD reconciles infra/k8s/ from the repository.
+
+- name: Check helm
+  ansible.builtin.command: helm version --short
+  register: helm_check
+  changed_when: false
+  failed_when: false
+
+- name: Download helm installer
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /usr/local/bin/get-helm-3
+    mode: "0755"
+  when: helm_check.rc != 0
+
+- name: Install helm
+  ansible.builtin.command: /usr/local/bin/get-helm-3 --version {{ helm_version }}
+  environment:
+    USE_SUDO: "false"
+    HELM_INSTALL_DIR: /usr/local/bin
+  when: helm_check.rc != 0
+  changed_when: true
+
+- name: Ensure /root/.kube exists
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: "0700"
+
+- name: Symlink kubeconfig for root's kubectl/helm
+  ansible.builtin.file:
+    src: "{{ kubeconfig }}"
+    dest: /root/.kube/config
+    state: link
+    force: true
+
+- name: Add helm repositories
+  ansible.builtin.command: helm repo add {{ item.name }} {{ item.url }}
+  loop:
+    - { name: argo, url: https://argoproj.github.io/argo-helm }
+    - { name: ingress-nginx, url: https://kubernetes.github.io/ingress-nginx }
+  register: repo_add
+  changed_when: "'has been added' in repo_add.stdout"
+  failed_when: repo_add.rc != 0 and 'already exists' not in repo_add.stderr
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+
+- name: Update helm repositories
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+
+- name: Install ingress-nginx (k3s traefik is disabled)
+  ansible.builtin.command: >
+    helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx
+    --namespace ingress-nginx --create-namespace
+    --version {{ ingress_nginx_chart_version }}
+    --set controller.ingressClassResource.default=true
+    --set controller.service.type=LoadBalancer
+    --wait --timeout 10m
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+  register: ingress_install
+  changed_when: "'STATUS: deployed' in ingress_install.stdout"
+
+- name: Copy Argo CD helm values
+  ansible.builtin.copy:
+    src: "{{ argocd_values_file }}"
+    dest: /root/argocd-values.yaml
+    mode: "0600"
+
+- name: Install Argo CD
+  ansible.builtin.command: >
+    helm upgrade --install argocd argo/argo-cd
+    --namespace {{ argocd_namespace }} --create-namespace
+    --version {{ argocd_chart_version }}
+    -f /root/argocd-values.yaml
+    --wait --timeout 10m
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+  register: argocd_install
+  changed_when: "'STATUS: deployed' in argocd_install.stdout"
+
+- name: Create rtdaas namespace (idempotent)
+  ansible.builtin.shell: kubectl create namespace rtdaas --dry-run=client -o yaml | kubectl apply -f -
+  args:
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+  register: ns_apply
+  changed_when: "'created' in ns_apply.stdout"
+
+- name: Render environment overlay ConfigMap (S3 buckets / region for this environment)
+  ansible.builtin.template:
+    src: rtdaas-env-overlay.yaml.j2
+    dest: /root/rtdaas-env-overlay.yaml
+    mode: "0600"
+
+- name: Apply environment overlay ConfigMap
+  ansible.builtin.command: kubectl apply -f /root/rtdaas-env-overlay.yaml
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+  register: overlay_apply
+  changed_when: "'configured' in overlay_apply.stdout or 'created' in overlay_apply.stdout"
+
+- name: Copy root application
+  ansible.builtin.copy:
+    src: "{{ argocd_root_app }}"
+    dest: /root/argocd-root.yaml
+    mode: "0600"
+
+- name: Apply root application (app-of-apps)
+  ansible.builtin.command: kubectl apply -n {{ argocd_namespace }} -f /root/argocd-root.yaml
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+  register: root_apply
+  changed_when: "'configured' in root_apply.stdout or 'created' in root_apply.stdout"
+
+- name: Read initial Argo CD admin password
+  ansible.builtin.command: kubectl -n {{ argocd_namespace }} get secret argocd-initial-admin-secret -o jsonpath='{.data.password}'
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+  register: argocd_pw
+  changed_when: false
+  failed_when: false
+
+- name: Show how to reach Argo CD
+  ansible.builtin.debug:
+    msg:
+      - "Argo CD: kubectl -n {{ argocd_namespace }} port-forward svc/argocd-server 8443:443  (user admin)"
+      - "Initial password: {{ (argocd_pw.stdout | b64decode) if argocd_pw.rc == 0 and argocd_pw.stdout else 'see argocd-initial-admin-secret' }}"
+      - "Applications: kubectl get applications -n {{ argocd_namespace }}"

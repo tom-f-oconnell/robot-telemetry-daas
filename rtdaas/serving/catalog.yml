@@ -1,0 +1,250 @@
+# Data catalog: every published table, its owner, SLA and column documentation (spec §6).
+# Served by GET /api/catalog and rendered on the Catalog UI page. `contract` names the
+# schema-registry subject a raw table is derived from, or "derived" for computed tables.
+owner_default: data-platform@rtdaas
+tables:
+  - name: telemetry.tool_pose_raw
+    owner: data-platform@rtdaas
+    description: Instrument tip Cartesian pose, jaw angle and tip speed per arm at ~50 Hz, from streaming and recorded bags.
+    sla_hours: 26
+    contract: rtdaas.telemetry.tool_pose-value
+    partitioning: [days(ts), robot_id]
+    freshness_column: ts
+    pii: false
+    columns:
+      - {name: robot_id, type: string, description: Robot identifier (dv-001...).}
+      - {name: arm, type: string, description: dVRK arm name (PSM1, PSM2, PSM3, ECM, MTML, MTMR).}
+      - {name: ts, type: timestamp, description: Message header stamp, UTC.}
+      - {name: recv_ts, type: timestamp, description: Bridge receive time (stream) or bag log time.}
+      - {name: x, type: double, description: Tip position x in metres, robot base frame.}
+      - {name: y, type: double, description: Tip position y in metres.}
+      - {name: z, type: double, description: Tip position z in metres.}
+      - {name: qx, type: double, description: Orientation quaternion x.}
+      - {name: qy, type: double, description: Orientation quaternion y.}
+      - {name: qz, type: double, description: Orientation quaternion z.}
+      - {name: qw, type: double, description: Orientation quaternion w.}
+      - {name: jaw_angle, type: double, description: Jaw opening in radians (NaN for arms without a jaw).}
+      - {name: speed, type: double, description: Tip linear speed in m/s as estimated by the adapter.}
+      - {name: source, type: string, description: "'stream' (Kafka) or 'bag' (MCAP)."}
+      - {name: bag_file, type: string, description: Source bag file name, null for stream rows.}
+
+  - name: telemetry.joint_states_raw
+    owner: data-platform@rtdaas
+    description: Joint positions, velocities and efforts per arm as published by the dVRK (measured_js).
+    sla_hours: 26
+    contract: rtdaas.telemetry.joint_states-value
+    partitioning: [days(ts), robot_id]
+    freshness_column: ts
+    pii: false
+    columns:
+      - {name: robot_id, type: string, description: Robot identifier.}
+      - {name: arm, type: string, description: Arm name.}
+      - {name: ts, type: timestamp, description: Header stamp, UTC.}
+      - {name: recv_ts, type: timestamp, description: Receive / log time.}
+      - {name: frame_id, type: string, description: ROS header frame_id.}
+      - {name: joint_names, type: "array<string>", description: Joint names in message order.}
+      - {name: position, type: "array<double>", description: Joint positions (rad or m).}
+      - {name: velocity, type: "array<double>", description: Joint velocities.}
+      - {name: effort, type: "array<double>", description: Joint efforts.}
+      - {name: source, type: string, description: stream or bag.}
+      - {name: bag_file, type: string, description: Source bag file name.}
+
+  - name: telemetry.events_raw
+    owner: data-platform@rtdaas
+    description: Discrete system events (session boundaries, instrument swaps, clutch, joint-limit warnings, e-stop).
+    sla_hours: 26
+    contract: rtdaas.telemetry.events-value
+    partitioning: [days(ts)]
+    freshness_column: ts
+    pii: false
+    columns:
+      - {name: robot_id, type: string, description: Robot identifier.}
+      - {name: arm, type: string, description: Arm the event relates to, empty for system-wide events.}
+      - {name: ts, type: timestamp, description: Header stamp, UTC.}
+      - {name: recv_ts, type: timestamp, description: Receive / log time.}
+      - {name: severity, type: int, description: "0 debug, 1 info, 2 warn, 3 error, 4 fatal."}
+      - {name: severity_name, type: string, description: Severity as text.}
+      - {name: code, type: string, description: Machine-readable event code.}
+      - {name: message, type: string, description: Human-readable detail.}
+      - {name: source, type: string, description: stream or bag.}
+      - {name: bag_file, type: string, description: Source bag file name.}
+
+  - name: telemetry.heartbeat_raw
+    owner: data-platform@rtdaas
+    description: 1 Hz liveness and coarse operating state per robot.
+    sla_hours: 26
+    contract: rtdaas.telemetry.heartbeat-value
+    partitioning: [days(ts)]
+    freshness_column: ts
+    pii: false
+    columns:
+      - {name: robot_id, type: string, description: Robot identifier.}
+      - {name: ts, type: timestamp, description: Header stamp, UTC.}
+      - {name: recv_ts, type: timestamp, description: Receive / log time.}
+      - {name: uptime_s, type: double, description: Seconds since the robot software started.}
+      - {name: state, type: string, description: "idle, homing, ready, teleop or fault."}
+      - {name: active_arms, type: "array<string>", description: Arms currently enabled.}
+      - {name: software_version, type: string, description: Publishing stack version.}
+      - {name: source, type: string, description: stream or bag.}
+      - {name: bag_file, type: string, description: Source bag file name.}
+
+  - name: telemetry.kpi_1m
+    owner: data-platform@rtdaas
+    description: Per robot x arm x 1-minute window KPIs (speed, path length, idle fraction, jaw cycles, event counts, heartbeat gaps). Stream rows are replaced by batch rows for the same window.
+    sla_hours: 1
+    contract: derived
+    partitioning: [days(window_start)]
+    freshness_column: window_start
+    pii: false
+    columns:
+      - {name: robot_id, type: string, description: Robot identifier.}
+      - {name: arm, type: string, description: Arm name.}
+      - {name: window_start, type: timestamp, description: Window start (inclusive), UTC.}
+      - {name: window_end, type: timestamp, description: Window end (exclusive).}
+      - {name: n_samples, type: long, description: Tool-pose samples in the window.}
+      - {name: mean_speed_mps, type: double, description: Mean tip speed, m/s.}
+      - {name: max_speed_mps, type: double, description: Max tip speed, m/s.}
+      - {name: path_length_m, type: double, description: Tip path length in the window, m.}
+      - {name: idle_fraction, type: double, description: Fraction of samples below 5 mm/s.}
+      - {name: jaw_cycles, type: long, description: Jaw open transitions.}
+      - {name: warn_events, type: long, description: Events with severity 2.}
+      - {name: error_events, type: long, description: Events with severity >= 3.}
+      - {name: heartbeat_gap_s, type: double, description: Largest heartbeat gap inside the window, s.}
+      - {name: computed_by, type: string, description: stream or batch.}
+      - {name: computed_at, type: timestamp, description: When the row was computed.}
+
+  - name: telemetry.sessions
+    owner: data-platform@rtdaas
+    description: Economy-of-motion summary per session x arm (path length, mean speed, idle fraction, jaw cycles, event counts, instrument swaps).
+    sla_hours: 26
+    contract: derived
+    partitioning: [days(start_ts)]
+    freshness_column: start_ts
+    pii: false
+    columns:
+      - {name: session_id, type: string, description: "<robot_id>-<start UTC yyyymmddTHHMMSS>."}
+      - {name: robot_id, type: string, description: Robot identifier.}
+      - {name: arm, type: string, description: Arm name.}
+      - {name: start_ts, type: timestamp, description: Session start, UTC.}
+      - {name: end_ts, type: timestamp, description: Session end, UTC.}
+      - {name: duration_s, type: double, description: Pose-sample span in seconds.}
+      - {name: n_samples, type: long, description: Tool-pose samples.}
+      - {name: path_length_m, type: double, description: Total tip path length, m.}
+      - {name: mean_speed_mps, type: double, description: Path length / duration.}
+      - {name: idle_fraction, type: double, description: Fraction of samples below 5 mm/s.}
+      - {name: jaw_cycles, type: long, description: Jaw open transitions.}
+      - {name: warn_events, type: long, description: Severity-2 events during the session.}
+      - {name: error_events, type: long, description: Severity>=3 events during the session.}
+      - {name: instrument_swaps, type: long, description: INSTRUMENT_SWAP events.}
+      - {name: bag_file, type: string, description: Source bag file.}
+      - {name: pipeline_version, type: string, description: rtdaas version that produced the row.}
+      - {name: processed_at, type: timestamp, description: Processing time.}
+
+  - name: procedures.trials
+    owner: data-platform@rtdaas
+    description: One row per JIGSAWS trial (task, subject, repetition, skill level, GRS score, durations, file paths).
+    sla_hours: 168
+    contract: derived
+    partitioning: [task]
+    freshness_column: processed_at
+    pii: false
+    columns:
+      - {name: trial_id, type: string, description: e.g. Suturing_B001.}
+      - {name: task, type: string, description: Suturing, Knot_Tying or Needle_Passing.}
+      - {name: subject, type: string, description: Subject letter B..I.}
+      - {name: repetition, type: int, description: Repetition number.}
+      - {name: skill_level, type: string, description: novice, intermediate or expert.}
+      - {name: grs_total, type: int, description: Global rating score total.}
+      - {name: duration_s, type: double, description: Kinematic duration.}
+      - {name: n_frames, type: long, description: Video frames.}
+      - {name: n_kinematic_samples, type: long, description: Kinematic samples.}
+      - {name: sample_rate_hz, type: double, description: Kinematic sample rate.}
+      - {name: video_path, type: string, description: Path of the video file.}
+      - {name: kinematics_path, type: string, description: Path of the kinematics file.}
+      - {name: transcription_path, type: string, description: Path of the transcription file.}
+      - {name: n_gestures, type: long, description: Transcribed gesture segments.}
+      - {name: processed_at, type: timestamp, description: Processing time.}
+      - {name: pipeline_version, type: string, description: rtdaas version.}
+
+  - name: procedures.kinematics
+    owner: data-platform@rtdaas
+    description: 30 Hz kinematics for all four manipulators (position, rotation, velocities, gripper) with the gesture label per sample.
+    sla_hours: 168
+    contract: derived
+    partitioning: [task, trial_id]
+    freshness_column: null
+    pii: false
+    columns:
+      - {name: trial_id, type: string, description: Trial id.}
+      - {name: task, type: string, description: Task.}
+      - {name: frame_idx, type: long, description: 0-based sample index (= video frame).}
+      - {name: t_s, type: double, description: Time from trial start, s.}
+      - {name: mtml, type: struct, description: "Left master: x,y,z,r11..r33,vx,vy,vz,wx,wy,wz,gripper (flattened as mtml_x... in SQLite)."}
+      - {name: mtmr, type: struct, description: Right master.}
+      - {name: psml, type: struct, description: Left patient-side manipulator.}
+      - {name: psmr, type: struct, description: Right patient-side manipulator.}
+      - {name: gesture, type: string, description: Gesture code (G1..G15) or null.}
+
+  - name: procedures.gestures
+    owner: data-platform@rtdaas
+    description: One row per transcribed gesture segment with PSM path length, speed, gripper cycles and video motion energy.
+    sla_hours: 168
+    contract: derived
+    partitioning: [task]
+    freshness_column: null
+    pii: false
+    columns:
+      - {name: trial_id, type: string, description: Trial id.}
+      - {name: task, type: string, description: Task.}
+      - {name: subject, type: string, description: Subject letter.}
+      - {name: skill_level, type: string, description: Skill level.}
+      - {name: gesture, type: string, description: Gesture code.}
+      - {name: start_frame, type: long, description: 1-based start frame.}
+      - {name: end_frame, type: long, description: 1-based end frame (inclusive).}
+      - {name: duration_s, type: double, description: Segment duration.}
+      - {name: path_length_psml, type: double, description: Left PSM tip path length, m.}
+      - {name: path_length_psmr, type: double, description: Right PSM tip path length, m.}
+      - {name: mean_speed_psml, type: double, description: Left PSM mean speed, m/s.}
+      - {name: mean_speed_psmr, type: double, description: Right PSM mean speed, m/s.}
+      - {name: gripper_cycles, type: long, description: Gripper open transitions, both PSMs.}
+      - {name: motion_energy_mean, type: double, description: Mean video motion energy over the segment.}
+      - {name: n_frames, type: long, description: Samples in the segment.}
+
+  - name: procedures.frame_features
+    owner: data-platform@rtdaas
+    description: Per video frame intensity, motion energy and sharpness, aligned with kinematic samples.
+    sla_hours: 168
+    contract: derived
+    partitioning: [task, trial_id]
+    freshness_column: null
+    pii: false
+    columns:
+      - {name: trial_id, type: string, description: Trial id.}
+      - {name: task, type: string, description: Task.}
+      - {name: frame_idx, type: long, description: 0-based frame index.}
+      - {name: t_s, type: double, description: frame_idx / fps.}
+      - {name: mean_intensity, type: double, description: Mean grey level / 255.}
+      - {name: motion_energy, type: double, description: Mean abs frame difference / 255.}
+      - {name: sharpness, type: double, description: Variance of the Laplacian.}
+      - {name: gesture, type: string, description: Gesture label at this frame.}
+
+  - name: dq.check_results
+    owner: data-platform@rtdaas
+    description: Results of every data-quality check run (quality gate, dq_daily, local pipeline).
+    sla_hours: 26
+    contract: derived
+    partitioning: [days(run_ts)]
+    freshness_column: run_ts
+    pii: false
+    columns:
+      - {name: run_id, type: string, description: Run identifier.}
+      - {name: suite, type: string, description: Suite name.}
+      - {name: table_name, type: string, description: Checked table.}
+      - {name: check_name, type: string, description: Check name.}
+      - {name: severity, type: string, description: blocking or warning.}
+      - {name: status, type: string, description: "pass, fail, error or skipped."}
+      - {name: observed, type: double, description: Observed value.}
+      - {name: threshold, type: string, description: Threshold description.}
+      - {name: partition_value, type: string, description: Partition filter used.}
+      - {name: run_ts, type: timestamp, description: Run time.}
+      - {name: message, type: string, description: Detail.}

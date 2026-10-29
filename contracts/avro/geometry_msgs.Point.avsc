@@ -1,0 +1,21 @@
+{
+  "type": "record",
+  "name": "Point",
+  "namespace": "geometry_msgs",
+  "doc": "Generated from ROS 2 message geometry_msgs/Point.",
+  "fields": [
+    {
+      "name": "x",
+      "type": "double",
+      "doc": "This contains the position of a point in free space"
+    },
+    {
+      "name": "y",
+      "type": "double"
+    },
+    {
+      "name": "z",
+      "type": "double"
+    }
+  ]
+}

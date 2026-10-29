@@ -1,0 +1,31 @@
+# Non-secret settings from docs/architecture/spec.md §9 with in-cluster hostnames.
+# Every rtdaas workload uses `envFrom: rtdaas-config` first and the Ansible-managed
+# `rtdaas-env-overlay` second (its keys win: buckets, S3 endpoint, region per environment).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rtdaas-config
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/part-of: rtdaas
+data:
+  KAFKA_BOOTSTRAP: rtdaas-kafka-bootstrap.kafka.svc.cluster.local:9092
+  SCHEMA_REGISTRY_URL: http://apicurio.rtdaas.svc.cluster.local:8080/apis/ccompat/v7
+  ES_URL: http://rtdaas-es-http.rtdaas.svc.cluster.local:9200
+  S3_ENDPOINT: http://minio.minio.svc.cluster.local:9000
+  S3_BUCKET_RAW: rtdaas-raw
+  S3_BUCKET_LAKE: rtdaas-lake
+  ICEBERG_REST_URI: http://iceberg-rest.rtdaas.svc.cluster.local:8181
+  ICEBERG_WAREHOUSE: s3a://rtdaas-lake/warehouse
+  AIRFLOW_API_URL: http://airflow-webserver.rtdaas.svc.cluster.local:8080/api/v1
+  AIRFLOW_USER: airflow
+  SERVING_BACKEND: duckdb
+  SERVING_SQLITE_PATH: /data/rtdaas.sqlite
+  SERVING_DUCKDB_PATH: /data/rtdaas.duckdb
+  MEDIA_ROOT: /data
+  API_HOST: "0.0.0.0"
+  API_PORT: "8080"
+  AWS_REGION: us-east-1
+  # Jars are baked into the spark image; never resolve packages at submit time.
+  RTDAAS_SPARK_PACKAGES: "0"
+  LOG_LEVEL: INFO

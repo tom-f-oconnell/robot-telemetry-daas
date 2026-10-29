@@ -1,0 +1,32 @@
+# Freshness/liveness suite for the real-time path. Run every 15 minutes by dq_daily's
+# streaming sub-DAG (or ad hoc) against telemetry.kpi_1m with no partition filter.
+suite: streaming
+tables:
+  - table: telemetry.kpi_1m
+    checks:
+      - name: fresh_kpis
+        type: freshness
+        ts_column: window_start
+        max_age_hours: 0.25
+        severity: warning
+      - name: stream_rows_present
+        type: sql
+        query: "SELECT COUNT(*) FROM {table} WHERE computed_by = 'stream'"
+        op: ">="
+        threshold: 1
+        severity: warning
+      - name: heartbeat_gaps_small
+        type: value_range
+        column: heartbeat_gap_s
+        min: 0
+        max: 5
+        max_violation_fraction: 0.05
+        severity: warning
+  - table: telemetry.heartbeat_raw
+    partition_column: ts
+    checks:
+      - name: fresh_heartbeats
+        type: freshness
+        ts_column: ts
+        max_age_hours: 0.1
+        severity: warning

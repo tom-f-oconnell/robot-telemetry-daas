@@ -1,0 +1,20 @@
+# Scraped by kube-prometheus-stack (serviceMonitorSelectorNilUsesHelmValues: false,
+# so no `release` label is required; it is set anyway for clusters that filter on it).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rtdaas-api
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/part-of: rtdaas
+    release: kps
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rtdaas-api
+  namespaceSelector:
+    matchNames: ["rtdaas"]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

@@ -1,0 +1,21 @@
+sequenceDiagram
+    participant R as dVRK arm (ROS 2)
+    participant A as tool_pose_adapter / fleet_monitor
+    participant B as kafka_bridge (C++)
+    participant S as Schema registry
+    participant K as Kafka
+    participant P as Spark Structured Streaming
+    participant I as Iceberg (telemetry.*)
+    participant E as Elasticsearch
+
+    B->>S: GET /subjects/{topic}-value/versions/latest (startup)
+    S-->>B: schema id + Avro schema
+    R->>A: measured_cp, jaw/measured_js (50 Hz)
+    A->>B: rtdaas_msgs/ToolPose on /{robot}/{arm}/rtdaas/tool_pose
+    B->>K: 0x00 + schema id + Avro(envelope{robot_id, ros_topic, recv_time_ns, msg})
+    loop every 30 s trigger
+        K->>P: micro-batch (3 topics)
+        P->>P: from_avro, watermark 30 s, 1-min windows per robot × arm
+        P->>I: append *_raw (source=stream), MERGE kpi_1m (stream never overwrites batch)
+        P->>E: bulk upsert rtdaas-kpi-1m, rtdaas-events
+    end

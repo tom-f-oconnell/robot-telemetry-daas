@@ -1,0 +1,100 @@
+{
+  "type": "record",
+  "name": "HeartbeatRecord",
+  "namespace": "rtdaas.kafka",
+  "doc": "Kafka value for topic rtdaas.telemetry.heartbeat: bridge envelope around rtdaas_msgs.Heartbeat.",
+  "fields": [
+    {
+      "name": "robot_id",
+      "type": "string",
+      "doc": "Fleet-wide robot identifier, e.g. dv-001."
+    },
+    {
+      "name": "ros_topic",
+      "type": "string",
+      "doc": "Fully-qualified ROS 2 topic the message came from."
+    },
+    {
+      "name": "recv_time_ns",
+      "type": "long",
+      "doc": "bridge receive time, UNIX ns"
+    },
+    {
+      "name": "msg",
+      "type": {
+        "type": "record",
+        "name": "Heartbeat",
+        "namespace": "rtdaas_msgs",
+        "doc": "Generated from ROS 2 message rtdaas_msgs/Heartbeat.",
+        "fields": [
+          {
+            "name": "header",
+            "type": {
+              "type": "record",
+              "name": "Header",
+              "namespace": "std_msgs",
+              "doc": "Generated from ROS 2 message std_msgs/Header.",
+              "fields": [
+                {
+                  "name": "stamp",
+                  "type": {
+                    "type": "record",
+                    "name": "Time",
+                    "namespace": "builtin_interfaces",
+                    "doc": "Generated from ROS 2 message builtin_interfaces/Time.",
+                    "fields": [
+                      {
+                        "name": "sec",
+                        "type": "int",
+                        "doc": "Time indicates a specific point in time, relative to a clock's 0 point. The seconds component, valid over all int32 values."
+                      },
+                      {
+                        "name": "nanosec",
+                        "type": "long",
+                        "doc": "The nanoseconds component, valid in the range [0, 10e9)."
+                      }
+                    ]
+                  },
+                  "doc": "Standard metadata for higher-level stamped data types. Two-integer timestamp that is expressed as seconds and nanoseconds."
+                },
+                {
+                  "name": "frame_id",
+                  "type": "string",
+                  "doc": "Transform frame with which this data is associated."
+                }
+              ]
+            },
+            "doc": "Periodic liveness message, one per robot, published at 1 Hz."
+          },
+          {
+            "name": "robot_id",
+            "type": "string"
+          },
+          {
+            "name": "uptime_s",
+            "type": "double",
+            "doc": "Seconds since the robot's software stack started."
+          },
+          {
+            "name": "state",
+            "type": "string",
+            "doc": "Coarse operating state: \"idle\", \"homing\", \"ready\", \"teleop\", \"fault\"."
+          },
+          {
+            "name": "active_arms",
+            "type": {
+              "type": "array",
+              "items": "string"
+            },
+            "doc": "Arms currently enabled on this robot."
+          },
+          {
+            "name": "software_version",
+            "type": "string",
+            "doc": "Software version string of the publishing stack."
+          }
+        ]
+      }
+    }
+  ]
+}

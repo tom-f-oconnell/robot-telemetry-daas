@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rtdaas — robot telemetry</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="brand">
+      <div class="brand-title">rtdaas</div>
+      <div class="brand-sub">robot telemetry DaaS</div>
+    </div>
+    <div class="nav-section">Telemetry</div>
+    <a href="#/sessions" data-nav="sessions">Sessions</a>
+    <a href="#/events" data-nav="events">Log explorer</a>
+    <div class="nav-section">Procedures</div>
+    <a href="#/trials" data-nav="trials">Trials</a>
+    <a href="#/gestures" data-nav="gestures">Gesture search</a>
+    <div class="nav-section">Platform</div>
+    <a href="#/catalog" data-nav="catalog">Catalog</a>
+    <a href="#/quality" data-nav="quality">Quality</a>
+    <a href="#/contracts" data-nav="contracts">Contracts</a>
+    <a href="#/jobs" data-nav="jobs">Jobs</a>
+    <div class="nav-footer">
+      <a href="/docs" target="_blank" rel="noopener">API docs ↗</a>
+      <span id="health-badge" class="badge badge-muted">…</span>
+    </div>
+  </nav>
+  <main id="main" class="main">
+    <div class="empty">Loading…</div>
+  </main>
+  <div id="toasts" class="toasts"></div>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

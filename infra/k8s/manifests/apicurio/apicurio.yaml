@@ -1,0 +1,91 @@
+# Apicurio Registry (in-memory variant) — fine for the demo cluster.
+# Production: switch to apicurio/apicurio-registry-sql backed by PostgreSQL
+# (REGISTRY_DATASOURCE_URL / USERNAME / PASSWORD) so schemas survive restarts.
+# Confluent-compatible API: http://apicurio.rtdaas.svc.cluster.local:8080/apis/ccompat/v7
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apicurio
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/name: apicurio
+    app.kubernetes.io/part-of: rtdaas
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apicurio
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apicurio
+        app.kubernetes.io/part-of: rtdaas
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+        - name: registry
+          image: apicurio/apicurio-registry-mem:2.6.5.Final
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: QUARKUS_HTTP_PORT
+              value: "8080"
+            - name: REGISTRY_CCOMPAT_LEGACY_ID_MODE_ENABLED
+              value: "true"
+            - name: REGISTRY_RULES_GLOBAL_COMPATIBILITY
+              value: BACKWARD
+            - name: QUARKUS_LOG_LEVEL
+              value: WARN
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apicurio
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/name: apicurio
+    app.kubernetes.io/part-of: rtdaas
+spec:
+  selector:
+    app.kubernetes.io/name: apicurio
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: apicurio
+  namespace: rtdaas
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: registry.rtdaas.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: apicurio
+                port:
+                  name: http

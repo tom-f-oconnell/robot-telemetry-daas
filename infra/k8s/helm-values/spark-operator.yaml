@@ -1,0 +1,36 @@
+# kubeflow spark-operator chart 2.0.x
+spark:
+  # Namespaces where SparkApplication CRs are watched and where the operator
+  # creates the `spark-operator-spark` service account.
+  jobNamespaces:
+    - rtdaas
+  serviceAccount:
+    create: true
+    name: spark-operator-spark
+  rbac:
+    create: true
+
+controller:
+  replicas: 1
+  workers: 10
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+webhook:
+  enable: true
+  port: 9443
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 256Mi }
+
+prometheus:
+  metrics:
+    enable: true
+    port: 8080
+    portName: metrics
+    endpoint: /metrics
+  podMonitor:
+    create: true
+    labels:
+      release: kps

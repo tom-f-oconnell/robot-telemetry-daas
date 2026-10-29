@@ -1,0 +1,46 @@
+#cloud-config
+hostname: ${hostname}
+fqdn: ${hostname}.rtdaas.local
+manage_etc_hosts: true
+preserve_hostname: false
+
+users:
+  - name: ubuntu
+    groups: [adm, sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+package_update: true
+package_upgrade: false
+packages:
+  - qemu-guest-agent
+  - python3
+  - python3-apt
+  - curl
+  - open-iscsi
+  - nfs-common
+
+# k3s/kubelet needs swap off; cloud images ship without a swapfile but be explicit.
+swap:
+  size: 0
+
+write_files:
+  - path: /etc/sysctl.d/99-rtdaas.conf
+    content: |
+      fs.inotify.max_user_instances = 8192
+      fs.inotify.max_user_watches = 1048576
+      net.ipv4.ip_forward = 1
+      vm.max_map_count = 262144
+      net.bridge.bridge-nf-call-iptables = 1
+
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  - swapoff -a || true
+  - sed -i '/\sswap\s/d' /etc/fstab
+  - modprobe br_netfilter || true
+  - sysctl --system
+
+final_message: "rtdaas node ${hostname} is ready after $UPTIME seconds"

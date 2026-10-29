@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rtdaas_kafka_bridge</name>
+  <version>0.1.0</version>
+  <description>
+    Generic ROS 2 topic to Kafka bridge: deserializes any message type via introspection
+    type support, encodes it as Avro against the schema registered for the Kafka topic
+    (Confluent wire format) and produces it with librdkafka. See ros2/README.md.
+  </description>
+  <maintainer email="tom.oconn3ll@gmail.com">Thomas O'Connell</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rcpputils</depend>
+  <depend>rosbag2_cpp</depend>
+  <depend>rosidl_runtime_cpp</depend>
+  <depend>rosidl_typesupport_cpp</depend>
+  <depend>rosidl_typesupport_introspection_cpp</depend>
+  <depend>std_msgs</depend>
+  <depend>yaml_cpp_vendor</depend>
+  <depend>yaml-cpp</depend>
+
+  <!-- system libraries (rosdep keys): librdkafka-dev, libcurl4-openssl-dev, nlohmann-json3-dev -->
+  <depend>librdkafka-dev</depend>
+  <depend>libcurl-dev</depend>
+  <depend>nlohmann-json-dev</depend>
+  <!-- avro-cpp has no reliable rosdep/apt key on Ubuntu 24.04: built from source in
+       infra/docker/bridge.Dockerfile (Apache Avro 1.11.3). -->
+  <depend>boost</depend>
+
+  <!-- message packages the default config bridges; generic subscriptions load their
+       typesupport libraries at runtime, so they must be installed in the same environment. -->
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>rtdaas_msgs</exec_depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

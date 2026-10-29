@@ -1,0 +1,26 @@
+flowchart TB
+    root["<root>/<Task>/<br/>kinematics/AllGestures/*.txt<br/>transcriptions/*.txt<br/>video/*_capture1.avi<br/>meta_file_<Task>.txt"]
+    disc["discover_trials()<br/>(driver)"]
+    par["parallelize(trials)<br/>one partition per trial"]
+    kin["parse_kinematics<br/>76 cols → 4 arm structs"]
+    tr["parse_transcription<br/>+ label_frames"]
+    vid["frame_features (OpenCV)<br/>intensity, motion energy, sharpness"]
+    gm["gesture_metrics<br/>path length, speed, gripper cycles,<br/>video motion energy per gesture"]
+    t1["procedures.trials"]
+    t2["procedures.kinematics"]
+    t3["procedures.gestures"]
+    t4["procedures.frame_features"]
+    es["ES rtdaas-gestures<br/>(search by task/gesture/skill)"]
+    ui["Trial page: video ⟷ kinematics scrubber,<br/>gesture ribbon, frame features"]
+
+    root --> disc --> par
+    par --> kin --> gm
+    par --> tr --> gm
+    par --> vid --> gm
+    kin --> t2
+    vid --> t4
+    gm --> t3 --> es
+    disc --> t1
+    t2 --> ui
+    t3 --> ui
+    t4 --> ui

@@ -1,0 +1,16 @@
+flowchart TB
+    msg["contracts/msgs/**/*.msg<br/>(ROS 2 definitions = source of truth)"]
+    gen["rtdaas-contracts gen"]
+    avsc["contracts/avro/*.avsc<br/>+ kafka/<topic>.avsc envelopes"]
+    pr["Pull request"]
+    chk["rtdaas-contracts check<br/>--base origin/main --mode BACKWARD<br/>(pure-Python Avro resolution rules)"]
+    diff["git diff --exit-code<br/>(generated files up to date?)"]
+    merge["merge"]
+    sync["contracts_sync DAG<br/>rtdaas-contracts register"]
+    regy["Schema registry<br/>subject <topic>-value"]
+    cons["Bridge · simulator · Spark jobs<br/>fetch schema at startup, never embed"]
+
+    msg --> gen --> avsc --> pr --> chk --> merge
+    pr --> diff --> merge
+    merge --> sync --> regy --> cons
+    chk -- incompatible --> block["CI fails:<br/>field removed / default missing / narrowing type"]

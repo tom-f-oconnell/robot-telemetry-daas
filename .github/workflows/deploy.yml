@@ -1,0 +1,45 @@
+name: deploy
+
+# GitOps hand-off: after images for a main commit are published, pin the new tags
+# in infra/k8s/manifests/rtdaas/kustomization.yaml. Argo CD (automated sync) rolls
+# the change out; nothing here talks to the cluster.
+on:
+  workflow_run:
+    workflows: [images]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump-image-tags:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Install kustomize
+        run: |
+          curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- 5.4.3 /usr/local/bin
+          kustomize version
+      - name: Pin image tags to the built commit
+        working-directory: infra/k8s/manifests/rtdaas
+        run: |
+          for img in rtdaas-api rtdaas-spark rtdaas-sim rtdaas-bridge; do
+            kustomize edit set image "ghcr.io/OWNER/${img}=ghcr.io/${OWNER}/${img}:${SHA}"
+          done
+          kustomize build . > /dev/null   # fail fast if the overlay no longer renders
+          git diff --stat
+      - name: Commit and push
+        run: |
+          git config user.name "rtdaas-deploy[bot]"
+          git config user.email "rtdaas-deploy@users.noreply.github.com"
+          git add infra/k8s/manifests/rtdaas/kustomization.yaml
+          git diff --cached --quiet && { echo "nothing to deploy"; exit 0; }
+          git commit -m "deploy: pin rtdaas images to ${SHA} [skip ci]"
+          git push origin HEAD:main

@@ -1,0 +1,4 @@
+---
+k3s_version: "v1.31.2+k3s1"
+k3s_agent_args: ""
+k3s_node_ip: "{{ ansible_default_ipv4.address }}"

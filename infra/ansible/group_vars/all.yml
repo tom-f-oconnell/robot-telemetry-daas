@@ -1,0 +1,27 @@
+# Shared variables for every host.
+k3s_version: "v1.31.2+k3s1"
+k3s_server_args: "--disable traefik --write-kubeconfig-mode 644 --cluster-cidr 10.52.0.0/16 --service-cidr 10.53.0.0/16"
+k3s_agent_args: ""
+# Node IP advertised to the cluster. Terraform's AWS inventory sets `private_ip`
+# per host; libvirt hosts fall back to the default interface address.
+k3s_node_ip: "{{ private_ip | default(ansible_default_ipv4.address) }}"
+
+# Where kubeconfig and the node token are fetched on the control machine.
+local_artifacts_dir: "{{ playbook_dir }}/artifacts"
+
+# Argo CD
+argocd_namespace: argocd
+argocd_chart_version: "7.6.12"
+helm_version: "v3.16.2"
+argocd_values_file: "{{ playbook_dir }}/../k8s/helm-values/argocd.yaml"
+argocd_root_app: "{{ playbook_dir }}/../k8s/argocd/root.yaml"
+
+# ingress-nginx is installed by the argocd role so the rtdaas Ingress has a controller
+# (k3s' bundled traefik is disabled above to keep one ingress class across envs).
+ingress_nginx_chart_version: "4.11.3"
+
+# Cloud hints (overridden by terraform-generated inventory for AWS)
+rtdaas_cloud: libvirt
+rtdaas_s3_bucket_raw: rtdaas-raw
+rtdaas_s3_bucket_lake: rtdaas-lake
+rtdaas_aws_region: us-east-1

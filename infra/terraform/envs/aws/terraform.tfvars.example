@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and edit.
+region         = "us-west-2"
+ssh_public_key = "ssh-ed25519 AAAA... you@laptop"
+admin_cidr     = "203.0.113.42/32"   # curl -s ifconfig.me
+node_count     = 4
+instance_type  = "t3.xlarge"
+root_volume_gb = 80
+# bucket_suffix = "tom"              # otherwise random

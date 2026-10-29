@@ -1,0 +1,144 @@
+{
+  "type": "record",
+  "name": "ToolPoseRecord",
+  "namespace": "rtdaas.kafka",
+  "doc": "Kafka value for topic rtdaas.telemetry.tool_pose: bridge envelope around rtdaas_msgs.ToolPose.",
+  "fields": [
+    {
+      "name": "robot_id",
+      "type": "string",
+      "doc": "Fleet-wide robot identifier, e.g. dv-001."
+    },
+    {
+      "name": "ros_topic",
+      "type": "string",
+      "doc": "Fully-qualified ROS 2 topic the message came from."
+    },
+    {
+      "name": "recv_time_ns",
+      "type": "long",
+      "doc": "bridge receive time, UNIX ns"
+    },
+    {
+      "name": "msg",
+      "type": {
+        "type": "record",
+        "name": "ToolPose",
+        "namespace": "rtdaas_msgs",
+        "doc": "Generated from ROS 2 message rtdaas_msgs/ToolPose.",
+        "fields": [
+          {
+            "name": "header",
+            "type": {
+              "type": "record",
+              "name": "Header",
+              "namespace": "std_msgs",
+              "doc": "Generated from ROS 2 message std_msgs/Header.",
+              "fields": [
+                {
+                  "name": "stamp",
+                  "type": {
+                    "type": "record",
+                    "name": "Time",
+                    "namespace": "builtin_interfaces",
+                    "doc": "Generated from ROS 2 message builtin_interfaces/Time.",
+                    "fields": [
+                      {
+                        "name": "sec",
+                        "type": "int",
+                        "doc": "Time indicates a specific point in time, relative to a clock's 0 point. The seconds component, valid over all int32 values."
+                      },
+                      {
+                        "name": "nanosec",
+                        "type": "long",
+                        "doc": "The nanoseconds component, valid in the range [0, 10e9)."
+                      }
+                    ]
+                  },
+                  "doc": "Standard metadata for higher-level stamped data types. Two-integer timestamp that is expressed as seconds and nanoseconds."
+                },
+                {
+                  "name": "frame_id",
+                  "type": "string",
+                  "doc": "Transform frame with which this data is associated."
+                }
+              ]
+            },
+            "doc": "Cartesian pose of an instrument tip plus jaw opening, composed by the rtdaas tool_pose_adapter node from dVRK measured_cp + jaw/measured_js."
+          },
+          {
+            "name": "arm",
+            "type": "string",
+            "doc": "Arm name as used in the dVRK namespace, e.g. \"PSM1\", \"PSM2\", \"ECM\", \"MTML\", \"MTMR\"."
+          },
+          {
+            "name": "position",
+            "type": {
+              "type": "record",
+              "name": "Point",
+              "namespace": "geometry_msgs",
+              "doc": "Generated from ROS 2 message geometry_msgs/Point.",
+              "fields": [
+                {
+                  "name": "x",
+                  "type": "double",
+                  "doc": "This contains the position of a point in free space"
+                },
+                {
+                  "name": "y",
+                  "type": "double"
+                },
+                {
+                  "name": "z",
+                  "type": "double"
+                }
+              ]
+            }
+          },
+          {
+            "name": "orientation",
+            "type": {
+              "type": "record",
+              "name": "Quaternion",
+              "namespace": "geometry_msgs",
+              "doc": "Generated from ROS 2 message geometry_msgs/Quaternion.",
+              "fields": [
+                {
+                  "name": "x",
+                  "type": "double",
+                  "doc": "This represents an orientation in free space in quaternion form.",
+                  "default": 0.0
+                },
+                {
+                  "name": "y",
+                  "type": "double",
+                  "default": 0.0
+                },
+                {
+                  "name": "z",
+                  "type": "double",
+                  "default": 0.0
+                },
+                {
+                  "name": "w",
+                  "type": "double",
+                  "default": 1.0
+                }
+              ]
+            }
+          },
+          {
+            "name": "jaw_angle",
+            "type": "double",
+            "doc": "Jaw opening angle in radians (NaN for arms without a jaw)."
+          },
+          {
+            "name": "speed",
+            "type": "double",
+            "doc": "Cartesian linear speed of the tip in m/s, as estimated by the adapter."
+          }
+        ]
+      }
+    }
+  ]
+}

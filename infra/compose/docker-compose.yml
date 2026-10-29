@@ -1,0 +1,503 @@
+# Local "laptop" deployment of the whole platform.
+#
+#   cd infra/compose
+#   cp .env.example .env
+#   docker compose --profile core up -d --build          # platform + API
+#   docker compose --profile core --profile demo up -d   # + simulator + streaming job
+#   docker compose --profile observability up -d         # + Prometheus / Grafana / Kibana
+#
+# Or simply `make demo` from the repository root (wraps scripts/demo.sh).
+#
+# Host ports:
+#   API/UI 8000 | Airflow 8085 | Spark master UI 8082 | Apicurio 8081 | MinIO 9000/9001
+#   Iceberg REST 8181 | Elasticsearch 9200 | Kafka (host clients) 29092 | Grafana 3000 | Prometheus 9090
+
+name: rtdaas
+
+x-rtdaas-env: &rtdaas-env
+  KAFKA_BOOTSTRAP: kafka:9092
+  SCHEMA_REGISTRY_URL: http://apicurio:8080/apis/ccompat/v7
+  ES_URL: http://elasticsearch:9200
+  S3_ENDPOINT: http://minio:9000
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+  S3_BUCKET_RAW: ${S3_BUCKET_RAW:-rtdaas-raw}
+  S3_BUCKET_LAKE: ${S3_BUCKET_LAKE:-rtdaas-lake}
+  ICEBERG_REST_URI: http://iceberg-rest:8181
+  ICEBERG_WAREHOUSE: s3a://${S3_BUCKET_LAKE:-rtdaas-lake}/warehouse
+  AIRFLOW_API_URL: http://airflow-webserver:8080/api/v1
+  AIRFLOW_USER: ${AIRFLOW_USER:-airflow}
+  AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD:-airflow}
+  AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minioadmin}
+  AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minioadmin}
+  AWS_REGION: us-east-1
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+x-airflow-common: &airflow-common
+  image: ${RTDAAS_IMAGE_PREFIX:-rtdaas}-airflow:${RTDAAS_IMAGE_TAG:-dev}
+  build:
+    context: ../..
+    dockerfile: infra/docker/airflow.Dockerfile
+  environment: &airflow-env
+    <<: *rtdaas-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: utc
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+    AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: "15"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY:-rtdaas-dev-secret}
+    AIRFLOW_VAR_RTDAAS_SPARK_MODE: submit
+    AIRFLOW_VAR_RTDAAS_SPARK_MASTER: spark://spark-master:7077
+    AIRFLOW_VAR_RTDAAS_HOME: /opt/rtdaas
+    AIRFLOW_CONN_RTDAAS_S3: 'aws://${S3_ACCESS_KEY:-minioadmin}:${S3_SECRET_KEY:-minioadmin}@/?endpoint_url=http%3A%2F%2Fminio%3A9000&region_name=us-east-1'
+    AIRFLOW_CONN_RTDAAS_SPARK: 'spark://spark-master:7077?deploy-mode=client'
+  volumes:
+    - ../../rtdaas/airflow/dags:/opt/airflow/dags:ro
+    - airflow-logs:/opt/airflow/logs
+    - ./data:/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+  profiles: ["core"]
+
+services:
+  # ------------------------------------------------------------------ messaging
+  kafka:
+    image: apache/kafka:3.8.1
+    container_name: rtdaas-kafka
+    profiles: ["core"]
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  kafka-init:
+    image: apache/kafka:3.8.1
+    container_name: rtdaas-kafka-init
+    profiles: ["core"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/init/kafka-topics.sh"]
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+    volumes:
+      - ./init:/init:ro
+    restart: "no"
+
+  apicurio:
+    image: apicurio/apicurio-registry-mem:2.6.5.Final
+    container_name: rtdaas-apicurio
+    profiles: ["core"]
+    ports:
+      - "8081:8080"
+    environment:
+      QUARKUS_HTTP_PORT: 8080
+      QUARKUS_LOG_LEVEL: WARN
+      REGISTRY_LOG_LEVEL: INFO
+      # Confluent-compatible API exposed at /apis/ccompat/v7 by default.
+      REGISTRY_CCOMPAT_LEGACY_ID_MODE_ENABLED: "true"
+      REGISTRY_RULES_GLOBAL_COMPATIBILITY: BACKWARD
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  registry-init:
+    image: ${RTDAAS_IMAGE_PREFIX:-rtdaas}-sim:${RTDAAS_IMAGE_TAG:-dev}
+    build:
+      context: ../..
+      dockerfile: infra/docker/sim.Dockerfile
+    container_name: rtdaas-registry-init
+    profiles: ["core"]
+    depends_on:
+      apicurio:
+        condition: service_healthy
+    entrypoint: ["rtdaas-contracts"]
+    command: ["register", "--registry", "http://apicurio:8080/apis/ccompat/v7", "--avro", "/opt/rtdaas/contracts/avro"]
+    restart: "no"
+
+  # ------------------------------------------------------------------ storage
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    container_name: rtdaas-minio
+    profiles: ["core"]
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+      MINIO_REGION: us-east-1
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local >/dev/null 2>&1 || curl -fsS http://localhost:9000/minio/health/live >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
+    container_name: rtdaas-minio-init
+    profiles: ["core"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/init/minio-buckets.sh"]
+    environment:
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      S3_BUCKET_RAW: ${S3_BUCKET_RAW:-rtdaas-raw}
+      S3_BUCKET_LAKE: ${S3_BUCKET_LAKE:-rtdaas-lake}
+    volumes:
+      - ./init:/init:ro
+    restart: "no"
+
+  iceberg-rest:
+    image: tabulario/iceberg-rest:1.6.0
+    container_name: rtdaas-iceberg-rest
+    profiles: ["core"]
+    ports:
+      - "8181:8181"
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minioadmin}
+      AWS_REGION: us-east-1
+      CATALOG_WAREHOUSE: s3://${S3_BUCKET_LAKE:-rtdaas-lake}/warehouse
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8181/v1/config >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: rtdaas-elasticsearch
+    profiles: ["core"]
+    ports:
+      - "9200:9200"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.enrollment.enabled: "false"
+      cluster.name: rtdaas
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+      bootstrap.memory_lock: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 30s
+
+  # ------------------------------------------------------------------ compute
+  spark-master:
+    image: ${RTDAAS_IMAGE_PREFIX:-rtdaas}-spark:${RTDAAS_IMAGE_TAG:-dev}
+    build:
+      context: ../..
+      dockerfile: infra/docker/spark.Dockerfile
+    container_name: rtdaas-spark-master
+    profiles: ["core"]
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master", "--port", "7077", "--webui-port", "8080"]
+    ports:
+      - "8082:8080"
+      - "7077:7077"
+    environment:
+      <<: *rtdaas-env
+      SPARK_NO_DAEMONIZE: "true"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  spark-worker:
+    image: ${RTDAAS_IMAGE_PREFIX:-rtdaas}-spark:${RTDAAS_IMAGE_TAG:-dev}
+    build:
+      context: ../..
+      dockerfile: infra/docker/spark.Dockerfile
+    profiles: ["core"]
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077", "--webui-port", "8081"]
+    deploy:
+      replicas: 2
+    environment:
+      <<: *rtdaas-env
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
+    volumes:
+      - ./data:/data
+    depends_on:
+      spark-master:
+        condition: service_healthy
+
+  streaming:
+    image: ${RTDAAS_IMAGE_PREFIX:-rtdaas}-spark:${RTDAAS_IMAGE_TAG:-dev}
+    container_name: rtdaas-streaming
+    profiles: ["demo"]
+    command:
+      - /opt/spark/bin/spark-submit
+      - --master
+      - spark://spark-master:7077
+      - --deploy-mode
+      - client
+      - --name
+      - rtdaas-streaming-kpis
+      - --conf
+      - spark.executor.memory=1g
+      - --conf
+      - spark.executor.cores=1
+      - --conf
+      - spark.cores.max=2
+      - /opt/rtdaas/rtdaas/spark/streaming_kpis.py
+      - --trigger
+      - 30s
+    environment:
+      <<: *rtdaas-env
+    volumes:
+      - ./data:/data
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      registry-init:
+        condition: service_completed_successfully
+      iceberg-rest:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    restart: on-failure
+
+  # ------------------------------------------------------------------ orchestration
+  postgres:
+    image: postgres:16
+    container_name: rtdaas-postgres
+    profiles: ["core"]
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: rtdaas-airflow-init
+    entrypoint: ["/bin/bash", "/init/airflow-init.sh"]
+    environment:
+      <<: *airflow-env
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-airflow}
+    volumes:
+      - ../../rtdaas/airflow/dags:/opt/airflow/dags:ro
+      - airflow-logs:/opt/airflow/logs
+      - ./init:/init:ro
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: rtdaas-airflow-webserver
+    command: webserver
+    ports:
+      - "8085:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: rtdaas-airflow-scheduler
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\" >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      start_period: 40s
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ serving
+  api:
+    image: ${RTDAAS_IMAGE_PREFIX:-rtdaas}-api:${RTDAAS_IMAGE_TAG:-dev}
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: rtdaas-api
+    profiles: ["core"]
+    ports:
+      - "8000:8080"
+    environment:
+      <<: *rtdaas-env
+      SERVING_BACKEND: ${SERVING_BACKEND:-duckdb}
+      SERVING_SQLITE_PATH: /data/rtdaas.sqlite
+      SERVING_DUCKDB_PATH: /data/rtdaas.duckdb
+      MEDIA_ROOT: /data
+      API_HOST: 0.0.0.0
+      API_PORT: 8080
+    volumes:
+      - ./data:/data
+    depends_on:
+      iceberg-rest:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      apicurio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ demo load
+  sim:
+    image: ${RTDAAS_IMAGE_PREFIX:-rtdaas}-sim:${RTDAAS_IMAGE_TAG:-dev}
+    build:
+      context: ../..
+      dockerfile: infra/docker/sim.Dockerfile
+    container_name: rtdaas-sim
+    profiles: ["demo"]
+    command: ["run", "--robots", "${SIM_ROBOTS:-3}", "--duration", "${SIM_DURATION_S:-600}", "--rate", "${SIM_RATE_HZ:-50}", "--kafka", "--mcap-out", "/data/bags"]
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      SCHEMA_REGISTRY_URL: http://apicurio:8080/apis/ccompat/v7
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/data
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      registry-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # ------------------------------------------------------------------ observability
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: rtdaas-prometheus
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: rtdaas-kafka-exporter
+    profiles: ["observability"]
+    command: ["--kafka.server=kafka:9092", "--web.listen-address=:9308"]
+    ports:
+      - "9308:9308"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    container_name: rtdaas-grafana
+    profiles: ["observability"]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: rtdaas-kibana
+    profiles: ["observability"]
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      XPACK_SECURITY_ENABLED: "false"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  kafka-data:
+  minio-data:
+  es-data:
+  postgres-data:
+  airflow-logs:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,32 @@
+# Argo CD syncs this directory (argocd/apps/10-rtdaas.yaml).
+# `.github/workflows/deploy.yml` runs `kustomize edit set image ...` here after each
+# image build on main, which is what rolls out a new version.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rtdaas
+commonLabels:
+  app.kubernetes.io/part-of: rtdaas
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - media-pvc.yaml
+  - spark-rbac.yaml
+  - api.yaml
+  - servicemonitor.yaml
+  - streaming-kpis.yaml
+  - sim.yaml
+  - bridge.yaml
+images:
+  - name: ghcr.io/OWNER/rtdaas-api
+    newName: ghcr.io/OWNER/rtdaas-api
+    newTag: latest
+  - name: ghcr.io/OWNER/rtdaas-spark
+    newName: ghcr.io/OWNER/rtdaas-spark
+    newTag: latest
+  - name: ghcr.io/OWNER/rtdaas-sim
+    newName: ghcr.io/OWNER/rtdaas-sim
+    newTag: latest
+  - name: ghcr.io/OWNER/rtdaas-bridge
+    newName: ghcr.io/OWNER/rtdaas-bridge
+    newTag: latest

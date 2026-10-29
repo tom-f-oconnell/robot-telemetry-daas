@@ -1,0 +1,17 @@
+flowchart TB
+    s3["s3://rtdaas-raw/bags/<robot>/<yyyy>/<mm>/<dd>/*.mcap"]
+    sensor["S3KeySensor<br/>(reschedule mode)"]
+    decode["sc.binaryFiles → mapPartitions(decode_bag)<br/>mcap_lite + CdrCodec (pure Python, unit-tested)"]
+    raw["MERGE INTO telemetry.*_raw<br/>keys (robot_id, arm, ts), source=bag wins"]
+    split["split_sessions()<br/>SESSION_START/END or heartbeat gap > 60 s"]
+    sess["applyInPandas(session_metrics)<br/>→ telemetry.sessions"]
+    kpi["applyInPandas(kpi_windows)<br/>→ telemetry.kpi_1m (computed_by=batch)"]
+    gate{"quality_gate<br/>telemetry.yml"}
+    pub["publish_snowflake<br/>ROBOT_DAILY, SESSION_DAILY"]
+    esx["ES rtdaas-sessions"]
+    fail["task fails →<br/>publish skipped, alert"]
+
+    s3 --> sensor --> decode --> raw --> split --> sess --> kpi --> gate
+    gate -- all blocking checks pass --> pub
+    gate -- blocking failure (exit 2) --> fail
+    sess --> esx

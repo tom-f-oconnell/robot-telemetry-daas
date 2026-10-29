@@ -1,0 +1,178 @@
+name: integration
+
+# Nightly end-to-end smoke test on a 3-node kind cluster: Strimzi Kafka (1 broker),
+# Apicurio registry, MinIO, the API, and the simulator producing for 60 s. Asserts
+# the API comes up and sees robots through the schema registry/Kafka path.
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      KIND_CLUSTER: rtdaas-it
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create kind cluster (1 control-plane + 2 workers)
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: ${{ env.KIND_CLUSTER }}
+          version: v0.24.0
+          node_image: kindest/node:v1.31.0
+          config: |
+            kind: Cluster
+            apiVersion: kind.x-k8s.io/v1alpha4
+            nodes:
+              - role: control-plane
+              - role: worker
+              - role: worker
+
+      - name: Build sim + api images and load into kind
+        run: |
+          docker build -f infra/docker/sim.Dockerfile -t rtdaas-sim:it .
+          docker build -f infra/docker/api.Dockerfile -t rtdaas-api:it .
+          kind load docker-image rtdaas-sim:it --name "$KIND_CLUSTER"
+          kind load docker-image rtdaas-api:it --name "$KIND_CLUSTER"
+
+      - name: Install Strimzi and a single-broker KRaft Kafka
+        run: |
+          kubectl create namespace kafka
+          helm install strimzi oci://quay.io/strimzi-helm/strimzi-kafka-operator \
+            --version 0.43.0 --namespace kafka --set watchNamespaces="{kafka}" --wait --timeout 5m
+          cat <<'EOF' | kubectl apply -n kafka -f -
+          apiVersion: kafka.strimzi.io/v1beta2
+          kind: KafkaNodePool
+          metadata: { name: combined, labels: { strimzi.io/cluster: rtdaas } }
+          spec:
+            replicas: 1
+            roles: [controller, broker]
+            storage: { type: ephemeral }
+          ---
+          apiVersion: kafka.strimzi.io/v1beta2
+          kind: Kafka
+          metadata:
+            name: rtdaas
+            annotations: { strimzi.io/node-pools: enabled, strimzi.io/kraft: enabled }
+          spec:
+            kafka:
+              version: 3.8.0
+              metadataVersion: 3.8-IV0
+              listeners: [{ name: plain, port: 9092, type: internal, tls: false }]
+              config:
+                offsets.topic.replication.factor: 1
+                transaction.state.log.replication.factor: 1
+                transaction.state.log.min.isr: 1
+                default.replication.factor: 1
+                min.insync.replicas: 1
+                auto.create.topics.enable: false
+            entityOperator: { topicOperator: {} }
+          EOF
+          kubectl -n kafka wait kafka/rtdaas --for=condition=Ready --timeout=10m
+          # Topics (partitions/retention per contracts/registry.yml; RF 1 for the test cluster)
+          cat <<'EOF' | kubectl apply -n kafka -f -
+          apiVersion: kafka.strimzi.io/v1beta2
+          kind: KafkaTopic
+          metadata: { name: rtdaas.telemetry.joint-states, labels: { strimzi.io/cluster: rtdaas } }
+          spec: { topicName: rtdaas.telemetry.joint_states, partitions: 12, replicas: 1, config: { retention.ms: 604800000 } }
+          ---
+          apiVersion: kafka.strimzi.io/v1beta2
+          kind: KafkaTopic
+          metadata: { name: rtdaas.telemetry.tool-pose, labels: { strimzi.io/cluster: rtdaas } }
+          spec: { topicName: rtdaas.telemetry.tool_pose, partitions: 12, replicas: 1, config: { retention.ms: 604800000 } }
+          ---
+          apiVersion: kafka.strimzi.io/v1beta2
+          kind: KafkaTopic
+          metadata: { name: rtdaas.telemetry.events, labels: { strimzi.io/cluster: rtdaas } }
+          spec: { topicName: rtdaas.telemetry.events, partitions: 3, replicas: 1, config: { retention.ms: 2592000000 } }
+          ---
+          apiVersion: kafka.strimzi.io/v1beta2
+          kind: KafkaTopic
+          metadata: { name: rtdaas.telemetry.heartbeat, labels: { strimzi.io/cluster: rtdaas } }
+          spec: { topicName: rtdaas.telemetry.heartbeat, partitions: 3, replicas: 1, config: { retention.ms: 2592000000 } }
+          EOF
+
+      - name: Install Apicurio, MinIO and the rtdaas config/secret
+        run: |
+          kubectl apply -f infra/k8s/manifests/rtdaas/namespace.yaml
+          kubectl apply -f infra/k8s/manifests/rtdaas/configmap.yaml
+          kubectl apply -f infra/k8s/manifests/rtdaas/secret.yaml
+          kubectl apply -f infra/k8s/manifests/apicurio/apicurio.yaml
+          helm repo add minio https://charts.min.io/ && helm repo update
+          helm install minio minio/minio --version 5.3.0 --namespace minio --create-namespace \
+            -f infra/k8s/helm-values/minio.yaml --set persistence.enabled=false --set resources.requests.memory=256Mi \
+            --wait --timeout 5m
+          kubectl -n rtdaas rollout status deployment/apicurio --timeout=5m
+
+      - name: Register contracts
+        run: |
+          kubectl -n rtdaas run registry-init --image=rtdaas-sim:it --image-pull-policy=Never --restart=Never \
+            --command -- rtdaas-contracts register --registry http://apicurio.rtdaas.svc.cluster.local:8080/apis/ccompat/v7 --avro /opt/rtdaas/contracts/avro
+          kubectl -n rtdaas wait pod/registry-init --for=jsonpath='{.status.phase}'=Succeeded --timeout=3m
+          kubectl -n rtdaas logs registry-init
+
+      - name: Deploy the API (sqlite backend so no Iceberg/ES needed) and run the simulator for 60 s
+        run: |
+          kubectl kustomize infra/k8s/manifests/rtdaas >/dev/null   # the overlay must render
+          kubectl -n rtdaas apply -f infra/k8s/manifests/rtdaas/media-pvc.yaml
+          sed -e 's#ghcr.io/OWNER/rtdaas-api:latest#rtdaas-api:it#' -e 's#imagePullPolicy: IfNotPresent#imagePullPolicy: Never#' \
+              -e 's#replicas: 2#replicas: 1#' infra/k8s/manifests/rtdaas/api.yaml | kubectl apply -f -
+          kubectl -n rtdaas set env deployment/rtdaas-api SERVING_BACKEND=sqlite
+          kubectl -n rtdaas rollout status deployment/rtdaas-api --timeout=5m
+          cat <<'EOF' | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata: { name: sim-60s, namespace: rtdaas }
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: sim
+                    image: rtdaas-sim:it
+                    imagePullPolicy: Never
+                    args: ["run", "--robots", "2", "--duration", "60", "--rate", "20", "--kafka", "--mcap-out", "/data/bags"]
+                    envFrom:
+                      - { configMapRef: { name: rtdaas-config } }
+                      - { secretRef: { name: rtdaas-secrets } }
+                    volumeMounts: [{ name: data, mountPath: /data }]
+                volumes: [{ name: data, emptyDir: {} }]
+          EOF
+          kubectl -n rtdaas wait job/sim-60s --for=condition=complete --timeout=5m
+          kubectl -n rtdaas logs job/sim-60s | tail -n 20
+
+      - name: Assert the API is healthy and Kafka received telemetry
+        run: |
+          kubectl -n rtdaas port-forward svc/rtdaas-api 18080:8080 >/tmp/pf.log 2>&1 &
+          sleep 5
+          curl -fsS http://127.0.0.1:18080/api/health | tee /tmp/health.json
+          curl -fsS http://127.0.0.1:18080/openapi.json >/dev/null
+          # Robots are visible in the API only after a batch run; assert the Kafka path instead.
+          kubectl -n kafka run kcat --image=edenhill/kcat:1.7.1 --restart=Never --command -- \
+            kcat -b rtdaas-kafka-bootstrap:9092 -t rtdaas.telemetry.tool_pose -C -o beginning -e -c 50 -f '%k\n'
+          kubectl -n kafka wait pod/kcat --for=jsonpath='{.status.phase}'=Succeeded --timeout=2m
+          kubectl -n kafka logs kcat | sort | uniq -c | tee /tmp/keys.txt
+          robots=$(wc -l < /tmp/keys.txt)
+          echo "distinct robot keys: $robots"
+          test "$robots" -ge 1
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          mkdir -p /tmp/it-logs
+          for ns in rtdaas kafka minio; do
+            kubectl -n "$ns" get all > "/tmp/it-logs/${ns}-resources.txt" 2>&1 || true
+            for pod in $(kubectl -n "$ns" get pods -o name 2>/dev/null); do
+              kubectl -n "$ns" logs "$pod" --all-containers > "/tmp/it-logs/${ns}-${pod##*/}.log" 2>&1 || true
+            done
+          done
+          kubectl get events -A --sort-by=.lastTimestamp > /tmp/it-logs/events.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: integration-logs
+          path: /tmp/it-logs

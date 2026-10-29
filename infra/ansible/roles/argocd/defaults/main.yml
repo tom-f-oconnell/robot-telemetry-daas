@@ -1,0 +1,12 @@
+---
+argocd_namespace: argocd
+argocd_chart_version: "7.6.12"
+helm_version: "v3.16.2"
+ingress_nginx_chart_version: "4.11.3"
+argocd_values_file: "{{ playbook_dir }}/../k8s/helm-values/argocd.yaml"
+argocd_root_app: "{{ playbook_dir }}/../k8s/argocd/root.yaml"
+kubeconfig: /etc/rancher/k3s/k3s.yaml
+rtdaas_cloud: libvirt
+rtdaas_s3_bucket_raw: rtdaas-raw
+rtdaas_s3_bucket_lake: rtdaas-lake
+rtdaas_aws_region: us-east-1

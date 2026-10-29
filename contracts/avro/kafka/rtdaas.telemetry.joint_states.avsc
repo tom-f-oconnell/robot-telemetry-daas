@@ -1,0 +1,101 @@
+{
+  "type": "record",
+  "name": "JointStateRecord",
+  "namespace": "rtdaas.kafka",
+  "doc": "Kafka value for topic rtdaas.telemetry.joint_states: bridge envelope around sensor_msgs.JointState.",
+  "fields": [
+    {
+      "name": "robot_id",
+      "type": "string",
+      "doc": "Fleet-wide robot identifier, e.g. dv-001."
+    },
+    {
+      "name": "ros_topic",
+      "type": "string",
+      "doc": "Fully-qualified ROS 2 topic the message came from."
+    },
+    {
+      "name": "recv_time_ns",
+      "type": "long",
+      "doc": "bridge receive time, UNIX ns"
+    },
+    {
+      "name": "msg",
+      "type": {
+        "type": "record",
+        "name": "JointState",
+        "namespace": "sensor_msgs",
+        "doc": "Generated from ROS 2 message sensor_msgs/JointState.",
+        "fields": [
+          {
+            "name": "header",
+            "type": {
+              "type": "record",
+              "name": "Header",
+              "namespace": "std_msgs",
+              "doc": "Generated from ROS 2 message std_msgs/Header.",
+              "fields": [
+                {
+                  "name": "stamp",
+                  "type": {
+                    "type": "record",
+                    "name": "Time",
+                    "namespace": "builtin_interfaces",
+                    "doc": "Generated from ROS 2 message builtin_interfaces/Time.",
+                    "fields": [
+                      {
+                        "name": "sec",
+                        "type": "int",
+                        "doc": "Time indicates a specific point in time, relative to a clock's 0 point. The seconds component, valid over all int32 values."
+                      },
+                      {
+                        "name": "nanosec",
+                        "type": "long",
+                        "doc": "The nanoseconds component, valid in the range [0, 10e9)."
+                      }
+                    ]
+                  },
+                  "doc": "Standard metadata for higher-level stamped data types. Two-integer timestamp that is expressed as seconds and nanoseconds."
+                },
+                {
+                  "name": "frame_id",
+                  "type": "string",
+                  "doc": "Transform frame with which this data is associated."
+                }
+              ]
+            },
+            "doc": "This is a message that holds data to describe the state of a set of torque controlled joints."
+          },
+          {
+            "name": "name",
+            "type": {
+              "type": "array",
+              "items": "string"
+            }
+          },
+          {
+            "name": "position",
+            "type": {
+              "type": "array",
+              "items": "double"
+            }
+          },
+          {
+            "name": "velocity",
+            "type": {
+              "type": "array",
+              "items": "double"
+            }
+          },
+          {
+            "name": "effort",
+            "type": {
+              "type": "array",
+              "items": "double"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
