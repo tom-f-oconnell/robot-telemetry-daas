@@ -172,10 +172,13 @@ def launch_setup(context, *args, **kwargs):
     registry_url = LaunchConfiguration("schema_registry_url").perform(context)
     software_version = LaunchConfiguration("software_version").perform(context)
 
+    # Optional explicit ids (comma-separated) override the dv-00i numbering; used by single_robot_sim.
+    explicit = [r.strip() for r in LaunchConfiguration("robot_ids").perform(context).split(",") if r.strip()]
+    robot_ids = explicit[:robot_count] if explicit else [robot_id_for(i) for i in range(1, robot_count + 1)]
+
     out_dir = Path(tempfile.mkdtemp(prefix="rtdaas-bridge-"))
     actions: list = []
-    for i in range(1, robot_count + 1):
-        robot_id = robot_id_for(i)
+    for robot_id in robot_ids:
         params = render_bridge_params(robot_id, arms, kafka_bootstrap, registry_url, out_dir)
         actions += robot_actions(
             robot_id, arms, generation, launch_dvrk, rviz, dvrk_launch_file, params, software_version)
@@ -185,6 +188,7 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         DeclareLaunchArgument("robot_count", default_value="2"),
+        DeclareLaunchArgument("robot_ids", default_value="", description="optional comma-separated ids overriding dv-00i"),
         DeclareLaunchArgument("arms", default_value="PSM1,PSM2,ECM"),
         DeclareLaunchArgument("generation", default_value="Classic", description="Classic | Si"),
         DeclareLaunchArgument("launch_dvrk", default_value="true"),
