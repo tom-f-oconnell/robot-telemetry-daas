@@ -24,15 +24,20 @@ def test_catalog_and_contracts(client):
     assert all("owner" in t and "columns" in t for t in tables)
     contracts = client.get("/api/contracts").json()["contracts"]
     assert {c["subject"] for c in contracts} == {
-        "rtdaas.telemetry.joint_states-value", "rtdaas.telemetry.tool_pose-value",
-        "rtdaas.telemetry.events-value", "rtdaas.telemetry.heartbeat-value"}
+        "rtdaas.telemetry.joint_states-value",
+        "rtdaas.telemetry.tool_pose-value",
+        "rtdaas.telemetry.events-value",
+        "rtdaas.telemetry.heartbeat-value",
+    }
     assert all(c["schema"]["type"] == "record" for c in contracts)
 
 
 def test_sessions_and_detail(client):
     robots = client.get("/api/robots").json()["robots"]
     assert len(robots) == 1 and robots[0]["n_sessions"] >= 1
-    sessions = client.get("/api/sessions", params={"robot_id": robots[0]["robot_id"]}).json()["sessions"]
+    sessions = client.get("/api/sessions", params={"robot_id": robots[0]["robot_id"]}).json()[
+        "sessions"
+    ]
     assert sessions and sessions[0]["n_arms"] == 3
     sid = sessions[0]["session_id"]
     detail = client.get(f"/api/sessions/{sid}").json()
@@ -47,7 +52,9 @@ def test_sessions_and_detail(client):
 def test_trajectory_and_kpis(client):
     sid = client.get("/api/sessions").json()["sessions"][0]["session_id"]
     full = client.get(f"/api/sessions/{sid}/trajectory", params={"arm": "PSM1"}).json()
-    ds = client.get(f"/api/sessions/{sid}/trajectory", params={"arm": "PSM1", "downsample": 4}).json()
+    ds = client.get(
+        f"/api/sessions/{sid}/trajectory", params={"arm": "PSM1", "downsample": 4}
+    ).json()
     assert full["count"] > 100 and abs(ds["count"] - full["count"] / 4) <= 1
     assert {"ts", "x", "y", "z", "jaw_angle", "speed"} <= set(full["points"][0])
     assert client.get(f"/api/sessions/{sid}/trajectory", params={"arm": "NOPE"}).status_code == 400
@@ -69,8 +76,14 @@ def test_trials_kinematics_frames(client):
     tid = trials[0]["trial_id"]
     detail = client.get(f"/api/trials/{tid}").json()
     assert detail["gestures"] and detail["n_frames"] > 0
-    kin = client.get(f"/api/trials/{tid}/kinematics", params={"arms": "psml", "downsample": 2}).json()
-    assert kin["arms"] == ["psml"] and "psml_x" in kin["samples"][0] and "psmr_x" not in kin["samples"][0]
+    kin = client.get(
+        f"/api/trials/{tid}/kinematics", params={"arms": "psml", "downsample": 2}
+    ).json()
+    assert (
+        kin["arms"] == ["psml"]
+        and "psml_x" in kin["samples"][0]
+        and "psmr_x" not in kin["samples"][0]
+    )
     assert client.get(f"/api/trials/{tid}/kinematics", params={"arms": "nope"}).status_code == 400
     frames = client.get(f"/api/trials/{tid}/frames").json()["frames"]
     assert frames and {"motion_energy", "sharpness", "mean_intensity"} <= set(frames[0])
@@ -105,8 +118,14 @@ def test_reprocess_without_airflow(client):
     body = r.json()
     assert body["status"] == "queued_local" and body["dag_id"] == "telemetry_backfill"
     assert body["conf"]["start_date"] == "2026-10-28"
-    assert client.post("/api/jobs/reprocess", json={"kind": "date", "target": "yesterday"}).status_code == 400
-    assert client.post("/api/jobs/reprocess", json={"kind": "trial", "target": "nope"}).status_code == 404
+    assert (
+        client.post("/api/jobs/reprocess", json={"kind": "date", "target": "yesterday"}).status_code
+        == 400
+    )
+    assert (
+        client.post("/api/jobs/reprocess", json={"kind": "trial", "target": "nope"}).status_code
+        == 404
+    )
     assert client.post("/api/jobs/reprocess", content=b"not json").status_code == 400
     jobs = client.get("/api/jobs").json()["jobs"]
     assert jobs and jobs[0]["target"] == sid

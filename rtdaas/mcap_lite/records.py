@@ -145,7 +145,10 @@ class McapFooter:
     summary_crc: int = 0
 
     def pack(self) -> bytes:
-        return pack_record(OP_FOOTER, struct.pack("<QQI", self.summary_start, self.summary_offset_start, self.summary_crc))
+        return pack_record(
+            OP_FOOTER,
+            struct.pack("<QQI", self.summary_start, self.summary_offset_start, self.summary_crc),
+        )
 
     @classmethod
     def unpack(cls, body: bytes) -> McapFooter:
@@ -184,7 +187,11 @@ class McapChannel:
     metadata: dict[str, str] = field(default_factory=dict)
 
     def pack(self) -> bytes:
-        body = struct.pack("<HH", self.id, self.schema_id) + pack_string(self.topic) + pack_string(self.message_encoding)
+        body = (
+            struct.pack("<HH", self.id, self.schema_id)
+            + pack_string(self.topic)
+            + pack_string(self.message_encoding)
+        )
         body += pack_str_map(self.metadata)
         return pack_record(OP_CHANNEL, body)
 
@@ -210,7 +217,10 @@ class McapMessage:
     def pack(self) -> bytes:
         return pack_record(
             OP_MESSAGE,
-            struct.pack("<HIQQ", self.channel_id, self.sequence, self.log_time_ns, self.publish_time_ns) + self.data,
+            struct.pack(
+                "<HIQQ", self.channel_id, self.sequence, self.log_time_ns, self.publish_time_ns
+            )
+            + self.data,
         )
 
     @classmethod
@@ -270,7 +280,9 @@ class McapStatistics:
     channel_message_counts: dict[int, int]
 
     def pack(self) -> bytes:
-        counts = b"".join(struct.pack("<HQ", cid, n) for cid, n in sorted(self.channel_message_counts.items()))
+        counts = b"".join(
+            struct.pack("<HQ", cid, n) for cid, n in sorted(self.channel_message_counts.items())
+        )
         body = struct.pack(
             "<QHIIIIQQ",
             self.message_count,
@@ -288,7 +300,9 @@ class McapStatistics:
     @classmethod
     def unpack(cls, body: bytes) -> McapStatistics:
         c = Cursor(body)
-        (mc, sc, cc, ac, mdc, chc, start, end) = struct.unpack("<QHIIIIQQ", c.take(8 + 2 + 4 * 4 + 8 + 8))
+        (mc, sc, cc, ac, mdc, chc, start, end) = struct.unpack(
+            "<QHIIIIQQ", c.take(8 + 2 + 4 * 4 + 8 + 8)
+        )
         n = c.u32()
         end_pos = c.pos + n
         counts: dict[int, int] = {}
@@ -305,7 +319,10 @@ class McapSummaryOffset:
     group_length: int
 
     def pack(self) -> bytes:
-        return pack_record(OP_SUMMARY_OFFSET, struct.pack("<BQQ", self.group_opcode, self.group_start, self.group_length))
+        return pack_record(
+            OP_SUMMARY_OFFSET,
+            struct.pack("<BQQ", self.group_opcode, self.group_start, self.group_length),
+        )
 
     @classmethod
     def unpack(cls, body: bytes) -> McapSummaryOffset:
@@ -327,7 +344,9 @@ def iter_records(data: bytes, start: int = 0, end: int | None = None):
         body_start = pos + 9
         body_end = body_start + length
         if body_end > end:
-            raise McapFormatError(f"record {OPCODE_NAMES.get(opcode, opcode)} at {pos} overruns the stream")
+            raise McapFormatError(
+                f"record {OPCODE_NAMES.get(opcode, opcode)} at {pos} overruns the stream"
+            )
         yield pos, opcode, data[body_start:body_end]
         pos = body_end
 

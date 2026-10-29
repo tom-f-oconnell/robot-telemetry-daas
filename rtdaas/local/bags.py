@@ -13,9 +13,9 @@ this module can be imported, and the rest of the local pipeline used, without th
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from collections.abc import Iterable
 from typing import Any
 
 import pandas as pd
@@ -42,10 +42,59 @@ RAW_TABLES: dict[str, str] = {
     "heartbeat": "telemetry.heartbeat_raw",
 }
 RAW_COLUMNS: dict[str, list[str]] = {
-    "tool_pose": ["robot_id", "arm", "ts", "recv_ts", "x", "y", "z", "qx", "qy", "qz", "qw", "jaw_angle", "speed", "source", "bag_file"],
-    "joint_states": ["robot_id", "arm", "ts", "recv_ts", "frame_id", "joint_names", "position", "velocity", "effort", "source", "bag_file"],
-    "events": ["robot_id", "arm", "ts", "recv_ts", "severity", "severity_name", "code", "message", "source", "bag_file"],
-    "heartbeat": ["robot_id", "ts", "recv_ts", "uptime_s", "state", "active_arms", "software_version", "source", "bag_file"],
+    "tool_pose": [
+        "robot_id",
+        "arm",
+        "ts",
+        "recv_ts",
+        "x",
+        "y",
+        "z",
+        "qx",
+        "qy",
+        "qz",
+        "qw",
+        "jaw_angle",
+        "speed",
+        "source",
+        "bag_file",
+    ],
+    "joint_states": [
+        "robot_id",
+        "arm",
+        "ts",
+        "recv_ts",
+        "frame_id",
+        "joint_names",
+        "position",
+        "velocity",
+        "effort",
+        "source",
+        "bag_file",
+    ],
+    "events": [
+        "robot_id",
+        "arm",
+        "ts",
+        "recv_ts",
+        "severity",
+        "severity_name",
+        "code",
+        "message",
+        "source",
+        "bag_file",
+    ],
+    "heartbeat": [
+        "robot_id",
+        "ts",
+        "recv_ts",
+        "uptime_s",
+        "state",
+        "active_arms",
+        "software_version",
+        "source",
+        "bag_file",
+    ],
 }
 RAW_KEYS: dict[str, list[str]] = {
     "tool_pose": ["robot_id", "arm", "ts"],
@@ -82,7 +131,9 @@ def _get(msg: dict, *path: str, default: Any = None) -> Any:
     return cur
 
 
-def row_from_message(type_name: str, ros_topic: str, msg: dict, log_time_ns: int, bag_file: str) -> tuple[str, dict] | None:
+def row_from_message(
+    type_name: str, ros_topic: str, msg: dict, log_time_ns: int, bag_file: str
+) -> tuple[str, dict] | None:
     """Map one decoded message to ``(table_short_name, row)`` or ``None`` for unknown types."""
     table = TYPE_TABLES.get(type_name)
     if table is None:
@@ -95,10 +146,15 @@ def row_from_message(type_name: str, ros_topic: str, msg: dict, log_time_ns: int
         row = {
             **base,
             "arm": _get(msg, "arm") or arm,
-            "x": _get(msg, "position", "x"), "y": _get(msg, "position", "y"), "z": _get(msg, "position", "z"),
-            "qx": _get(msg, "orientation", "x"), "qy": _get(msg, "orientation", "y"),
-            "qz": _get(msg, "orientation", "z"), "qw": _get(msg, "orientation", "w"),
-            "jaw_angle": _get(msg, "jaw_angle"), "speed": _get(msg, "speed"),
+            "x": _get(msg, "position", "x"),
+            "y": _get(msg, "position", "y"),
+            "z": _get(msg, "position", "z"),
+            "qx": _get(msg, "orientation", "x"),
+            "qy": _get(msg, "orientation", "y"),
+            "qz": _get(msg, "orientation", "z"),
+            "qw": _get(msg, "orientation", "w"),
+            "jaw_angle": _get(msg, "jaw_angle"),
+            "speed": _get(msg, "speed"),
         }
     elif table == "joint_states":
         row = {
@@ -117,20 +173,24 @@ def row_from_message(type_name: str, ros_topic: str, msg: dict, log_time_ns: int
             "arm": _get(msg, "arm", default="") if _get(msg, "arm") is not None else (arm or ""),
             "severity": int(sev) if sev is not None else None,
             "severity_name": SEVERITY_NAMES.get(int(sev)) if sev is not None else None,
-            "code": _get(msg, "code"), "message": _get(msg, "message"),
+            "code": _get(msg, "code"),
+            "message": _get(msg, "message"),
         }
     else:  # heartbeat
         row = {
             **base,
             "robot_id": _get(msg, "robot_id") or robot,
-            "uptime_s": _get(msg, "uptime_s"), "state": _get(msg, "state"),
+            "uptime_s": _get(msg, "uptime_s"),
+            "state": _get(msg, "state"),
             "active_arms": list(_get(msg, "active_arms", default=[]) or []),
             "software_version": _get(msg, "software_version"),
         }
     return table, {c: row.get(c) for c in RAW_COLUMNS[table]}
 
 
-def decode_bag(path: str | Path, msgs_dir: str | Path | None = DEFAULT_MSGS_DIR) -> dict[str, list[dict]]:
+def decode_bag(
+    path: str | Path, msgs_dir: str | Path | None = DEFAULT_MSGS_DIR
+) -> dict[str, list[dict]]:
     """Decode one MCAP bag into ``{table_short_name: [row, ...]}``.
 
     Prefers each channel's embedded ``ros2msg`` schema; falls back to the registry loaded
@@ -173,7 +233,12 @@ def decode_bag(path: str | Path, msgs_dir: str | Path | None = DEFAULT_MSGS_DIR)
                         except Exception:  # noqa: BLE001 - repo registry may be absent in odd layouts
                             pass
                 except Exception as exc:  # noqa: BLE001
-                    log.warning("%s: embedded schema for %s unusable (%s); using repo registry", bag_file, type_name, exc)
+                    log.warning(
+                        "%s: embedded schema for %s unusable (%s); using repo registry",
+                        bag_file,
+                        type_name,
+                        exc,
+                    )
                     registry = None
             if registry is None:
                 registry = fallback_registry()
@@ -182,7 +247,9 @@ def decode_bag(path: str | Path, msgs_dir: str | Path | None = DEFAULT_MSGS_DIR)
         try:
             msg = codec.decode(type_name, message.data)
         except Exception as exc:  # noqa: BLE001 - one bad message must not kill the bag
-            log.warning("%s: failed to decode %s on %s: %s", bag_file, type_name, channel.topic, exc)
+            log.warning(
+                "%s: failed to decode %s on %s: %s", bag_file, type_name, channel.topic, exc
+            )
             skipped[channel.topic] = skipped.get(channel.topic, 0) + 1
             continue
         mapped = row_from_message(type_name, channel.topic, msg, message.log_time_ns, bag_file)
@@ -201,7 +268,9 @@ def find_bags(bags_dir: str | Path) -> list[Path]:
     return sorted(Path(bags_dir).rglob("*.mcap"))
 
 
-def bag_frames(paths: Iterable[str | Path], msgs_dir: str | Path | None = DEFAULT_MSGS_DIR) -> dict[str, pd.DataFrame]:
+def bag_frames(
+    paths: Iterable[str | Path], msgs_dir: str | Path | None = DEFAULT_MSGS_DIR
+) -> dict[str, pd.DataFrame]:
     """Decode several bags into one deduplicated pandas frame per raw table."""
     collected: dict[str, list[dict]] = {t: [] for t in RAW_TABLES}
     for p in paths:
@@ -213,6 +282,8 @@ def bag_frames(paths: Iterable[str | Path], msgs_dir: str | Path | None = DEFAUL
         for col in ("ts", "recv_ts"):
             df[col] = pd.to_datetime(df[col], utc=True)
         if len(df):
-            df = df.drop_duplicates(subset=RAW_KEYS[table], keep="last").sort_values(["robot_id", "ts"], kind="stable")
+            df = df.drop_duplicates(subset=RAW_KEYS[table], keep="last").sort_values(
+                ["robot_id", "ts"], kind="stable"
+            )
         frames[table] = df.reset_index(drop=True)
     return frames

@@ -46,7 +46,12 @@ def _load_head(head_dir: Path) -> dict[str, dict[str, Any]]:
 
 
 def _git_root(start: Path) -> Path:
-    res = subprocess.run(["git", "-C", str(start), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+    res = subprocess.run(
+        ["git", "-C", str(start), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     return Path(res.stdout.strip())
 
 
@@ -79,7 +84,11 @@ def cmd_gen(args: argparse.Namespace) -> int:
             p = out_dir / rel
             if not p.exists() or p.read_text(encoding="utf-8") != text:
                 stale.append(rel)
-        extra = [p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*.avsc") if p.relative_to(out_dir).as_posix() not in expected]
+        extra = [
+            p.relative_to(out_dir).as_posix()
+            for p in out_dir.rglob("*.avsc")
+            if p.relative_to(out_dir).as_posix() not in expected
+        ]
         if stale or extra:
             for rel in stale:
                 print(f"STALE   {rel}")
@@ -134,7 +143,9 @@ def cmd_diff(args: argparse.Namespace) -> int:
         old_fields = compat.flatten_fields(old_schema) if old_schema else {}
         added = sorted(set(new_fields) - set(old_fields))
         removed = sorted(set(old_fields) - set(new_fields))
-        changed = sorted(k for k in set(new_fields) & set(old_fields) if new_fields[k] != old_fields[k])
+        changed = sorted(
+            k for k in set(new_fields) & set(old_fields) if new_fields[k] != old_fields[k]
+        )
         if not (added or removed or changed):
             continue
         print(f"== {rel}")
@@ -170,7 +181,9 @@ def cmd_register(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="rtdaas-contracts", description="Generate, check and register data contracts.")
+    p = argparse.ArgumentParser(
+        prog="rtdaas-contracts", description="Generate, check and register data contracts."
+    )
     p.add_argument("--log-level", default=None)
     sub = p.add_subparsers(dest="command", required=True)
 
@@ -178,7 +191,11 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--msgs", default=str(DEFAULT_MSGS_DIR))
     g.add_argument("--registry-yml", default=str(DEFAULT_REGISTRY_YML))
     g.add_argument("--out", default=str(DEFAULT_AVRO_DIR))
-    g.add_argument("--check", action="store_true", help="exit 2 if committed schemas differ from generated ones")
+    g.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 2 if committed schemas differ from generated ones",
+    )
     g.set_defaults(func=cmd_gen)
 
     c = sub.add_parser("check", help="check compatibility of head schemas against a base")

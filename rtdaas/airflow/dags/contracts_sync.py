@@ -80,7 +80,9 @@ with DAG(
             schema_id, version, schema = client.latest(subject)
             fields = {f["name"] for f in schema.get("fields", [])}
             if not {"robot_id", "ros_topic", "recv_time_ns", "msg"} <= fields:
-                raise RuntimeError(f"{subject} v{version} (id {schema_id}) is missing envelope fields: {fields}")
+                raise RuntimeError(
+                    f"{subject} v{version} (id {schema_id}) is missing envelope fields: {fields}"
+                )
             versions[subject] = version
         log.info("registry versions: %s", versions)
         return versions

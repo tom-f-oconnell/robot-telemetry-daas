@@ -118,7 +118,9 @@ class RobotSim:
         self._next_limit_warn_s = self._exp(30.0) + 3.0
         self._next_estop_s = self._exp(900.0) + 30.0
         self._estop_active_until_s: float | None = None
-        self._instrument: dict[str, str] = {a: "LARGE_NEEDLE_DRIVER" for a in cfg.arms if a.startswith("PSM")}
+        self._instrument: dict[str, str] = {
+            a: "LARGE_NEEDLE_DRIVER" for a in cfg.arms if a.startswith("PSM")
+        }
 
     # -- setup -------------------------------------------------------------------------------
     def _exp(self, mean_s: float) -> float:
@@ -170,7 +172,9 @@ class RobotSim:
         return self._gate_active
 
     def _quaternion(self, arm: _ArmState, t_s: float) -> dict[str, float]:
-        roll, pitch, yaw = (0.3 * math.sin(2 * math.pi * f * t_s + i) for i, f in enumerate(arm.rot_freqs))
+        roll, pitch, yaw = (
+            0.3 * math.sin(2 * math.pi * f * t_s + i) for i, f in enumerate(arm.rot_freqs)
+        )
         cr, sr = math.cos(roll / 2), math.sin(roll / 2)
         cp, sp = math.cos(pitch / 2), math.sin(pitch / 2)
         cy, sy = math.cos(yaw / 2), math.sin(yaw / 2)
@@ -188,13 +192,21 @@ class RobotSim:
     def _step_arm(self, arm: _ArmState, t_s: float, active: bool, estop: bool) -> None:
         arm.prev_pos = arm.pos.copy()
         if active and not estop:
-            vel = (arm.amps * np.sin(2 * math.pi * arm.freqs * t_s + arm.phases)).sum(axis=1) * arm.speed_scale
-            vel += -0.6 * (arm.pos - arm.center)  # spring toward centre keeps motion inside the cube
+            vel = (arm.amps * np.sin(2 * math.pi * arm.freqs * t_s + arm.phases)).sum(
+                axis=1
+            ) * arm.speed_scale
+            vel += -0.6 * (
+                arm.pos - arm.center
+            )  # spring toward centre keeps motion inside the cube
             vel += self.rng.normal(0, 0.0005, 3)
             arm.pos = arm.pos + vel * self.dt
             arm.pos = np.clip(arm.pos, arm.center - WORKSPACE_HALF_M, arm.center + WORKSPACE_HALF_M)
             if arm.name.startswith("PSM"):
-                arm.jaw = JAW_MAX_RAD * 0.5 * (1 + math.sin(2 * math.pi * arm.jaw_freq * t_s + arm.jaw_phase))
+                arm.jaw = (
+                    JAW_MAX_RAD
+                    * 0.5
+                    * (1 + math.sin(2 * math.pi * arm.jaw_freq * t_s + arm.jaw_phase))
+                )
         else:
             arm.pos = arm.pos + self.rng.normal(0, 0.00002, 3)
         arm.speed = float(np.linalg.norm(arm.pos - arm.prev_pos) / self.dt)
@@ -221,11 +233,19 @@ class RobotSim:
             return self.arms["PSM2"]
         return None
 
-    def _event(self, t_ns: int, arm: str, severity: int, code: str, message: str) -> tuple[str, str, dict[str, Any]]:
+    def _event(
+        self, t_ns: int, arm: str, severity: int, code: str, message: str
+    ) -> tuple[str, str, dict[str, Any]]:
         return (
             KAFKA_EVENTS,
             robot_topic(self.cfg.robot_id, "events"),
-            {"header": header(t_ns), "arm": arm, "severity": severity, "code": code, "message": message},
+            {
+                "header": header(t_ns),
+                "arm": arm,
+                "severity": severity,
+                "code": code,
+                "message": message,
+            },
         )
 
     def _state(self, t_s: float) -> str:
@@ -245,13 +265,25 @@ class RobotSim:
         if self._t0_ns is not None:
             return []
         self._t0_ns = t_ns
-        return [self._event(t_ns, "", SEVERITY_INFO, "SESSION_START", f"session started on {self.cfg.robot_id}")]
+        return [
+            self._event(
+                t_ns, "", SEVERITY_INFO, "SESSION_START", f"session started on {self.cfg.robot_id}"
+            )
+        ]
 
     def end(self, t_ns: int) -> list[tuple[str, str, dict[str, Any]]]:
         if self._ended or self._t0_ns is None:
             return []
         self._ended = True
-        return [self._event(t_ns, "", SEVERITY_INFO, "SESSION_END", f"session ended after {self._elapsed_s(t_ns):.1f} s")]
+        return [
+            self._event(
+                t_ns,
+                "",
+                SEVERITY_INFO,
+                "SESSION_END",
+                f"session ended after {self._elapsed_s(t_ns):.1f} s",
+            )
+        ]
 
     def tick(self, t_ns: int) -> list[tuple[str, str, dict[str, Any]]]:
         out: list[tuple[str, str, dict[str, Any]]] = []
@@ -269,21 +301,42 @@ class RobotSim:
             estop = True
         if t_s >= self._next_swap_s and self._instrument:
             arm = str(self.rng.choice(sorted(self._instrument)))
-            new = str(self.rng.choice(["LARGE_NEEDLE_DRIVER", "MARYLAND_BIPOLAR", "CADIERE_FORCEPS", "MONOPOLAR_SCISSORS"]))
-            out.append(self._event(t_ns, arm, SEVERITY_INFO, "INSTRUMENT_SWAP", f"{self._instrument[arm]} -> {new}"))
+            new = str(
+                self.rng.choice(
+                    [
+                        "LARGE_NEEDLE_DRIVER",
+                        "MARYLAND_BIPOLAR",
+                        "CADIERE_FORCEPS",
+                        "MONOPOLAR_SCISSORS",
+                    ]
+                )
+            )
+            out.append(
+                self._event(
+                    t_ns, arm, SEVERITY_INFO, "INSTRUMENT_SWAP", f"{self._instrument[arm]} -> {new}"
+                )
+            )
             self._instrument[arm] = new
             self._next_swap_s = t_s + self._exp(45.0) + 5.0
         if self._clutch_release_s is None and t_s >= self._next_clutch_s:
-            out.append(self._event(t_ns, "", SEVERITY_INFO, "CLUTCH_ENGAGED", "master clutch engaged"))
+            out.append(
+                self._event(t_ns, "", SEVERITY_INFO, "CLUTCH_ENGAGED", "master clutch engaged")
+            )
             self._clutch_release_s = t_s + float(self.rng.uniform(1.0, 3.0))
         elif self._clutch_release_s is not None and t_s >= self._clutch_release_s:
-            out.append(self._event(t_ns, "", SEVERITY_INFO, "CLUTCH_RELEASED", "master clutch released"))
+            out.append(
+                self._event(t_ns, "", SEVERITY_INFO, "CLUTCH_RELEASED", "master clutch released")
+            )
             self._clutch_release_s = None
             self._next_clutch_s = t_s + self._exp(20.0) + 2.0
         if t_s >= self._next_limit_warn_s:
             arm = str(self.rng.choice(list(self.cfg.arms)))
             joint = str(self.rng.choice(JOINT_NAMES))
-            out.append(self._event(t_ns, arm, SEVERITY_WARN, "JOINT_LIMIT_WARN", f"{joint} within 5% of its limit"))
+            out.append(
+                self._event(
+                    t_ns, arm, SEVERITY_WARN, "JOINT_LIMIT_WARN", f"{joint} within 5% of its limit"
+                )
+            )
             self._next_limit_warn_s = t_s + self._exp(30.0) + 3.0
 
         # -- motion ------------------------------------------------------------------------
@@ -333,9 +386,15 @@ class RobotSim:
                     {
                         "header": header(t_ns, frame),
                         "arm": name,
-                        "position": {"x": float(arm.pos[0]), "y": float(arm.pos[1]), "z": float(arm.pos[2])},
+                        "position": {
+                            "x": float(arm.pos[0]),
+                            "y": float(arm.pos[1]),
+                            "z": float(arm.pos[2]),
+                        },
                         "orientation": self._quaternion(arm, t_s),
-                        "jaw_angle": float(arm.jaw) if name.startswith(("PSM", "MTM")) else float("nan"),
+                        "jaw_angle": float(arm.jaw)
+                        if name.startswith(("PSM", "MTM"))
+                        else float("nan"),
                         "speed": arm.speed,
                     },
                 )

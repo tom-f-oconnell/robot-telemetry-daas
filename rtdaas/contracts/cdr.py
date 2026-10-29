@@ -140,7 +140,9 @@ class CdrCodec:
             items = list(value) if value is not None else []
             if f.array_len is not None and not f.bounded:
                 if len(items) != f.array_len:
-                    raise CdrError(f"{path}: fixed array expects {f.array_len} items, got {len(items)}")
+                    raise CdrError(
+                        f"{path}: fixed array expects {f.array_len} items, got {len(items)}"
+                    )
             else:
                 if f.bounded and f.array_len is not None and len(items) > f.array_len:
                     raise CdrError(f"{path}: bounded sequence allows at most {f.array_len} items")
@@ -207,7 +209,9 @@ class CdrCodec:
     def default_value(self, f: Field) -> Any:
         if f.is_array:
             if f.array_len is not None and not f.bounded:
-                return [self.default_value(Field(name=f.name, type=f.type)) for _ in range(f.array_len)]
+                return [
+                    self.default_value(Field(name=f.name, type=f.type)) for _ in range(f.array_len)
+                ]
             return []
         if f.type == "bool":
             return False
@@ -215,7 +219,13 @@ class CdrCodec:
             return 0.0 if f.type in ("float32", "float64") else 0
         if f.type in ("string", "wstring"):
             return ""
-        return {sub.name: (sub.default if sub.default is not None else self.default_value(sub)) for sub in self.registry.get(f.type).fields}
+        return {
+            sub.name: (sub.default if sub.default is not None else self.default_value(sub))
+            for sub in self.registry.get(f.type).fields
+        }
 
     def empty_message(self, type_name: str) -> dict[str, Any]:
-        return {f.name: (f.default if f.default is not None else self.default_value(f)) for f in self.registry.get(type_name).fields}
+        return {
+            f.name: (f.default if f.default is not None else self.default_value(f))
+            for f in self.registry.get(type_name).fields
+        }

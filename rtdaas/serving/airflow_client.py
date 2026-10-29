@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 
@@ -17,7 +17,11 @@ from rtdaas.config import Settings
 
 log = logging.getLogger(__name__)
 
-DAG_FOR_KIND = {"session": "telemetry_backfill", "date": "telemetry_backfill", "trial": "jigsaws_ingest"}
+DAG_FOR_KIND = {
+    "session": "telemetry_backfill",
+    "date": "telemetry_backfill",
+    "trial": "jigsaws_ingest",
+}
 
 
 class AirflowUnavailable(RuntimeError):
@@ -37,7 +41,9 @@ def build_conf(kind: str, target: str, robot_id: str | None = None) -> tuple[str
         try:
             day = datetime.strptime(stamp, "%Y%m%dT%H%M%S").strftime("%Y-%m-%d")
         except ValueError as exc:
-            raise ValueError(f"session_id {target!r} does not end in a yyyymmddTHHMMSS stamp") from exc
+            raise ValueError(
+                f"session_id {target!r} does not end in a yyyymmddTHHMMSS stamp"
+            ) from exc
         return dag_id, {"start_date": day, "end_date": day, "robot_id": robot or robot_id}
     # trial: Suturing_B001 -> task Suturing
     task = target.rsplit("_", 1)[0] if "_" in target else target
@@ -46,7 +52,7 @@ def build_conf(kind: str, target: str, robot_id: str | None = None) -> tuple[str
 
 def trigger_dag(settings: Settings, dag_id: str, conf: dict, timeout: float = 5.0) -> str:
     """Create a DAG run and return its ``dag_run_id``."""
-    run_id = f"api__{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    run_id = f"api__{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:6]}"
     url = f"{settings.airflow_api_url.rstrip('/')}/dags/{dag_id}/dagRuns"
     try:
         r = requests.post(

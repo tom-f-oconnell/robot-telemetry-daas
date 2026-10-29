@@ -8,7 +8,13 @@ from typing import Any
 import pytest
 import requests
 
-from rtdaas.contracts.registry import RegistryClient, RegistryError, SchemaCache, subject_for_topic, topic_for_subject
+from rtdaas.contracts.registry import (
+    RegistryClient,
+    RegistryError,
+    SchemaCache,
+    subject_for_topic,
+    topic_for_subject,
+)
 
 
 class _Resp:
@@ -33,7 +39,9 @@ class FakeRegistry:
         self.config: dict[str, str] = {}
         self.calls: list[tuple[str, str]] = []
 
-    def request(self, method: str, url: str, data: str | None = None, timeout: float | None = None) -> _Resp:
+    def request(
+        self, method: str, url: str, data: str | None = None, timeout: float | None = None
+    ) -> _Resp:
         path = url.split("/apis/ccompat/v7", 1)[1]
         self.calls.append((method, path))
         parts = path.strip("/").split("/")
@@ -63,7 +71,10 @@ class FakeRegistry:
             if not versions:
                 return _Resp(404, {"error_code": 40401, "message": "Subject not found"})
             version, sid = versions[-1]
-            return _Resp(200, {"subject": parts[1], "version": version, "id": sid, "schema": self.schemas[sid]})
+            return _Resp(
+                200,
+                {"subject": parts[1], "version": version, "id": sid, "schema": self.schemas[sid]},
+            )
         if method == "GET" and parts[0] == "schemas":
             sid = int(parts[2])
             if sid not in self.schemas:
@@ -77,20 +88,44 @@ class FakeRegistry:
             new = json.loads(body["schema"])
             from rtdaas.contracts.compat import is_compatible
 
-            return _Resp(200, {"is_compatible": is_compatible(new, old, self.config.get(subject, "BACKWARD"))})
+            return _Resp(
+                200,
+                {"is_compatible": is_compatible(new, old, self.config.get(subject, "BACKWARD"))},
+            )
         return _Resp(500, {"message": f"unhandled {method} {path}"})
 
 
 @pytest.fixture
 def fake(monkeypatch) -> FakeRegistry:
     fr = FakeRegistry()
-    monkeypatch.setattr(requests.Session, "request", lambda self, method, url, data=None, timeout=None, **kw: fr.request(method, url, data, timeout))
+    monkeypatch.setattr(
+        requests.Session,
+        "request",
+        lambda self, method, url, data=None, timeout=None, **kw: fr.request(
+            method, url, data, timeout
+        ),
+    )
     return fr
 
 
-SCHEMA_V1 = {"type": "record", "name": "R", "namespace": "t", "fields": [{"name": "a", "type": "int"}]}
-SCHEMA_V2 = {"type": "record", "name": "R", "namespace": "t", "fields": [{"name": "a", "type": "int"}, {"name": "b", "type": "string", "default": ""}]}
-SCHEMA_BAD = {"type": "record", "name": "R", "namespace": "t", "fields": [{"name": "a", "type": "int"}, {"name": "b", "type": "string"}]}
+SCHEMA_V1 = {
+    "type": "record",
+    "name": "R",
+    "namespace": "t",
+    "fields": [{"name": "a", "type": "int"}],
+}
+SCHEMA_V2 = {
+    "type": "record",
+    "name": "R",
+    "namespace": "t",
+    "fields": [{"name": "a", "type": "int"}, {"name": "b", "type": "string", "default": ""}],
+}
+SCHEMA_BAD = {
+    "type": "record",
+    "name": "R",
+    "namespace": "t",
+    "fields": [{"name": "a", "type": "int"}, {"name": "b", "type": "string"}],
+}
 
 
 def test_subject_naming():

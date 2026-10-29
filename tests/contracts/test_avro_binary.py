@@ -72,7 +72,14 @@ def test_union_enum_fixed_record_round_trip():
             {"name": "u", "type": ["null", "string", "long"]},
             {"name": "e", "type": {"type": "enum", "name": "Color", "symbols": ["RED", "GREEN"]}},
             {"name": "f", "type": {"type": "fixed", "name": "Hash", "size": 2}},
-            {"name": "nested", "type": {"type": "record", "name": "N", "fields": [{"name": "x", "type": "double"}]}},
+            {
+                "name": "nested",
+                "type": {
+                    "type": "record",
+                    "name": "N",
+                    "fields": [{"name": "x", "type": "double"}],
+                },
+            },
             {"name": "again", "type": "N"},
             {"name": "d", "type": "int", "default": 7},
         ],
@@ -97,13 +104,22 @@ def test_record_missing_field_without_default_fails():
 
 def test_parse_schema_rejects_unknown_and_recursive():
     with pytest.raises(ab.AvroError):
-        ab.parse_schema({"type": "record", "name": "R", "fields": [{"name": "x", "type": "Missing"}]})
+        ab.parse_schema(
+            {"type": "record", "name": "R", "fields": [{"name": "x", "type": "Missing"}]}
+        )
     with pytest.raises(ab.AvroError):
         ab.parse_schema({"type": "record", "name": "R", "fields": [{"name": "x", "type": "R"}]})
 
 
 def test_public_encode_decode_match_pure_path():
-    schema = {"type": "record", "name": "P", "fields": [{"name": "a", "type": {"type": "array", "items": "double"}}, {"name": "s", "type": "string"}]}
+    schema = {
+        "type": "record",
+        "name": "P",
+        "fields": [
+            {"name": "a", "type": {"type": "array", "items": "double"}},
+            {"name": "s", "type": "string"},
+        ],
+    }
     datum = {"a": [1.0, 2.5, -3.0], "s": "héllo"}
     assert ab.encode(schema, datum) == ab.encode_pure(schema, datum)
     assert ab.decode(schema, ab.encode(schema, datum)) == datum
@@ -116,7 +132,9 @@ def test_nan_survives_round_trip():
 
 def test_every_simulator_message_validates_against_its_schema(msg_registry: MsgRegistry):
     sim = RobotSim(SimConfig(robot_id="dv-001", rate_hz=20.0, seed=3))
-    schemas = {topic: msg_to_avro(msg_registry.get(t), msg_registry) for topic, t in TOPIC_TYPES.items()}
+    schemas = {
+        topic: msg_to_avro(msg_registry.get(t), msg_registry) for topic, t in TOPIC_TYPES.items()
+    }
     envelopes = {topic: kafka_record_schema(s, topic) for topic, s in schemas.items()}
     seen: set[str] = set()
     t0 = 1_700_000_000 * 10**9
@@ -125,7 +143,12 @@ def test_every_simulator_message_validates_against_its_schema(msg_registry: MsgR
             seen.add(kafka_topic)
             ab.validate(schemas[kafka_topic], msg)
             env = {"robot_id": "dv-001", "ros_topic": ros_topic, "recv_time_ns": t0, "msg": msg}
-            assert ab.decode_pure(envelopes[kafka_topic], ab.encode_pure(envelopes[kafka_topic], env))["msg"]["header"] == msg["header"]
+            assert (
+                ab.decode_pure(envelopes[kafka_topic], ab.encode_pure(envelopes[kafka_topic], env))[
+                    "msg"
+                ]["header"]
+                == msg["header"]
+            )
     for kafka_topic, _ros_topic, msg in sim.end(t0 + 41 * 50_000_000):
         ab.validate(schemas[kafka_topic], msg)
     assert seen == set(TOPIC_TYPES)

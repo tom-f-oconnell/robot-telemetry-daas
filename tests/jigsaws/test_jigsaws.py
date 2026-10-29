@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from rtdaas.jigsaws.layout import (
@@ -58,7 +57,12 @@ def test_parse_kinematics_shape_and_columns(dataset):
     assert len(kin) == 60 and kin["frame_idx"].iloc[0] == 0
     assert kin["t_s"].iloc[-1] == pytest.approx(59 / 30)
     # rotation matrices should be close to orthonormal (synthetic data perturbs identity)
-    r = kin[[f"psml_r{i}{j}" for i in (1, 2, 3) for j in (1, 2, 3)]].iloc[0].to_numpy().reshape(3, 3)
+    r = (
+        kin[[f"psml_r{i}{j}" for i in (1, 2, 3) for j in (1, 2, 3)]]
+        .iloc[0]
+        .to_numpy()
+        .reshape(3, 3)
+    )
     assert np.allclose(r @ r.T, np.eye(3), atol=0.2)
 
 
@@ -70,8 +74,12 @@ def test_transcription_and_labels(dataset):
     assert (tr["start_frame"] >= 1).all() and (tr["end_frame"] >= tr["start_frame"]).all()
     kin = label_frames(parse_kinematics(t.kinematics_path), tr)
     first = tr.iloc[0]
-    assert kin.loc[kin["frame_idx"] == first["start_frame"] - 1, "gesture"].iloc[0] == first["gesture"]
-    assert kin["gesture"].notna().sum() == sum(int(e - s + 1) for s, e in zip(tr["start_frame"], tr["end_frame"], strict=True))
+    assert (
+        kin.loc[kin["frame_idx"] == first["start_frame"] - 1, "gesture"].iloc[0] == first["gesture"]
+    )
+    assert kin["gesture"].notna().sum() == sum(
+        int(e - s + 1) for s, e in zip(tr["start_frame"], tr["end_frame"], strict=True)
+    )
 
 
 def test_frame_features_track_motion(dataset):
@@ -81,7 +89,11 @@ def test_frame_features_track_motion(dataset):
     assert info["fps"] == pytest.approx(30, abs=1) and info["n_frames"] == 60
     ff = frame_features(t.video_path)
     assert list(ff.columns) == ["frame_idx", "t_s", "mean_intensity", "motion_energy", "sharpness"]
-    assert len(ff) == 60 and ff["motion_energy"].iloc[0] == 0 and (ff["motion_energy"].iloc[1:] > 0).all()
+    assert (
+        len(ff) == 60
+        and ff["motion_energy"].iloc[0] == 0
+        and (ff["motion_energy"].iloc[1:] > 0).all()
+    )
     assert 0 < ff["mean_intensity"].mean() < 1
     # the rendered discs follow the synthetic PSM tips, so video motion correlates with kinematic speed
     kin = parse_kinematics(t.kinematics_path)

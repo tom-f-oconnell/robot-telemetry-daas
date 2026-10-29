@@ -19,7 +19,9 @@ log = logging.getLogger(__name__)
 class TableAdapter(Protocol):
     """Minimal interface the engine needs from a storage backend."""
 
-    def frame(self, table_name: str, partition_column: str | None, partition_value: str | None) -> pd.DataFrame:
+    def frame(
+        self, table_name: str, partition_column: str | None, partition_value: str | None
+    ) -> pd.DataFrame:
         """Return the (optionally partition-filtered) table as a pandas frame."""
 
     def sql(self, query: str) -> float | None:
@@ -46,7 +48,9 @@ def _scalar(value: Any) -> float | None:
 
 def _partition_mask(frame: pd.DataFrame, column: str, value: str) -> np.ndarray:
     """Rows whose ``column`` falls on calendar day ``value`` (``YYYY-MM-DD``, UTC)."""
-    ts = pd.to_datetime(frame[column], utc=True, format="ISO8601" if frame[column].dtype == object else None)
+    ts = pd.to_datetime(
+        frame[column], utc=True, format="ISO8601" if frame[column].dtype == object else None
+    )
     return (ts.dt.strftime("%Y-%m-%d") == value).to_numpy()
 
 
@@ -61,9 +65,11 @@ def frame_to_sqlite_ready(frame: pd.DataFrame) -> pd.DataFrame:
         elif s.dtype == object:
             if s.map(lambda v: isinstance(v, (list, tuple, dict, np.ndarray))).any():
                 out[col] = s.map(
-                    lambda v: json.dumps(list(v) if isinstance(v, (tuple, np.ndarray)) else v)
-                    if isinstance(v, (list, tuple, dict, np.ndarray))
-                    else v
+                    lambda v: (
+                        json.dumps(list(v) if isinstance(v, (tuple, np.ndarray)) else v)
+                        if isinstance(v, (list, tuple, dict, np.ndarray))
+                        else v
+                    )
                 )
     return out
 
@@ -75,7 +81,12 @@ class PandasAdapter:
         self.tables = dict(tables)
         self._conn: sqlite3.Connection | None = None
 
-    def frame(self, table_name: str, partition_column: str | None = None, partition_value: str | None = None) -> pd.DataFrame:
+    def frame(
+        self,
+        table_name: str,
+        partition_column: str | None = None,
+        partition_value: str | None = None,
+    ) -> pd.DataFrame:
         if table_name not in self.tables:
             raise KeyError(f"unknown table {table_name!r}")
         df = self.tables[table_name]
@@ -114,11 +125,17 @@ class SqliteAdapter:
 
     def table_exists(self, table_name: str) -> bool:
         row = self.conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (sqlite_table_name(table_name),)
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (sqlite_table_name(table_name),),
         ).fetchone()
         return row is not None
 
-    def frame(self, table_name: str, partition_column: str | None = None, partition_value: str | None = None) -> pd.DataFrame:
+    def frame(
+        self,
+        table_name: str,
+        partition_column: str | None = None,
+        partition_value: str | None = None,
+    ) -> pd.DataFrame:
         name = sqlite_table_name(table_name)
         if not self.table_exists(table_name):
             raise KeyError(f"table {name!r} not found in {self.path}")
@@ -153,7 +170,12 @@ class SparkAdapter:
     def resolve_table(self, table_name: str) -> str:
         return f"{self.catalog}.{table_name}"
 
-    def _df(self, table_name: str, partition_column: str | None = None, partition_value: str | None = None):
+    def _df(
+        self,
+        table_name: str,
+        partition_column: str | None = None,
+        partition_value: str | None = None,
+    ):
         from pyspark.sql import functions as F  # noqa: N812
 
         df = self.spark.table(self.resolve_table(table_name))
@@ -161,7 +183,12 @@ class SparkAdapter:
             df = df.where(F.to_date(F.col(partition_column)) == F.lit(partition_value))
         return df
 
-    def frame(self, table_name: str, partition_column: str | None = None, partition_value: str | None = None) -> pd.DataFrame:
+    def frame(
+        self,
+        table_name: str,
+        partition_column: str | None = None,
+        partition_value: str | None = None,
+    ) -> pd.DataFrame:
         df = self._df(table_name, partition_column, partition_value)
         if self.row_limit:
             df = df.limit(self.row_limit)

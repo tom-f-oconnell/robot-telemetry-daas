@@ -10,8 +10,8 @@ that video ``motion_energy`` correlates with kinematic speed.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 
 import numpy as np
 
@@ -68,11 +68,20 @@ def _finite_diff(x: np.ndarray, fps: float) -> np.ndarray:
     return v
 
 
-def _arm_block(rng: np.random.Generator, t: np.ndarray, fps: float, skill: str, scale: float, gripper_phase: float) -> np.ndarray:
+def _arm_block(
+    rng: np.random.Generator,
+    t: np.ndarray,
+    fps: float,
+    skill: str,
+    scale: float,
+    gripper_phase: float,
+) -> np.ndarray:
     pos = _psm_trajectory(rng, t, skill) * scale
     rot = _rotation_matrices(rng, t)
     lin_v = _finite_diff(pos, fps)
-    ang_v = _finite_diff(np.arcsin(np.clip(rot[:, [7, 2, 3]], -1, 1)), fps)  # crude from off-diagonals
+    ang_v = _finite_diff(
+        np.arcsin(np.clip(rot[:, [7, 2, 3]], -1, 1)), fps
+    )  # crude from off-diagonals
     gripper_freq = rng.uniform(0.2, 0.5)
     gripper = 0.5 + 0.5 * np.sin(2 * np.pi * gripper_freq * t + gripper_phase)
     block = np.concatenate([pos, rot, lin_v, ang_v, gripper[:, None]], axis=1)
@@ -103,7 +112,11 @@ def synth_transcript(rng: np.random.Generator, n_frames: int) -> list[tuple[int,
     lead_in = int(rng.integers(0, max(1, n_frames // 20) + 1))
     tail = int(rng.integers(0, max(1, n_frames // 20) + 1))
     usable = max(n_segments, n_frames - lead_in - tail)
-    cuts = np.sort(rng.choice(np.arange(1, usable), size=n_segments - 1, replace=False)) if usable > n_segments else np.array([], dtype=int)
+    cuts = (
+        np.sort(rng.choice(np.arange(1, usable), size=n_segments - 1, replace=False))
+        if usable > n_segments
+        else np.array([], dtype=int)
+    )
     bounds = np.concatenate([[0], cuts, [usable]])
     rows: list[tuple[int, int, str]] = []
     prev_gesture = None
@@ -167,8 +180,14 @@ def _write_video_h264(path: Path, kin: np.ndarray, fps: float) -> Path | None:
     out_path = path.with_suffix(".mp4")
     try:
         writer = imageio_ffmpeg.write_frames(
-            str(out_path), (w, h), fps=fps, codec="libx264", pix_fmt_in="rgb24",
-            pix_fmt_out="yuv420p", output_params=["-movflags", "+faststart", "-crf", "23"], macro_block_size=1,
+            str(out_path),
+            (w, h),
+            fps=fps,
+            codec="libx264",
+            pix_fmt_in="rgb24",
+            pix_fmt_out="yuv420p",
+            output_params=["-movflags", "+faststart", "-crf", "23"],
+            macro_block_size=1,
         )
         writer.send(None)
         for frame in _render_frames(kin):

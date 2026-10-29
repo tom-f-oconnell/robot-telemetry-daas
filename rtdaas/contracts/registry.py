@@ -34,16 +34,22 @@ def topic_for_subject(subject: str) -> str:
 
 
 class RegistryClient:
-    def __init__(self, base_url: str, timeout: float = 10.0, session: requests.Session | None = None) -> None:
+    def __init__(
+        self, base_url: str, timeout: float = 10.0, session: requests.Session | None = None
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._session = session or requests.Session()
         self._session.headers.update({"Accept": CONTENT_TYPE, "Content-Type": CONTENT_TYPE})
 
     # -- low level ----------------------------------------------------------------------
-    def _request(self, method: str, path: str, body: dict[str, Any] | None = None, ok_404: bool = False) -> Any:
+    def _request(
+        self, method: str, path: str, body: dict[str, Any] | None = None, ok_404: bool = False
+    ) -> Any:
         url = f"{self.base_url}{path}"
-        resp = self._session.request(method, url, data=json.dumps(body) if body is not None else None, timeout=self.timeout)
+        resp = self._session.request(
+            method, url, data=json.dumps(body) if body is not None else None, timeout=self.timeout
+        )
         if resp.status_code == 404 and ok_404:
             return None
         if resp.status_code >= 400:

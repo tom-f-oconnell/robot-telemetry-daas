@@ -17,11 +17,19 @@ log = logging.getLogger(__name__)
 
 
 class KafkaProducer:
-    def __init__(self, bootstrap: str, registry_url: str, topics: dict[str, str], extra_config: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        bootstrap: str,
+        registry_url: str,
+        topics: dict[str, str],
+        extra_config: dict[str, Any] | None = None,
+    ) -> None:
         try:
             from confluent_kafka import Producer
         except ImportError as exc:  # pragma: no cover
-            raise ImportError("confluent-kafka is required for --kafka: pip install 'rtdaas[kafka]'") from exc
+            raise ImportError(
+                "confluent-kafka is required for --kafka: pip install 'rtdaas[kafka]'"
+            ) from exc
         self.topics = dict(topics)
         self.registry = RegistryClient(registry_url)
         self._schemas: dict[str, tuple[int, dict[str, Any]]] = {}
@@ -47,9 +55,21 @@ class KafkaProducer:
             self.errors += 1
             log.error("delivery failed: %s", err)
 
-    def send(self, kafka_topic: str, robot_id: str, ros_topic: str, msg: dict[str, Any], recv_time_ns: int) -> None:
+    def send(
+        self,
+        kafka_topic: str,
+        robot_id: str,
+        ros_topic: str,
+        msg: dict[str, Any],
+        recv_time_ns: int,
+    ) -> None:
         schema_id, schema = self._schemas[kafka_topic]
-        envelope = {"robot_id": robot_id, "ros_topic": ros_topic, "recv_time_ns": int(recv_time_ns), "msg": msg}
+        envelope = {
+            "robot_id": robot_id,
+            "ros_topic": ros_topic,
+            "recv_time_ns": int(recv_time_ns),
+            "msg": msg,
+        }
         value = encode_wire(schema_id, schema, envelope)
         headers = [
             ("robot_id", robot_id.encode()),
@@ -59,7 +79,13 @@ class KafkaProducer:
         ]
         while True:
             try:
-                self._producer.produce(kafka_topic, key=robot_id.encode(), value=value, headers=headers, on_delivery=self._on_delivery)
+                self._producer.produce(
+                    kafka_topic,
+                    key=robot_id.encode(),
+                    value=value,
+                    headers=headers,
+                    on_delivery=self._on_delivery,
+                )
                 break
             except BufferError:
                 self._producer.poll(0.05)

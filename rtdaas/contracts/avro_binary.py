@@ -25,7 +25,9 @@ try:  # pragma: no cover - exercised only when fastavro is installed
 except Exception:  # pragma: no cover
     _fastavro = None
 
-PRIMITIVE_TYPES = frozenset({"null", "boolean", "int", "long", "float", "double", "bytes", "string"})
+PRIMITIVE_TYPES = frozenset(
+    {"null", "boolean", "int", "long", "float", "double", "bytes", "string"}
+)
 NAMED_TYPES = frozenset({"record", "enum", "fixed"})
 
 INT_MIN, INT_MAX = -(2**31), 2**31 - 1
@@ -89,7 +91,11 @@ def parse_schema(schema: dict[str, Any] | list[Any] | str) -> dict[str, Any] | l
         if isinstance(node, str):
             if node in PRIMITIVE_TYPES:
                 return node
-            full = node if "." in node or node in names else (f"{enclosing_ns}.{node}" if enclosing_ns else node)
+            full = (
+                node
+                if "." in node or node in names
+                else (f"{enclosing_ns}.{node}" if enclosing_ns else node)
+            )
             if full not in names:
                 raise AvroError(f"unknown type reference {node!r}")
             if full in stack:
@@ -229,7 +235,11 @@ def _union_index(branches: list[Any], datum: Any) -> int:
     elif isinstance(datum, bool):
         idx = first("boolean")
     elif isinstance(datum, int):
-        idx = first("int", "long", "float", "double") if INT_MIN <= datum <= INT_MAX else first("long", "double", "float")
+        idx = (
+            first("int", "long", "float", "double")
+            if INT_MIN <= datum <= INT_MAX
+            else first("long", "double", "float")
+        )
     elif isinstance(datum, float):
         idx = first("double", "float")
     elif isinstance(datum, str):
@@ -241,7 +251,9 @@ def _union_index(branches: list[Any], datum: Any) -> int:
     elif isinstance(datum, dict):
         idx = None
         for i, b in enumerate(branches):
-            if kinds[i] == "record" and all(f["name"] in datum or "default" in f for f in b["fields"]):
+            if kinds[i] == "record" and all(
+                f["name"] in datum or "default" in f for f in b["fields"]
+            ):
                 idx = i
                 break
         if idx is None:
@@ -308,7 +320,9 @@ def _encode(out: io.BytesIO, node: Any, datum: Any, path: str) -> None:
             _encode(out, node[idx], datum, f"{path}<{idx}>")
         elif t == "record":
             if not isinstance(datum, dict):
-                raise AvroError(f"{path}: expected dict for record {node['name']}, got {type(datum).__name__}")
+                raise AvroError(
+                    f"{path}: expected dict for record {node['name']}, got {type(datum).__name__}"
+                )
             for f in node["fields"]:
                 name = f["name"]
                 if name in datum:

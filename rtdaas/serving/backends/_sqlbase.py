@@ -11,7 +11,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -163,11 +163,16 @@ class SqlBackendBase:
 
     def freshness(self) -> dict[str, dict]:
         """Per-table last-updated and SLA status, computed live from the tables."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         out: dict[str, dict] = {}
         for e in self._catalog_yml:
             name, col, sla = e["name"], e.get("freshness_column"), e.get("sla_hours")
-            info: dict[str, Any] = {"sla_hours": sla, "last_updated": None, "row_count": None, "fresh": None}
+            info: dict[str, Any] = {
+                "sla_hours": sla,
+                "last_updated": None,
+                "row_count": None,
+                "fresh": None,
+            }
             if self.table_exists(name):
                 try:
                     r = self.one(f"SELECT COUNT(*) AS n FROM {self.table(name)}")
@@ -178,7 +183,9 @@ class SqlBackendBase:
                 except Exception as exc:  # pragma: no cover - engine specific
                     log.warning("freshness query failed for %s: %s", name, exc)
             if info["last_updated"] and sla:
-                age_h = (now - pd.Timestamp(info["last_updated"]).to_pydatetime()).total_seconds() / 3600
+                age_h = (
+                    now - pd.Timestamp(info["last_updated"]).to_pydatetime()
+                ).total_seconds() / 3600
                 info["age_hours"] = round(age_h, 2)
                 info["fresh"] = age_h <= float(sla)
             out[name] = info
@@ -208,7 +215,9 @@ class SqlBackendBase:
         for entry in out:
             reg = self._registry_latest(entry["subject"])
             if reg:
-                entry.update({"version": reg["version"], "schema_id": reg["id"], "source": "registry"})
+                entry.update(
+                    {"version": reg["version"], "schema_id": reg["id"], "source": "registry"}
+                )
                 entry["registry_schema_matches_repo"] = reg["schema"] == entry["schema"]
         return out
 
@@ -233,7 +242,14 @@ class SqlBackendBase:
                     schema = body.get("schema")
                     if isinstance(schema, str):
                         schema = json.loads(schema)
-                    results.append({"subject": s, "version": body.get("version"), "id": body.get("id"), "schema": schema})
+                    results.append(
+                        {
+                            "subject": s,
+                            "version": body.get("version"),
+                            "id": body.get("id"),
+                            "schema": schema,
+                        }
+                    )
         except Exception as exc:  # registry optional: any failure -> cache empty for 5 min
             log.debug("schema registry unavailable (%s): %s", url, exc)
         self._registry_cache = (now, results)
@@ -245,12 +261,12 @@ class SqlBackendBase:
             return self.rows(
                 f"""SELECT robot_id, MIN(start_ts) AS first_seen, MAX(end_ts) AS last_seen,
                            COUNT(DISTINCT session_id) AS n_sessions
-                    FROM {self.table('telemetry.sessions')} GROUP BY robot_id ORDER BY robot_id"""
+                    FROM {self.table("telemetry.sessions")} GROUP BY robot_id ORDER BY robot_id"""
             )
         if self.table_exists("telemetry.tool_pose_raw"):
             return self.rows(
                 f"""SELECT robot_id, MIN(ts) AS first_seen, MAX(ts) AS last_seen, 0 AS n_sessions
-                    FROM {self.table('telemetry.tool_pose_raw')} GROUP BY robot_id ORDER BY robot_id"""
+                    FROM {self.table("telemetry.tool_pose_raw")} GROUP BY robot_id ORDER BY robot_id"""
             )
         return []
 
@@ -278,7 +294,8 @@ class SqlBackendBase:
         return [
             r["arm"]
             for r in self.rows(
-                f"SELECT arm FROM {self.table('telemetry.sessions')} WHERE session_id = ? ORDER BY arm", (session_id,)
+                f"SELECT arm FROM {self.table('telemetry.sessions')} WHERE session_id = ? ORDER BY arm",
+                (session_id,),
             )
         ]
 
@@ -286,22 +303,27 @@ class SqlBackendBase:
         if not self.table_exists("telemetry.sessions"):
             return None
         arms = self.rows(
-            f"SELECT * FROM {self.table('telemetry.sessions')} WHERE session_id = ? ORDER BY arm", (session_id,)
+            f"SELECT * FROM {self.table('telemetry.sessions')} WHERE session_id = ? ORDER BY arm",
+            (session_id,),
         )
         if not arms:
             return None
         head = self.rows(
-            SESSION_LIST_SQL.format(sessions=self.table("telemetry.sessions"), where="WHERE session_id = ?"),
+            SESSION_LIST_SQL.format(
+                sessions=self.table("telemetry.sessions"), where="WHERE session_id = ?"
+            ),
             (session_id, 1, 0),
         )[0]
         head["arms"] = [a["arm"] for a in arms]
         head["per_arm"] = arms
-        head["events"] = self.events(robot_id=head["robot_id"], start=head["start_ts"], end=head["end_ts"], limit=500)
+        head["events"] = self.events(
+            robot_id=head["robot_id"], start=head["start_ts"], end=head["end_ts"], limit=500
+        )
         return head
 
     def _session_span(self, session_id: str) -> tuple[str, str, str] | None:
         r = self.one(
-            f"""SELECT robot_id, MIN(start_ts) AS s, MAX(end_ts) AS e FROM {self.table('telemetry.sessions')}
+            f"""SELECT robot_id, MIN(start_ts) AS s, MAX(end_ts) AS e FROM {self.table("telemetry.sessions")}
                 WHERE session_id = ? GROUP BY robot_id""",
             (session_id,),
         )
@@ -320,7 +342,7 @@ class SqlBackendBase:
             SELECT ts, x, y, z, jaw_angle, speed FROM (
                 SELECT ts, x, y, z, jaw_angle, speed,
                        ROW_NUMBER() OVER (ORDER BY ts) - 1 AS rn
-                FROM {self.table('telemetry.tool_pose_raw')}
+                FROM {self.table("telemetry.tool_pose_raw")}
                 WHERE robot_id = ? AND arm = ? AND ts >= {tp} AND ts <= {tp}
             ) t WHERE rn % ? = 0 ORDER BY ts
         """
@@ -334,13 +356,15 @@ class SqlBackendBase:
         s_floor = pd.Timestamp(s).floor("1min").strftime(TS_FORMAT)
         tp = self.ts_param()
         return self.rows(
-            f"""SELECT * FROM {self.table('telemetry.kpi_1m')}
+            f"""SELECT * FROM {self.table("telemetry.kpi_1m")}
                 WHERE robot_id = ? AND window_start >= {tp} AND window_start <= {tp}
                 ORDER BY window_start, arm""",
             (robot_id, s_floor, norm_ts(e)),
         )
 
-    def events(self, q=None, robot_id=None, severity_min=None, start=None, end=None, limit=200) -> list[dict]:
+    def events(
+        self, q=None, robot_id=None, severity_min=None, start=None, end=None, limit=200
+    ) -> list[dict]:
         if not self.table_exists("telemetry.events_raw"):
             return []
         clauses, params = [], []
@@ -377,13 +401,16 @@ class SqlBackendBase:
                 params.append(val)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         return self.rows(
-            f"SELECT * FROM {self.table('procedures.trials')} {where} ORDER BY task, trial_id", tuple(params)
+            f"SELECT * FROM {self.table('procedures.trials')} {where} ORDER BY task, trial_id",
+            tuple(params),
         )
 
     def trial(self, trial_id: str) -> dict | None:
         if not self.table_exists("procedures.trials"):
             return None
-        t = self.one(f"SELECT * FROM {self.table('procedures.trials')} WHERE trial_id = ?", (trial_id,))
+        t = self.one(
+            f"SELECT * FROM {self.table('procedures.trials')} WHERE trial_id = ?", (trial_id,)
+        )
         if t is None:
             return None
         t["gestures"] = (
@@ -400,7 +427,7 @@ class SqlBackendBase:
                 f"""SELECT COUNT(*) AS n_frames, AVG(motion_energy) AS motion_energy_mean,
                            AVG(sharpness) AS sharpness_mean, AVG(mean_intensity) AS mean_intensity,
                            MAX(t_s) AS duration_s
-                    FROM {self.table('procedures.frame_features')} WHERE trial_id = ?""",
+                    FROM {self.table("procedures.frame_features")} WHERE trial_id = ?""",
                 (trial_id,),
             )
         t["frame_summary"] = summary or {}
@@ -417,7 +444,7 @@ class SqlBackendBase:
         cols = ", ".join(f"{self.arm_col(a, f)} AS {a}_{f}" for a in arms for f in ARM_FIELDS)
         return self.rows(
             f"""SELECT frame_idx, t_s, gesture, {cols}
-                FROM {self.table('procedures.kinematics')}
+                FROM {self.table("procedures.kinematics")}
                 WHERE trial_id = ? AND frame_idx % ? = 0 ORDER BY frame_idx""",
             (trial_id, n),
         )
@@ -427,7 +454,7 @@ class SqlBackendBase:
             return []
         return self.rows(
             f"""SELECT frame_idx, t_s, mean_intensity, motion_energy, sharpness, gesture
-                FROM {self.table('procedures.frame_features')} WHERE trial_id = ? ORDER BY frame_idx""",
+                FROM {self.table("procedures.frame_features")} WHERE trial_id = ? ORDER BY frame_idx""",
             (trial_id,),
         )
 
@@ -441,7 +468,7 @@ class SqlBackendBase:
                 params.append(val)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         return self.rows(
-            f"""SELECT * FROM {self.table('procedures.gestures')} {where}
+            f"""SELECT * FROM {self.table("procedures.gestures")} {where}
                 ORDER BY task, trial_id, start_frame LIMIT ?""",
             (*params, int(limit)),
         )
@@ -459,7 +486,7 @@ class SqlBackendBase:
                        SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS n_error,
                        SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS n_skipped,
                        MAX(partition_value) AS partition_value
-                FROM {self.table('dq.check_results')}
+                FROM {self.table("dq.check_results")}
                 GROUP BY run_id ORDER BY MAX(run_ts) DESC LIMIT ?""",
             (int(limit),),
         )
@@ -474,7 +501,7 @@ class SqlBackendBase:
                 params.append(val)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         return self.rows(
-            f"""SELECT * FROM {self.table('dq.check_results')} {where}
+            f"""SELECT * FROM {self.table("dq.check_results")} {where}
                 ORDER BY run_ts DESC, table_name, check_name LIMIT ?""",
             (*params, int(limit)),
         )
@@ -484,12 +511,12 @@ class SqlBackendBase:
             "job_id": uuid.uuid4().hex[:12],
             "kind": kind,
             "target": target,
-            "requested_at": datetime.now(timezone.utc).strftime(TS_FORMAT),
+            "requested_at": datetime.now(UTC).strftime(TS_FORMAT),
             "status": status,
             "dag_run_id": dag_run_id,
         }
         self.execute(
-            f"""INSERT INTO {self.table('jobs')} (job_id, kind, target, requested_at, status, dag_run_id)
+            f"""INSERT INTO {self.table("jobs")} (job_id, kind, target, requested_at, status, dag_run_id)
                 VALUES (?, ?, ?, ?, ?, ?)""",
             (job["job_id"], kind, target, job["requested_at"], status, dag_run_id),
         )
@@ -509,7 +536,14 @@ class SqlBackendBase:
             "status": "ok",
             "backend": self.name,
             "version": __version__,
-            "tables": {k: {"rows": v.get("row_count"), "last_updated": v.get("last_updated"), "fresh": v.get("fresh")} for k, v in fresh.items()},
+            "tables": {
+                k: {
+                    "rows": v.get("row_count"),
+                    "last_updated": v.get("last_updated"),
+                    "fresh": v.get("fresh"),
+                }
+                for k, v in fresh.items()
+            },
         }
 
 
@@ -537,7 +571,14 @@ def _field_summary(schema: dict) -> list[dict]:
         for f in rec.get("fields", []):
             t = f.get("type")
             path = f"{prefix}{f['name']}"
-            out.append({"path": path, "type": typ(t), "has_default": "default" in f, "default": f.get("default")})
+            out.append(
+                {
+                    "path": path,
+                    "type": typ(t),
+                    "has_default": "default" in f,
+                    "default": f.get("default"),
+                }
+            )
             if isinstance(t, dict) and t.get("type") == "record":
                 walk(t, path + ".")
 

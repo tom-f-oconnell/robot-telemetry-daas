@@ -57,12 +57,13 @@ def _is_local(root: str) -> bool:
 
 
 def _strip_scheme(p: str) -> str:
-    return p[len("file:"):] if p.startswith("file:") else p
+    return p[len("file:") :] if p.startswith("file:") else p
 
 
 # ---------------------------------------------------------------------------
 # Discovery (driver)
 # ---------------------------------------------------------------------------
+
 
 def _trial_id_from_path(path: str) -> str:
     stem = posixpath.splitext(posixpath.basename(path))[0]
@@ -96,8 +97,11 @@ def trial_metadata(spark, root: str, task: str | None) -> dict[str, dict]:
         trials = discover_trials(Path(_strip_scheme(root)), tasks=[task] if task else None)
         return {
             t.trial_id: {
-                "task": t.task, "subject": t.subject, "repetition": t.repetition,
-                "skill_level": t.skill_level, "grs_total": t.grs_total,
+                "task": t.task,
+                "subject": t.subject,
+                "repetition": t.repetition,
+                "skill_level": t.skill_level,
+                "grs_total": t.grs_total,
             }
             for t in trials
         }
@@ -123,14 +127,23 @@ def trial_metadata(spark, root: str, task: str | None) -> dict[str, dict]:
         except ValueError:
             subject, rep = trial_id[-4:-3], 0
         skill, grs = meta.get(trial_id, ("unknown", None))
-        out[trial_id] = {"task": t_task, "subject": subject, "repetition": rep, "skill_level": skill, "grs_total": grs}
+        out[trial_id] = {
+            "task": t_task,
+            "subject": subject,
+            "repetition": rep,
+            "skill_level": skill,
+            "grs_total": grs,
+        }
     return out
 
 
 def gather_inputs(spark, root: str, task: str | None):
     """RDD of ``(trial_id, {"kin": bytes, "transcript": bytes|None, "video": bytes|None, paths...})``."""
+
     def keyed(df, kind: str):
-        return df.rdd.map(lambda r: (_trial_id_from_path(r["path"]), (kind, r["path"], bytes(r["content"]))))
+        return df.rdd.map(
+            lambda r: (_trial_id_from_path(r["path"]), (kind, r["path"], bytes(r["content"])))
+        )
 
     kin = keyed(_binary_files(spark, root, KINEMATICS_GLOB), "kin")
     tr = keyed(_binary_files(spark, root, TRANSCRIPTION_GLOB), "transcript")
@@ -163,11 +176,14 @@ def gather_inputs(spark, root: str, task: str | None):
 # Per-trial processing (executors)
 # ---------------------------------------------------------------------------
 
+
 def _arm_struct(row: pd.Series, arm: str) -> dict:
     return {f: float(row[f"{arm}_{f}"]) for f in ddl.ARM_STRUCT_FIELDS}
 
 
-def process_trial(trial_id: str, files: dict, meta: dict, pipeline_version: str, processed_at: dt.datetime):
+def process_trial(
+    trial_id: str, files: dict, meta: dict, pipeline_version: str, processed_at: dt.datetime
+):
     """Parse + compute everything for one trial. Returns ``{"trials": [...], "kinematics": [...], "gestures": [...], "frame_features": [...]}``."""
     from rtdaas.jigsaws.layout import label_frames, parse_kinematics, parse_transcription
     from rtdaas.metrics.gestures import gesture_metrics
@@ -207,28 +223,55 @@ def process_trial(trial_id: str, files: dict, meta: dict, pipeline_version: str,
     )
 
     trial_row = {
-        "trial_id": trial_id, "task": task, "subject": meta.get("subject"), "repetition": meta.get("repetition"),
-        "skill_level": meta.get("skill_level"), "grs_total": meta.get("grs_total"),
-        "duration_s": float(max(n_kin - 1, 0) / SAMPLE_RATE_HZ), "n_frames": int(len(frames)) if frames is not None else n_kin,
-        "n_kinematic_samples": n_kin, "sample_rate_hz": SAMPLE_RATE_HZ,
-        "video_path": files.get("video_path"), "kinematics_path": files.get("kin_path"),
-        "transcription_path": files.get("transcript_path"), "n_gestures": int(len(gestures_pdf)),
-        "processed_at": processed_at, "pipeline_version": pipeline_version,
+        "trial_id": trial_id,
+        "task": task,
+        "subject": meta.get("subject"),
+        "repetition": meta.get("repetition"),
+        "skill_level": meta.get("skill_level"),
+        "grs_total": meta.get("grs_total"),
+        "duration_s": float(max(n_kin - 1, 0) / SAMPLE_RATE_HZ),
+        "n_frames": int(len(frames)) if frames is not None else n_kin,
+        "n_kinematic_samples": n_kin,
+        "sample_rate_hz": SAMPLE_RATE_HZ,
+        "video_path": files.get("video_path"),
+        "kinematics_path": files.get("kin_path"),
+        "transcription_path": files.get("transcript_path"),
+        "n_gestures": int(len(gestures_pdf)),
+        "processed_at": processed_at,
+        "pipeline_version": pipeline_version,
     }
 
     kin_rows = []
     for _, r in kin.iterrows():
-        kin_rows.append({
-            "trial_id": trial_id, "task": task, "frame_idx": int(r["frame_idx"]), "t_s": float(r["t_s"]),
-            "mtml": _arm_struct(r, "mtml"), "mtmr": _arm_struct(r, "mtmr"),
-            "psml": _arm_struct(r, "psml"), "psmr": _arm_struct(r, "psmr"),
-            "gesture": r["gesture"] if isinstance(r["gesture"], str) else None,
-        })
+        kin_rows.append(
+            {
+                "trial_id": trial_id,
+                "task": task,
+                "frame_idx": int(r["frame_idx"]),
+                "t_s": float(r["t_s"]),
+                "mtml": _arm_struct(r, "mtml"),
+                "mtmr": _arm_struct(r, "mtmr"),
+                "psml": _arm_struct(r, "psml"),
+                "psmr": _arm_struct(r, "psmr"),
+                "gesture": r["gesture"] if isinstance(r["gesture"], str) else None,
+            }
+        )
 
     gesture_rows = []
     for _, g in gestures_pdf.iterrows():
-        row = {c: (None if pd.isna(g.get(c)) else g.get(c)) for c in ddl.GESTURES.column_names if c in g.index}
-        row.update({"trial_id": trial_id, "task": task, "subject": meta.get("subject"), "skill_level": meta.get("skill_level")})
+        row = {
+            c: (None if pd.isna(g.get(c)) else g.get(c))
+            for c in ddl.GESTURES.column_names
+            if c in g.index
+        }
+        row.update(
+            {
+                "trial_id": trial_id,
+                "task": task,
+                "subject": meta.get("subject"),
+                "skill_level": meta.get("skill_level"),
+            }
+        )
         for c in ("start_frame", "end_frame", "gripper_cycles", "n_frames"):
             if row.get(c) is not None:
                 row[c] = int(row[c])
@@ -240,24 +283,43 @@ def process_trial(trial_id: str, files: dict, meta: dict, pipeline_version: str,
         for _, f in frames.iterrows():
             idx = int(f["frame_idx"])
             gesture = labels.get(idx) if labels is not None else None
-            frame_rows.append({
-                "trial_id": trial_id, "task": task, "frame_idx": idx, "t_s": float(f["t_s"]),
-                "mean_intensity": float(f["mean_intensity"]), "motion_energy": float(f["motion_energy"]),
-                "sharpness": float(f["sharpness"]), "gesture": gesture if isinstance(gesture, str) else None,
-            })
-    return {"trials": [trial_row], "kinematics": kin_rows, "gestures": gesture_rows, "frame_features": frame_rows}
+            frame_rows.append(
+                {
+                    "trial_id": trial_id,
+                    "task": task,
+                    "frame_idx": idx,
+                    "t_s": float(f["t_s"]),
+                    "mean_intensity": float(f["mean_intensity"]),
+                    "motion_energy": float(f["motion_energy"]),
+                    "sharpness": float(f["sharpness"]),
+                    "gesture": gesture if isinstance(gesture, str) else None,
+                }
+            )
+    return {
+        "trials": [trial_row],
+        "kinematics": kin_rows,
+        "gestures": gesture_rows,
+        "frame_features": frame_rows,
+    }
 
 
 TABLE_FOR = {
-    "trials": ddl.TRIALS, "kinematics": ddl.KINEMATICS, "gestures": ddl.GESTURES, "frame_features": ddl.FRAME_FEATURES,
+    "trials": ddl.TRIALS,
+    "kinematics": ddl.KINEMATICS,
+    "gestures": ddl.GESTURES,
+    "frame_features": ddl.FRAME_FEATURES,
 }
 
 
-def process_partition(items: Iterable, meta_b, pipeline_version: str, processed_at: dt.datetime) -> Iterator[tuple[str, tuple]]:
+def process_partition(
+    items: Iterable, meta_b, pipeline_version: str, processed_at: dt.datetime
+) -> Iterator[tuple[str, tuple]]:
     meta_all = meta_b.value
     for trial_id, files in items:
         try:
-            result = process_trial(trial_id, files, meta_all.get(trial_id, {}), pipeline_version, processed_at)
+            result = process_trial(
+                trial_id, files, meta_all.get(trial_id, {}), pipeline_version, processed_at
+            )
         except Exception as exc:
             log.error("trial %s failed: %s", trial_id, exc)
             continue
@@ -271,9 +333,16 @@ def process_partition(items: Iterable, meta_b, pipeline_version: str, processed_
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def parse_args(argv=None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--root", default=None, help="dataset root (local path or s3a://...); default s3a://<raw bucket>/jigsaws")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--root",
+        default=None,
+        help="dataset root (local path or s3a://...); default s3a://<raw bucket>/jigsaws",
+    )
     p.add_argument("--task", default=None, help="restrict to one task, e.g. Suturing")
     p.add_argument("--skip-es", action="store_true")
     return p.parse_args(argv)
@@ -287,7 +356,7 @@ def run(spark, settings: Settings, root: str, task: str | None, skip_es: bool = 
         return {k: 0 for k in TABLE_FOR}
 
     meta_b = spark.sparkContext.broadcast(meta)
-    processed_at = dt.datetime.now(tz=dt.timezone.utc)
+    processed_at = dt.datetime.now(tz=dt.UTC)
     inputs = gather_inputs(spark, root, task).repartition(max(len(meta), 1))
     decoded = inputs.mapPartitions(
         lambda it: process_partition(it, meta_b, settings.pipeline_version, processed_at)
@@ -309,8 +378,10 @@ def run(spark, settings: Settings, root: str, task: str | None, skip_es: bool = 
     if not skip_es and counts["gestures"]:
         es_ensure_index(ES_INDEX_GESTURES, settings=settings)
         es_bulk(
-            rows_as_dicts(frames["gestures"]), ES_INDEX_GESTURES,
-            id_fn=lambda r: f"{r['trial_id']}|{r['start_frame']}", settings=settings,
+            rows_as_dicts(frames["gestures"]),
+            ES_INDEX_GESTURES,
+            id_fn=lambda r: f"{r['trial_id']}|{r['start_frame']}",
+            settings=settings,
         )
     return counts
 

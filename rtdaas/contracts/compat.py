@@ -134,10 +134,20 @@ def _check(
             for i, wb in enumerate(writer):
                 if not _matches_any_branch(reader, wb, rnames, wnames, rns, wns):
                     out.append(
-                        Incompatibility(f"{path}<{i}>", "missing_union_branch", f"writer branch {_kind(wnames.resolve(wb, wns))!r} has no compatible reader branch")
+                        Incompatibility(
+                            f"{path}<{i}>",
+                            "missing_union_branch",
+                            f"writer branch {_kind(wnames.resolve(wb, wns))!r} has no compatible reader branch",
+                        )
                     )
         elif not _matches_any_branch(reader, writer, rnames, wnames, rns, wns):
-            out.append(Incompatibility(path, "missing_union_branch", f"writer type {wk!r} has no compatible branch in reader union"))
+            out.append(
+                Incompatibility(
+                    path,
+                    "missing_union_branch",
+                    f"writer type {wk!r} has no compatible branch in reader union",
+                )
+            )
         return
     if wk == "union":
         for i, wb in enumerate(writer):
@@ -146,11 +156,19 @@ def _check(
 
     if rk in PRIMITIVE_TYPES or wk in PRIMITIVE_TYPES:
         if rk not in PROMOTIONS.get(wk, frozenset()):
-            out.append(Incompatibility(path, "type_mismatch", f"reader type {rk!r} cannot read writer type {wk!r}"))
+            out.append(
+                Incompatibility(
+                    path, "type_mismatch", f"reader type {rk!r} cannot read writer type {wk!r}"
+                )
+            )
         return
 
     if rk != wk:
-        out.append(Incompatibility(path, "type_mismatch", f"reader type {rk!r} cannot read writer type {wk!r}"))
+        out.append(
+            Incompatibility(
+                path, "type_mismatch", f"reader type {rk!r} cannot read writer type {wk!r}"
+            )
+        )
         return
 
     if rk == "array":
@@ -163,19 +181,35 @@ def _check(
     # named types from here on
     rfull, wfull = _fullname(reader, rns), _fullname(writer, wns)
     if not (_names_of(reader, rns) & _names_of(writer, wns)):
-        out.append(Incompatibility(path, "name_mismatch", f"reader {rk} {rfull!r} vs writer {wfull!r} (no alias matches)"))
+        out.append(
+            Incompatibility(
+                path,
+                "name_mismatch",
+                f"reader {rk} {rfull!r} vs writer {wfull!r} (no alias matches)",
+            )
+        )
         return
     inner_rns = rfull.rsplit(".", 1)[0] if "." in rfull else rns
     inner_wns = wfull.rsplit(".", 1)[0] if "." in wfull else wns
 
     if rk == "fixed":
         if reader["size"] != writer["size"]:
-            out.append(Incompatibility(path, "fixed_size_mismatch", f"{reader['size']} != {writer['size']}"))
+            out.append(
+                Incompatibility(
+                    path, "fixed_size_mismatch", f"{reader['size']} != {writer['size']}"
+                )
+            )
         return
     if rk == "enum":
         missing = [s for s in writer["symbols"] if s not in reader["symbols"]]
         if missing and "default" not in reader:
-            out.append(Incompatibility(path, "missing_enum_symbols", f"reader lacks writer symbols {missing} and has no default"))
+            out.append(
+                Incompatibility(
+                    path,
+                    "missing_enum_symbols",
+                    f"reader lacks writer symbols {missing} and has no default",
+                )
+            )
         return
     if rk == "record":
         wfields = {f["name"]: f for f in writer["fields"]}
@@ -189,14 +223,27 @@ def _check(
             fpath = f"{path}.{rf['name']}"
             if wf is None:
                 if "default" not in rf:
-                    out.append(Incompatibility(fpath, "reader_field_missing_default", "field added without a default; old data cannot be read"))
+                    out.append(
+                        Incompatibility(
+                            fpath,
+                            "reader_field_missing_default",
+                            "field added without a default; old data cannot be read",
+                        )
+                    )
                 continue
             _check(rf["type"], wf["type"], rnames, wnames, inner_rns, inner_wns, fpath, out)
         return
     out.append(Incompatibility(path, "unsupported", f"cannot compare {rk!r}"))
 
 
-def _matches_any_branch(reader_union: list[Any], writer: Any, rnames: _Names, wnames: _Names, rns: str | None, wns: str | None) -> bool:
+def _matches_any_branch(
+    reader_union: list[Any],
+    writer: Any,
+    rnames: _Names,
+    wnames: _Names,
+    rns: str | None,
+    wns: str | None,
+) -> bool:
     for rb in reader_union:
         probe: list[Incompatibility] = []
         _check(rb, writer, rnames, wnames, rns, wns, "", probe)
@@ -222,7 +269,9 @@ def check_forward(reader: dict[str, Any], writer: dict[str, Any]) -> list[Incomp
     return check_backward(writer, reader)
 
 
-def check(new: dict[str, Any], old: dict[str, Any], mode: str = "BACKWARD") -> list[Incompatibility]:
+def check(
+    new: dict[str, Any], old: dict[str, Any], mode: str = "BACKWARD"
+) -> list[Incompatibility]:
     mode = mode.upper()
     if mode not in MODES:
         raise ValueError(f"unknown compatibility mode {mode!r}; expected one of {MODES}")
@@ -232,7 +281,9 @@ def check(new: dict[str, Any], old: dict[str, Any], mode: str = "BACKWARD") -> l
     if mode in ("BACKWARD", "FULL"):
         out.extend(check_backward(new, old))
     if mode in ("FORWARD", "FULL"):
-        out.extend(Incompatibility(f"forward:{i.path}", i.kind, i.detail) for i in check_forward(new, old))
+        out.extend(
+            Incompatibility(f"forward:{i.path}", i.kind, i.detail) for i in check_forward(new, old)
+        )
     return out
 
 

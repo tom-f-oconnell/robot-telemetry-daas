@@ -33,7 +33,6 @@ import logging
 import sys
 
 from rtdaas.config import Settings, configure_logging, get_settings
-from rtdaas.spark import ddl
 from rtdaas.spark.common import (
     ES_INDEX_EVENTS,
     ES_INDEX_KPI,
@@ -67,6 +66,7 @@ WINDOW = "1 minute"
 # Source + parsing
 # ---------------------------------------------------------------------------
 
+
 def read_kafka(spark, settings: Settings, starting_offsets: str):
     return (
         spark.readStream.format("kafka")
@@ -86,7 +86,9 @@ def _decode(df, topic: str, schema_json: str):
 
     return (
         df.where(F.col("topic") == topic)
-        .select(from_avro(strip_wire_header("value"), schema_json, {"mode": "PERMISSIVE"}).alias("r"))
+        .select(
+            from_avro(strip_wire_header("value"), schema_json, {"mode": "PERMISSIVE"}).alias("r")
+        )
         .where(F.col("r").isNotNull())
     )
 
@@ -98,8 +100,12 @@ def build_pose_stream(df, schema_json: str):
     r = _decode(df, TOPIC_TOOL_POSE, schema_json)
     return r.select(
         F.col("r.robot_id").alias("robot_id"),
-        F.coalesce(F.col("r.msg.arm"), F.element_at(F.split(F.col("r.ros_topic"), "/"), 3)).alias("arm"),
-        ros_time_to_ts(F.col("r.msg.header.stamp.sec"), F.col("r.msg.header.stamp.nanosec")).alias("ts"),
+        F.coalesce(F.col("r.msg.arm"), F.element_at(F.split(F.col("r.ros_topic"), "/"), 3)).alias(
+            "arm"
+        ),
+        ros_time_to_ts(F.col("r.msg.header.stamp.sec"), F.col("r.msg.header.stamp.nanosec")).alias(
+            "ts"
+        ),
         ns_to_ts(F.col("r.recv_time_ns")).alias("recv_ts"),
         F.col("r.msg.position.x").alias("x"),
         F.col("r.msg.position.y").alias("y"),
@@ -122,13 +128,23 @@ def build_event_stream(df, schema_json: str):
     r = _decode(df, TOPIC_EVENTS, schema_json)
     severity = F.col("r.msg.severity").cast("int")
     names = F.create_map(
-        F.lit(0), F.lit("DEBUG"), F.lit(1), F.lit("INFO"), F.lit(2), F.lit("WARN"),
-        F.lit(3), F.lit("ERROR"), F.lit(4), F.lit("FATAL"),
+        F.lit(0),
+        F.lit("DEBUG"),
+        F.lit(1),
+        F.lit("INFO"),
+        F.lit(2),
+        F.lit("WARN"),
+        F.lit(3),
+        F.lit("ERROR"),
+        F.lit(4),
+        F.lit("FATAL"),
     )
     return r.select(
         F.col("r.robot_id").alias("robot_id"),
         F.coalesce(F.col("r.msg.arm"), F.lit("")).alias("arm"),
-        ros_time_to_ts(F.col("r.msg.header.stamp.sec"), F.col("r.msg.header.stamp.nanosec")).alias("ts"),
+        ros_time_to_ts(F.col("r.msg.header.stamp.sec"), F.col("r.msg.header.stamp.nanosec")).alias(
+            "ts"
+        ),
         ns_to_ts(F.col("r.recv_time_ns")).alias("recv_ts"),
         severity.alias("severity"),
         F.element_at(names, severity).alias("severity_name"),
@@ -146,7 +162,9 @@ def build_heartbeat_stream(df, schema_json: str):
     r = _decode(df, TOPIC_HEARTBEAT, schema_json)
     return r.select(
         F.coalesce(F.col("r.msg.robot_id"), F.col("r.robot_id")).alias("robot_id"),
-        ros_time_to_ts(F.col("r.msg.header.stamp.sec"), F.col("r.msg.header.stamp.nanosec")).alias("ts"),
+        ros_time_to_ts(F.col("r.msg.header.stamp.sec"), F.col("r.msg.header.stamp.nanosec")).alias(
+            "ts"
+        ),
         ns_to_ts(F.col("r.recv_time_ns")).alias("recv_ts"),
         F.col("r.msg.uptime_s").alias("uptime_s"),
         F.col("r.msg.state").alias("state"),
@@ -161,6 +179,7 @@ def build_heartbeat_stream(df, schema_json: str):
 # KPI aggregation
 # ---------------------------------------------------------------------------
 
+
 def unify(pose, events, heartbeat):
     """Union the three parsed streams into one narrow frame for a single aggregation.
 
@@ -170,21 +189,33 @@ def unify(pose, events, heartbeat):
     from pyspark.sql import functions as F
 
     p = pose.select(
-        "robot_id", "arm", "ts", F.col("speed").cast("double").alias("speed"),
-        F.lit(1).alias("is_pose"), F.lit(0).alias("is_warn"), F.lit(0).alias("is_error"),
+        "robot_id",
+        "arm",
+        "ts",
+        F.col("speed").cast("double").alias("speed"),
+        F.lit(1).alias("is_pose"),
+        F.lit(0).alias("is_warn"),
+        F.lit(0).alias("is_error"),
         F.lit(None).cast("timestamp").alias("hb_ts"),
     )
     e = events.select(
         "robot_id",
         F.when(F.col("arm") == "", F.lit(ROBOT_WIDE)).otherwise(F.col("arm")).alias("arm"),
-        "ts", F.lit(None).cast("double").alias("speed"), F.lit(0).alias("is_pose"),
+        "ts",
+        F.lit(None).cast("double").alias("speed"),
+        F.lit(0).alias("is_pose"),
         F.when(F.col("severity") == 2, 1).otherwise(0).alias("is_warn"),
         F.when(F.col("severity") >= 3, 1).otherwise(0).alias("is_error"),
         F.lit(None).cast("timestamp").alias("hb_ts"),
     )
     h = heartbeat.select(
-        "robot_id", F.lit(ROBOT_WIDE).alias("arm"), "ts", F.lit(None).cast("double").alias("speed"),
-        F.lit(0).alias("is_pose"), F.lit(0).alias("is_warn"), F.lit(0).alias("is_error"),
+        "robot_id",
+        F.lit(ROBOT_WIDE).alias("arm"),
+        "ts",
+        F.lit(None).cast("double").alias("speed"),
+        F.lit(0).alias("is_pose"),
+        F.lit(0).alias("is_warn"),
+        F.lit(0).alias("is_error"),
         F.col("ts").alias("hb_ts"),
     )
     return p.unionByName(e).unionByName(h)
@@ -201,7 +232,11 @@ def kpi_aggregate(unified, watermark: str = WATERMARK, window: str = WINDOW):
         F.max("speed").alias("max_speed_mps"),
         F.min(F.when(F.col("is_pose") == 1, F.col("ts"))).alias("pose_min_ts"),
         F.max(F.when(F.col("is_pose") == 1, F.col("ts"))).alias("pose_max_ts"),
-        F.avg(F.when(F.col("is_pose") == 1, F.when(F.col("speed") < IDLE_SPEED_MPS, 1.0).otherwise(0.0))).alias("idle_fraction"),
+        F.avg(
+            F.when(
+                F.col("is_pose") == 1, F.when(F.col("speed") < IDLE_SPEED_MPS, 1.0).otherwise(0.0)
+            )
+        ).alias("idle_fraction"),
         F.sum("is_warn").cast("bigint").alias("warn_events"),
         F.sum("is_error").cast("bigint").alias("error_events"),
         F.count("hb_ts").alias("n_hb"),
@@ -214,15 +249,18 @@ def kpi_aggregate(unified, watermark: str = WATERMARK, window: str = WINDOW):
         (F.col("hb_max").cast("double") - F.col("hb_min").cast("double")) / (F.col("n_hb") - 1),
     )
     return agg.select(
-        "robot_id", "arm",
-        F.col("w.start").alias("window_start"), F.col("w.end").alias("window_end"),
+        "robot_id",
+        "arm",
+        F.col("w.start").alias("window_start"),
+        F.col("w.end").alias("window_end"),
         "n_samples",
         F.coalesce("mean_speed_mps", F.lit(0.0)).alias("mean_speed_mps"),
         F.coalesce("max_speed_mps", F.lit(0.0)).alias("max_speed_mps"),
         F.coalesce(F.col("mean_speed_mps") * span_s, F.lit(0.0)).alias("path_length_m"),
         F.coalesce("idle_fraction", F.lit(0.0)).alias("idle_fraction"),
         F.lit(0).cast("bigint").alias("jaw_cycles"),
-        "warn_events", "error_events",
+        "warn_events",
+        "error_events",
         hb_gap.alias("heartbeat_gap_s"),
     )
 
@@ -235,17 +273,29 @@ def fold_robot_wide(kpi):
     from pyspark.sql import functions as F
 
     wide = kpi.where(F.col("arm") == ROBOT_WIDE).select(
-        "robot_id", "window_start",
-        F.col("warn_events").alias("w_warn"), F.col("error_events").alias("w_err"),
+        "robot_id",
+        "window_start",
+        F.col("warn_events").alias("w_warn"),
+        F.col("error_events").alias("w_err"),
         F.col("heartbeat_gap_s").alias("w_gap"),
     )
     arms = kpi.where(F.col("arm") != ROBOT_WIDE)
     joined = arms.join(wide, ["robot_id", "window_start"], "left")
     return joined.select(
-        "robot_id", "arm", "window_start", "window_end", "n_samples", "mean_speed_mps", "max_speed_mps",
-        "path_length_m", "idle_fraction", "jaw_cycles",
+        "robot_id",
+        "arm",
+        "window_start",
+        "window_end",
+        "n_samples",
+        "mean_speed_mps",
+        "max_speed_mps",
+        "path_length_m",
+        "idle_fraction",
+        "jaw_cycles",
         (F.col("warn_events") + F.coalesce("w_warn", F.lit(0))).cast("bigint").alias("warn_events"),
-        (F.col("error_events") + F.coalesce("w_err", F.lit(0))).cast("bigint").alias("error_events"),
+        (F.col("error_events") + F.coalesce("w_err", F.lit(0)))
+        .cast("bigint")
+        .alias("error_events"),
         F.coalesce("heartbeat_gap_s", "w_gap").alias("heartbeat_gap_s"),
     )
 
@@ -253,6 +303,7 @@ def fold_robot_wide(kpi):
 # ---------------------------------------------------------------------------
 # Sinks (foreachBatch)
 # ---------------------------------------------------------------------------
+
 
 def make_raw_sink(spark, settings: Settings, schemas: dict[str, str]):
     def sink_raw(batch_df, batch_id: int) -> None:
@@ -269,9 +320,11 @@ def make_raw_sink(spark, settings: Settings, schemas: dict[str, str]):
             ev_rows = rows_as_dicts(events)  # low volume
             if ev_rows:
                 es_bulk(
-                    ev_rows, ES_INDEX_EVENTS,
+                    ev_rows,
+                    ES_INDEX_EVENTS,
                     id_fn=lambda r: f"{r['robot_id']}|{r['ts'].isoformat()}|{r['code']}",
-                    settings=settings, ts_field="ts",
+                    settings=settings,
+                    ts_field="ts",
                 )
             log.info("raw batch %d: events=%d", batch_id, len(ev_rows))
             events.unpersist()
@@ -294,14 +347,19 @@ def make_kpi_sink(spark, settings: Settings):
         ).persist()
         try:
             merge_iceberg(
-                spark, rows, "telemetry.kpi_1m", ["robot_id", "arm", "window_start"],
+                spark,
+                rows,
+                "telemetry.kpi_1m",
+                ["robot_id", "arm", "window_start"],
                 matched_condition="t.computed_by <> 'batch'",
             )
             dicts = rows_as_dicts(rows)
             es_bulk(
-                dicts, ES_INDEX_KPI,
+                dicts,
+                ES_INDEX_KPI,
                 id_fn=lambda r: f"{r['robot_id']}|{r['arm']}|{r['window_start'].isoformat()}",
-                settings=settings, ts_field="window_start",
+                settings=settings,
+                ts_field="window_start",
             )
             log.info("kpi batch %d: %d windows", batch_id, len(dicts))
         finally:
@@ -314,8 +372,11 @@ def make_kpi_sink(spark, settings: Settings):
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def parse_args(argv=None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--trigger", default="30 seconds", help="processing-time trigger interval")
     p.add_argument("--starting-offsets", default="latest", choices=["latest", "earliest"])
     p.add_argument("--checkpoint", default=None, help="override checkpoint base URI")
@@ -350,7 +411,8 @@ def main(argv=None) -> int:
         build_heartbeat_stream(source, schemas[TOPIC_HEARTBEAT]),
     )
     kpi_query = (
-        kpi_aggregate(unified).writeStream.queryName("rtdaas_kpi")
+        kpi_aggregate(unified)
+        .writeStream.queryName("rtdaas_kpi")
         .outputMode("update")
         .foreachBatch(make_kpi_sink(spark, settings))
         .option("checkpointLocation", f"{checkpoint}/kpi")

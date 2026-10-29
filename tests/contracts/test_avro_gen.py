@@ -35,8 +35,19 @@ def test_primitive_mapping_table():
 
 def test_tool_pose_schema_shape(msg_registry: MsgRegistry):
     schema = avro_gen.msg_to_avro(msg_registry.get("rtdaas_msgs/ToolPose"), msg_registry)
-    assert (schema["type"], schema["name"], schema["namespace"]) == ("record", "ToolPose", "rtdaas_msgs")
-    assert [f["name"] for f in schema["fields"]] == ["header", "arm", "position", "orientation", "jaw_angle", "speed"]
+    assert (schema["type"], schema["name"], schema["namespace"]) == (
+        "record",
+        "ToolPose",
+        "rtdaas_msgs",
+    )
+    assert [f["name"] for f in schema["fields"]] == [
+        "header",
+        "arm",
+        "position",
+        "orientation",
+        "jaw_angle",
+        "speed",
+    ]
     header = _field(schema, "header")["type"]
     assert header["name"] == "Header" and header["namespace"] == "std_msgs"
     stamp = _field(header, "stamp")["type"]
@@ -54,7 +65,13 @@ def test_nested_types_defined_once_then_referenced(msg_registry: MsgRegistry):
     # Header.stamp defines builtin_interfaces.Time; nothing else references it here, but Pose
     # defines Point and Quaternion inline. Build a type that uses Header twice to check reuse.
     twice = parse_msg("demo_msgs", "Twice", "std_msgs/Header a\nstd_msgs/Header b\n")
-    reg = MsgRegistry({twice.full_name: twice, "std_msgs/Header": msg_registry.get("std_msgs/Header"), "builtin_interfaces/Time": msg_registry.get("builtin_interfaces/Time")})
+    reg = MsgRegistry(
+        {
+            twice.full_name: twice,
+            "std_msgs/Header": msg_registry.get("std_msgs/Header"),
+            "builtin_interfaces/Time": msg_registry.get("builtin_interfaces/Time"),
+        }
+    )
     s2 = avro_gen.msg_to_avro(twice, reg)
     assert isinstance(_field(s2, "a")["type"], dict)
     assert _field(s2, "b")["type"] == "std_msgs.Header"
@@ -67,7 +84,13 @@ def test_arrays_constants_and_docs(msg_registry: MsgRegistry):
     assert _field(js, "name")["type"] == {"type": "array", "items": "string"}
     assert _field(js, "position")["type"] == {"type": "array", "items": "double"}
     ev = avro_gen.msg_to_avro(msg_registry.get("rtdaas_msgs/SystemEvent"), msg_registry)
-    assert [f["name"] for f in ev["fields"]] == ["header", "arm", "severity", "code", "message"]  # constants are not fields
+    assert [f["name"] for f in ev["fields"]] == [
+        "header",
+        "arm",
+        "severity",
+        "code",
+        "message",
+    ]  # constants are not fields
     assert "SEVERITY_WARN=2" in ev["doc"]
     assert _field(ev, "severity")["type"] == "int"
 
@@ -76,7 +99,9 @@ def test_kafka_record_schema_envelope(msg_registry: MsgRegistry):
     msg_schema = avro_gen.msg_to_avro(msg_registry.get("rtdaas_msgs/Heartbeat"), msg_registry)
     env = avro_gen.kafka_record_schema(msg_schema, "rtdaas.telemetry.heartbeat")
     assert env["name"] == "HeartbeatRecord" and env["namespace"] == "rtdaas.kafka"
-    assert [(f["name"], f["type"] if isinstance(f["type"], str) else "record") for f in env["fields"]] == [
+    assert [
+        (f["name"], f["type"] if isinstance(f["type"], str) else "record") for f in env["fields"]
+    ] == [
         ("robot_id", "string"),
         ("ros_topic", "string"),
         ("recv_time_ns", "long"),
@@ -86,7 +111,9 @@ def test_kafka_record_schema_envelope(msg_registry: MsgRegistry):
     parse_schema(env)
 
 
-def test_generate_all_is_deterministic_and_complete(msg_registry: MsgRegistry, registry_yml: Path, tmp_path: Path):
+def test_generate_all_is_deterministic_and_complete(
+    msg_registry: MsgRegistry, registry_yml: Path, tmp_path: Path
+):
     topics = avro_gen.load_topics(registry_yml)
     assert topics == {
         "rtdaas.telemetry.joint_states": "sensor_msgs/JointState",
@@ -107,10 +134,14 @@ def test_generate_all_is_deterministic_and_complete(msg_registry: MsgRegistry, r
         assert json.loads(text)["type"] == "record"
 
 
-def test_committed_schemas_are_up_to_date(msg_registry: MsgRegistry, registry_yml: Path, repo_root: Path):
+def test_committed_schemas_are_up_to_date(
+    msg_registry: MsgRegistry, registry_yml: Path, repo_root: Path
+):
     """CI runs `rtdaas-contracts gen` + git diff; this is the same check in-process."""
     topics = avro_gen.load_topics(registry_yml)
     expected = avro_gen.render_all(msg_registry, topics)
     avro_dir = repo_root / "contracts" / "avro"
     for rel, text in expected.items():
-        assert (avro_dir / rel).read_text(encoding="utf-8") == text, f"{rel} is stale: run rtdaas-contracts gen"
+        assert (avro_dir / rel).read_text(encoding="utf-8") == text, (
+            f"{rel} is stale: run rtdaas-contracts gen"
+        )

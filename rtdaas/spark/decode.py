@@ -32,7 +32,7 @@ TYPE_TO_TABLE: dict[str, str] = {
 
 SEVERITY_NAMES = {0: "DEBUG", 1: "INFO", 2: "WARN", 3: "ERROR", 4: "FATAL"}
 
-_EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+_EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
 
 
 def normalize_type_name(schema_name: str) -> str:
@@ -102,6 +102,7 @@ def _arm_from_topic(ros_topic: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Per-type row builders
 # ---------------------------------------------------------------------------
+
 
 def joint_state_row(msg: dict, ros_topic: str, log_time_ns: int, bag_file: str) -> dict:
     return {
@@ -183,6 +184,7 @@ ROW_BUILDERS = {
 # Bag decoding
 # ---------------------------------------------------------------------------
 
+
 class _CodecCache:
     """One :class:`CdrCodec` per MCAP schema id, built from the embedded definition."""
 
@@ -208,7 +210,11 @@ class _CodecCache:
         from_text = getattr(MsgRegistry, "from_ros2msg_schema", None)
         if schema.encoding == "ros2msg" and schema.data and from_text is not None:
             try:
-                text = schema.data.decode("utf-8") if isinstance(schema.data, (bytes, bytearray)) else str(schema.data)
+                text = (
+                    schema.data.decode("utf-8")
+                    if isinstance(schema.data, (bytes, bytearray))
+                    else str(schema.data)
+                )
                 registry = from_text(type_name, text)
                 # Types the embedded definition does not carry resolve against the repo registry.
                 merge = getattr(registry, "merge", None)
@@ -216,9 +222,17 @@ class _CodecCache:
                     registry = merge(self.fallback.registry, prefer_self=True)
                 return CdrCodec(registry), type_name
             except Exception as exc:  # malformed embedded definition -> fall back to repo registry
-                log.warning("embedded ros2msg schema for %s unusable (%s); using repo registry", type_name, exc)
+                log.warning(
+                    "embedded ros2msg schema for %s unusable (%s); using repo registry",
+                    type_name,
+                    exc,
+                )
         elif schema.encoding != "ros2msg":
-            log.warning("schema %s has encoding %r (expected ros2msg); using repo registry", type_name, schema.encoding)
+            log.warning(
+                "schema %s has encoding %r (expected ros2msg); using repo registry",
+                type_name,
+                schema.encoding,
+            )
         if type_name in self.fallback.registry:
             return self.fallback, type_name
         log.warning("no definition available for %s; skipping channel %s", type_name, channel.topic)

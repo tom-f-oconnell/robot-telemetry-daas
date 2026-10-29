@@ -52,7 +52,9 @@ STRING_TYPES: frozenset[str] = frozenset({"string", "wstring"})
 
 SEPARATOR = "=" * 80
 
-_CONSTANT_RE = re.compile(r"^(?P<type>[A-Za-z_][\w/]*)\s+(?P<name>[A-Z_][A-Z0-9_]*)\s*=\s*(?P<value>.+?)\s*$")
+_CONSTANT_RE = re.compile(
+    r"^(?P<type>[A-Za-z_][\w/]*)\s+(?P<name>[A-Z_][A-Z0-9_]*)\s*=\s*(?P<value>.+?)\s*$"
+)
 _FIELD_RE = re.compile(
     r"^(?P<base>[A-Za-z_][\w/]*)"
     r"(?:<=(?P<strbound>\d+))?"
@@ -186,7 +188,9 @@ def parse_msg(package: str, name: str, text: str) -> MsgDef:
         if m and m.group("type") in PRIMITIVES:
             ctype = m.group("type")
             msg.constants.append(
-                Constant(name=m.group("name"), type=ctype, value=_parse_scalar(ctype, m.group("value")))
+                Constant(
+                    name=m.group("name"), type=ctype, value=_parse_scalar(ctype, m.group("value"))
+                )
             )
             pending_doc = []
             continue

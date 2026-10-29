@@ -9,7 +9,9 @@ from rtdaas.config import configure_logging, get_settings
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="rtdaas-api", description="Serve the rtdaas data API and UI")
+    parser = argparse.ArgumentParser(
+        prog="rtdaas-api", description="Serve the rtdaas data API and UI"
+    )
     parser.add_argument("--host", default=None, help="bind host (default API_HOST)")
     parser.add_argument("--port", type=int, default=None, help="bind port (default API_PORT)")
     parser.add_argument("--reload", action="store_true", help="auto-reload (development)")

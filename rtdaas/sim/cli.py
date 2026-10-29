@@ -34,7 +34,14 @@ def session_id(robot_id: str, start_ns: int) -> str:
 
 def bag_path(root: Path, robot_id: str, start_ns: int) -> Path:
     start = datetime.fromtimestamp(start_ns / NS, tz=UTC)
-    return root / robot_id / f"{start:%Y}" / f"{start:%m}" / f"{start:%d}" / f"{session_id(robot_id, start_ns)}.mcap"
+    return (
+        root
+        / robot_id
+        / f"{start:%Y}"
+        / f"{start:%m}"
+        / f"{start:%d}"
+        / f"{session_id(robot_id, start_ns)}.mcap"
+    )
 
 
 def _parse_start(value: str | None) -> int:
@@ -61,15 +68,23 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.kafka:
         from rtdaas.sim.producer import KafkaProducer
 
-        producer = KafkaProducer(args.bootstrap or settings.kafka_bootstrap, args.registry or settings.schema_registry_url, TOPIC_TYPES)
+        producer = KafkaProducer(
+            args.bootstrap or settings.kafka_bootstrap,
+            args.registry or settings.schema_registry_url,
+            TOPIC_TYPES,
+        )
 
     sims: list[RobotSim] = []
     recorders: dict[str, McapRecorder] = {}
     for i in range(args.robots):
         rid = f"dv-{i + 1:03d}"
-        sims.append(RobotSim(SimConfig(robot_id=rid, arms=arms, rate_hz=args.rate, seed=args.seed + i)))
+        sims.append(
+            RobotSim(SimConfig(robot_id=rid, arms=arms, rate_hz=args.rate, seed=args.seed + i))
+        )
         if args.mcap_out:
-            recorders[rid] = McapRecorder(bag_path(Path(args.mcap_out), rid, start_ns), registry, TOPIC_TYPES)
+            recorders[rid] = McapRecorder(
+                bag_path(Path(args.mcap_out), rid, start_ns), registry, TOPIC_TYPES
+            )
 
     n_ticks = int(round(args.duration * args.rate))
     dt_ns = int(round(NS / args.rate))
@@ -80,7 +95,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         for kafka_topic, ros_topic, msg in batch:
             counts[kafka_topic] = counts.get(kafka_topic, 0) + 1
             if producer is not None:
-                producer.send(kafka_topic, sim.cfg.robot_id, ros_topic, msg, time.time_ns() if realtime else t_ns)
+                producer.send(
+                    kafka_topic,
+                    sim.cfg.robot_id,
+                    ros_topic,
+                    msg,
+                    time.time_ns() if realtime else t_ns,
+                )
             rec = recorders.get(sim.cfg.robot_id)
             if rec is not None:
                 rec.record(ros_topic, TOPIC_TYPES[kafka_topic], msg, t_ns)
@@ -109,7 +130,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         "duration_s": args.duration,
         "rate_hz": args.rate,
         "messages": counts,
-        "bags": [str(bag_path(Path(args.mcap_out), s.cfg.robot_id, start_ns)) for s in sims] if args.mcap_out else [],
+        "bags": [str(bag_path(Path(args.mcap_out), s.cfg.robot_id, start_ns)) for s in sims]
+        if args.mcap_out
+        else [],
         "kafka": bool(producer),
         "elapsed_s": round(time.monotonic() - wall_start, 3),
     }
@@ -118,12 +141,16 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="rtdaas-sim", description="Simulate a fleet of dVRK-like robots.")
+    p = argparse.ArgumentParser(
+        prog="rtdaas-sim", description="Simulate a fleet of dVRK-like robots."
+    )
     p.add_argument("--log-level", default=None)
     sub = p.add_subparsers(dest="command", required=True)
     r = sub.add_parser("run", help="run the simulator")
     r.add_argument("--robots", type=int, default=1)
-    r.add_argument("--duration", type=float, required=True, help="seconds of simulated time per robot")
+    r.add_argument(
+        "--duration", type=float, required=True, help="seconds of simulated time per robot"
+    )
     r.add_argument("--rate", type=float, default=50.0, help="tick rate in Hz")
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--arms", default="PSM1,PSM2,ECM")
@@ -134,7 +161,9 @@ def build_parser() -> argparse.ArgumentParser:
     rt = r.add_mutually_exclusive_group()
     rt.add_argument("--realtime", dest="realtime", action="store_true", default=None)
     rt.add_argument("--no-realtime", dest="realtime", action="store_false")
-    r.add_argument("--start-time", default=None, help="ISO-8601 start of simulated time (default: now)")
+    r.add_argument(
+        "--start-time", default=None, help="ISO-8601 start of simulated time (default: now)"
+    )
     r.add_argument("--msgs", default=str(DEFAULT_MSGS_DIR))
     r.set_defaults(func=cmd_run)
     return p

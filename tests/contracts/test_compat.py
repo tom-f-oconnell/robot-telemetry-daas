@@ -56,7 +56,12 @@ def test_type_promotions():
     flt = _record([{"name": "x", "type": "float"}])
     assert compat.check_backward(dbl, flt) == []
     assert kinds(compat.check_backward(flt, dbl)) == [("$.x", "type_mismatch")]
-    assert compat.check_backward(_record([{"name": "b", "type": "bytes"}]), _record([{"name": "b", "type": "string"}])) == []
+    assert (
+        compat.check_backward(
+            _record([{"name": "b", "type": "bytes"}]), _record([{"name": "b", "type": "string"}])
+        )
+        == []
+    )
 
 
 def test_record_rename_breaks_unless_aliased():
@@ -69,13 +74,23 @@ def test_record_rename_breaks_unless_aliased():
 def test_field_rename_breaks_unless_aliased():
     renamed = _record([{"name": "a", "type": "int"}, {"name": "bb", "type": "string"}])
     assert kinds(compat.check_backward(renamed, BASE)) == [("$.bb", "reader_field_missing_default")]
-    aliased = _record([{"name": "a", "type": "int"}, {"name": "bb", "type": "string", "aliases": ["b"]}])
+    aliased = _record(
+        [{"name": "a", "type": "int"}, {"name": "bb", "type": "string", "aliases": ["b"]}]
+    )
     assert compat.check_backward(aliased, BASE) == []
 
 
 def test_nested_record_and_array_changes_are_reported_with_paths():
-    inner_old = {"type": "record", "name": "P", "fields": [{"name": "x", "type": "double"}, {"name": "y", "type": "double"}]}
-    inner_new = {"type": "record", "name": "P", "fields": [{"name": "x", "type": "float"}, {"name": "y", "type": "double"}]}
+    inner_old = {
+        "type": "record",
+        "name": "P",
+        "fields": [{"name": "x", "type": "double"}, {"name": "y", "type": "double"}],
+    }
+    inner_new = {
+        "type": "record",
+        "name": "P",
+        "fields": [{"name": "x", "type": "float"}, {"name": "y", "type": "double"}],
+    }
     old = _record([{"name": "pts", "type": {"type": "array", "items": inner_old}}])
     new = _record([{"name": "pts", "type": {"type": "array", "items": inner_new}}])
     assert kinds(compat.check_backward(new, old)) == [("$.pts[].x", "type_mismatch")]
@@ -95,7 +110,9 @@ def test_enum_and_fixed_rules():
     old = _record([{"name": "e", "type": {"type": "enum", "name": "E", "symbols": ["A", "B"]}}])
     fewer = _record([{"name": "e", "type": {"type": "enum", "name": "E", "symbols": ["A"]}}])
     assert kinds(compat.check_backward(fewer, old)) == [("$.e", "missing_enum_symbols")]
-    fewer_default = _record([{"name": "e", "type": {"type": "enum", "name": "E", "symbols": ["A"], "default": "A"}}])
+    fewer_default = _record(
+        [{"name": "e", "type": {"type": "enum", "name": "E", "symbols": ["A"], "default": "A"}}]
+    )
     assert compat.check_backward(fewer_default, old) == []
     f2 = _record([{"name": "f", "type": {"type": "fixed", "name": "F", "size": 2}}])
     f4 = _record([{"name": "f", "type": {"type": "fixed", "name": "F", "size": 4}}])
@@ -109,7 +126,9 @@ def test_unknown_mode_rejected():
 
 def test_real_envelope_evolution(msg_registry: MsgRegistry):
     """Adding `speed 0` to ToolPose must pass, narrowing jaw_angle must fail, with the nested path."""
-    old = avro_gen.kafka_record_schema(avro_gen.msg_to_avro(msg_registry.get("rtdaas_msgs/ToolPose"), msg_registry), "t")
+    old = avro_gen.kafka_record_schema(
+        avro_gen.msg_to_avro(msg_registry.get("rtdaas_msgs/ToolPose"), msg_registry), "t"
+    )
     new = copy.deepcopy(old)
     msg_fields = new["fields"][3]["type"]["fields"]
     msg_fields.append({"name": "tool_id", "type": "string", "default": ""})
@@ -122,7 +141,9 @@ def test_real_envelope_evolution(msg_registry: MsgRegistry):
 
 
 def test_flatten_fields(msg_registry: MsgRegistry):
-    schema = avro_gen.kafka_record_schema(avro_gen.msg_to_avro(msg_registry.get("rtdaas_msgs/ToolPose"), msg_registry), "t")
+    schema = avro_gen.kafka_record_schema(
+        avro_gen.msg_to_avro(msg_registry.get("rtdaas_msgs/ToolPose"), msg_registry), "t"
+    )
     flat = compat.flatten_fields(schema)
     assert flat["msg.header.stamp.sec"] == "int"
     assert flat["msg.header.stamp.nanosec"] == "long"

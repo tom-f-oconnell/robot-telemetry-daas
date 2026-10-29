@@ -8,8 +8,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 
 from rtdaas.config import configure_logging
 
@@ -17,7 +16,14 @@ log = logging.getLogger(__name__)
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    from rtdaas.quality.engine import has_blocking_failures, load_suite, new_run_id, run_suite, summary, to_frame
+    from rtdaas.quality.engine import (
+        has_blocking_failures,
+        load_suite,
+        new_run_id,
+        run_suite,
+        summary,
+        to_frame,
+    )
 
     if args.backend == "sqlite":
         from rtdaas.quality.adapters import SqliteAdapter
@@ -32,10 +38,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         raise ValueError(f"unknown backend {args.backend!r}")
 
     run_id = args.run_id or new_run_id()
-    run_ts = datetime.now(timezone.utc)
+    run_ts = datetime.now(UTC)
     results = []
     for suite_path in args.suite:
-        results.extend(run_suite(load_suite(suite_path), adapter, args.partition, run_id, now=run_ts))
+        results.extend(
+            run_suite(load_suite(suite_path), adapter, args.partition, run_id, now=run_ts)
+        )
 
     n_fail = sum(r.status == "fail" for r in results)
     n_err = sum(r.status == "error" for r in results)
@@ -66,7 +74,9 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("run", help="run one or more suites")
     r.add_argument("--suite", action="append", required=True, help="suite YAML (repeatable)")
     r.add_argument("--backend", choices=["sqlite", "spark"], default="sqlite")
-    r.add_argument("--db", default="./data/rtdaas.sqlite", help="sqlite mirror path (sqlite backend)")
+    r.add_argument(
+        "--db", default="./data/rtdaas.sqlite", help="sqlite mirror path (sqlite backend)"
+    )
     r.add_argument("--partition", default=None, help="YYYY-MM-DD partition filter")
     r.add_argument("--run-id", default=None)
     r.add_argument("--out-table", action="store_true", help="append results to dq.check_results")

@@ -7,14 +7,11 @@ mounted route is documented (and vice versa). Static UI files are served from ``
 
 from __future__ import annotations
 
-import json
 import logging
 import mimetypes
-import os
 import re
 import time
 from pathlib import Path
-from typing import Any
 
 import yaml
 from starlette.applications import Starlette
@@ -26,7 +23,6 @@ from starlette.responses import (
     FileResponse,
     HTMLResponse,
     JSONResponse,
-    PlainTextResponse,
     Response,
     StreamingResponse,
 )
@@ -92,7 +88,9 @@ def q_ts(request: Request, name: str) -> str | None:
         if pd.isna(pd.Timestamp(raw)):
             raise ValueError
     except Exception as exc:  # noqa: BLE001
-        raise ApiError(400, "invalid_parameter", f"{name} must be an ISO-8601 date or datetime") from exc
+        raise ApiError(
+            400, "invalid_parameter", f"{name} must be an ISO-8601 date or datetime"
+        ) from exc
     return raw
 
 
@@ -114,7 +112,9 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         route = request.scope.get("route")
         route_path = getattr(route, "path", request.url.path)
-        self.metrics.observe(request.method, route_path, response.status_code, time.perf_counter() - start)
+        self.metrics.observe(
+            request.method, route_path, response.status_code, time.perf_counter() - start
+        )
         return response
 
 
@@ -176,8 +176,12 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
             raise ApiError(400, "invalid_parameter", f"arm must be one of {sorted(VALID_ARMS)}")
         if backend.session(session_id) is None:
             raise ApiError(404, "not_found", "unknown session_id")
-        points = backend.trajectory(session_id, arm, downsample=q_int(request, "downsample", 1, 1, 10_000))
-        return JSONResponse({"session_id": session_id, "arm": arm, "points": points, "count": len(points)})
+        points = backend.trajectory(
+            session_id, arm, downsample=q_int(request, "downsample", 1, 1, 10_000)
+        )
+        return JSONResponse(
+            {"session_id": session_id, "arm": arm, "points": points, "count": len(points)}
+        )
 
     async def session_kpis(request: Request):
         session_id = request.path_params["session_id"]
@@ -227,8 +231,12 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
             raise ApiError(400, "invalid_parameter", f"arms must be from {KINEMATIC_ARMS}")
         if backend.trial(trial_id) is None:
             raise ApiError(404, "not_found", "unknown trial_id")
-        rows = backend.trial_kinematics(trial_id, arms, downsample=q_int(request, "downsample", 1, 1, 10_000))
-        return JSONResponse({"trial_id": trial_id, "arms": arms, "samples": rows, "count": len(rows)})
+        rows = backend.trial_kinematics(
+            trial_id, arms, downsample=q_int(request, "downsample", 1, 1, 10_000)
+        )
+        return JSONResponse(
+            {"trial_id": trial_id, "arms": arms, "samples": rows, "count": len(rows)}
+        )
 
     async def trial_frames(request: Request):
         trial_id = request.path_params["trial_id"]
@@ -357,7 +365,11 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
     app = Starlette(
         routes=routes,
         middleware=middleware,
-        exception_handlers={ApiError: on_api_error, 404: lambda r, e: error_response(404, "not_found", str(r.url.path)), Exception: on_unhandled},
+        exception_handlers={
+            ApiError: on_api_error,
+            404: lambda r, e: error_response(404, "not_found", str(r.url.path)),
+            Exception: on_unhandled,
+        },
     )
     app.state.backend = backend
     app.state.settings = settings

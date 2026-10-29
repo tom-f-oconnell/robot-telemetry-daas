@@ -14,7 +14,13 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-FRAME_FEATURE_COLUMNS: tuple[str, ...] = ("frame_idx", "t_s", "mean_intensity", "motion_energy", "sharpness")
+FRAME_FEATURE_COLUMNS: tuple[str, ...] = (
+    "frame_idx",
+    "t_s",
+    "mean_intensity",
+    "motion_energy",
+    "sharpness",
+)
 DEFAULT_FPS = 30.0
 
 

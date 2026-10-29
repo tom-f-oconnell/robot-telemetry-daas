@@ -46,7 +46,9 @@ class Backend(Protocol):
         self, task: str | None = None, skill_level: str | None = None, subject: str | None = None
     ) -> list[dict]: ...
     def trial(self, trial_id: str) -> dict | None: ...
-    def trial_kinematics(self, trial_id: str, arms: list[str], downsample: int = 1) -> list[dict]: ...
+    def trial_kinematics(
+        self, trial_id: str, arms: list[str], downsample: int = 1
+    ) -> list[dict]: ...
     def trial_frames(self, trial_id: str) -> list[dict]: ...
     def gestures(
         self,
@@ -70,7 +72,24 @@ class Backend(Protocol):
 
 
 ARM_FIELDS: tuple[str, ...] = (
-    "x", "y", "z", "r11", "r12", "r13", "r21", "r22", "r23", "r31", "r32", "r33",
-    "vx", "vy", "vz", "wx", "wy", "wz", "gripper",
+    "x",
+    "y",
+    "z",
+    "r11",
+    "r12",
+    "r13",
+    "r21",
+    "r22",
+    "r23",
+    "r31",
+    "r32",
+    "r33",
+    "vx",
+    "vy",
+    "vz",
+    "wx",
+    "wy",
+    "wz",
+    "gripper",
 )
 KINEMATIC_ARMS: tuple[str, ...] = ("mtml", "mtmr", "psml", "psmr")

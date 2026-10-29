@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -76,7 +76,7 @@ def format_ts(value) -> str | None:
 
 
 def now_iso() -> str:
-    return format_ts(datetime.now(timezone.utc)) or ""
+    return format_ts(datetime.now(UTC)) or ""
 
 
 def _is_listlike(v) -> bool:
@@ -94,11 +94,20 @@ def to_sqlite_frame(frame: pd.DataFrame) -> pd.DataFrame:
         elif s.dtype == object or pd.api.types.is_string_dtype(s.dtype):
             if len(s) and s.map(_is_listlike).any():
                 out[col] = s.map(
-                    lambda v: json.dumps(v.tolist() if isinstance(v, np.ndarray) else (list(v) if isinstance(v, tuple) else v))
-                    if _is_listlike(v) else v
+                    lambda v: (
+                        json.dumps(
+                            v.tolist()
+                            if isinstance(v, np.ndarray)
+                            else (list(v) if isinstance(v, tuple) else v)
+                        )
+                        if _is_listlike(v)
+                        else v
+                    )
                 ).astype(object)
             elif len(s) and s.map(lambda v: isinstance(v, (pd.Timestamp, datetime))).any():
-                out[col] = s.map(lambda v: format_ts(v) if isinstance(v, (pd.Timestamp, datetime)) else v).astype(object)
+                out[col] = s.map(
+                    lambda v: format_ts(v) if isinstance(v, (pd.Timestamp, datetime)) else v
+                ).astype(object)
         elif pd.api.types.is_bool_dtype(s.dtype):
             out[col] = s.astype("int64")
     return out
@@ -160,8 +169,14 @@ class SqliteStore:
     def write_catalog(self, entries: Iterable[dict]) -> int:
         rows = [
             (
-                e["name"], e.get("owner"), e.get("description"), e.get("sla_hours"), e.get("row_count"),
-                e.get("last_updated"), int(bool(e.get("freshness_ok", True))), e.get("contract"),
+                e["name"],
+                e.get("owner"),
+                e.get("description"),
+                e.get("sla_hours"),
+                e.get("row_count"),
+                e.get("last_updated"),
+                int(bool(e.get("freshness_ok", True))),
+                e.get("contract"),
                 json.dumps(e.get("columns", [])),
             )
             for e in entries
@@ -173,7 +188,14 @@ class SqliteStore:
         self.conn.commit()
         return len(rows)
 
-    def record_job(self, job_id: str, kind: str, target: str, status: str = "queued", dag_run_id: str | None = None) -> None:
+    def record_job(
+        self,
+        job_id: str,
+        kind: str,
+        target: str,
+        status: str = "queued",
+        dag_run_id: str | None = None,
+    ) -> None:
         self.conn.execute(
             "INSERT OR REPLACE INTO jobs (job_id, kind, target, requested_at, status, dag_run_id) VALUES (?,?,?,?,?,?)",
             (job_id, kind, target, now_iso(), status, dag_run_id),
@@ -183,7 +205,8 @@ class SqliteStore:
     # ------------------------------------------------------------------ reads
     def table_exists(self, table_name: str) -> bool:
         row = self.conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (sqlite_table_name(table_name),)
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (sqlite_table_name(table_name),),
         ).fetchone()
         return row is not None
 
@@ -195,15 +218,26 @@ class SqliteStore:
     def row_count(self, table_name: str) -> int:
         if not self.table_exists(table_name):
             return 0
-        return int(self.conn.execute(f'SELECT COUNT(*) FROM "{sqlite_table_name(table_name)}"').fetchone()[0])
+        return int(
+            self.conn.execute(f'SELECT COUNT(*) FROM "{sqlite_table_name(table_name)}"').fetchone()[
+                0
+            ]
+        )
 
     def max_value(self, table_name: str, column: str):
         if not self.table_exists(table_name):
             return None
-        cols = {r[1] for r in self.conn.execute(f'PRAGMA table_info("{sqlite_table_name(table_name)}")').fetchall()}
+        cols = {
+            r[1]
+            for r in self.conn.execute(
+                f'PRAGMA table_info("{sqlite_table_name(table_name)}")'
+            ).fetchall()
+        }
         if column not in cols:
             return None
-        return self.conn.execute(f'SELECT MAX("{column}") FROM "{sqlite_table_name(table_name)}"').fetchone()[0]
+        return self.conn.execute(
+            f'SELECT MAX("{column}") FROM "{sqlite_table_name(table_name)}"'
+        ).fetchone()[0]
 
     def close(self) -> None:
         self.conn.close()

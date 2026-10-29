@@ -39,10 +39,27 @@ K8S_CONN_ID = "kubernetes_default"
 
 # Env keys forwarded from the scheduler process to spark-submit / the SparkApplication.
 _FORWARDED_ENV = (
-    "KAFKA_BOOTSTRAP", "SCHEMA_REGISTRY_URL", "ES_URL", "S3_ENDPOINT", "S3_ACCESS_KEY", "S3_SECRET_KEY",
-    "S3_BUCKET_RAW", "S3_BUCKET_LAKE", "ICEBERG_REST_URI", "ICEBERG_WAREHOUSE", "SNOWFLAKE_ACCOUNT",
-    "SNOWFLAKE_USER", "SNOWFLAKE_PASSWORD", "SNOWFLAKE_WAREHOUSE", "SNOWFLAKE_DATABASE", "SNOWFLAKE_ROLE",
-    "SERVING_DUCKDB_PATH", "PIPELINE_VERSION", "LOG_LEVEL", "RTDAAS_SPARK_PACKAGES", "RTDAAS_PUBLISH_TARGET",
+    "KAFKA_BOOTSTRAP",
+    "SCHEMA_REGISTRY_URL",
+    "ES_URL",
+    "S3_ENDPOINT",
+    "S3_ACCESS_KEY",
+    "S3_SECRET_KEY",
+    "S3_BUCKET_RAW",
+    "S3_BUCKET_LAKE",
+    "ICEBERG_REST_URI",
+    "ICEBERG_WAREHOUSE",
+    "SNOWFLAKE_ACCOUNT",
+    "SNOWFLAKE_USER",
+    "SNOWFLAKE_PASSWORD",
+    "SNOWFLAKE_WAREHOUSE",
+    "SNOWFLAKE_DATABASE",
+    "SNOWFLAKE_ROLE",
+    "SERVING_DUCKDB_PATH",
+    "PIPELINE_VERSION",
+    "LOG_LEVEL",
+    "RTDAAS_SPARK_PACKAGES",
+    "RTDAAS_PUBLISH_TARGET",
 )
 
 DEFAULT_ARGS: dict[str, Any] = {
@@ -58,7 +75,9 @@ TAGS = ["rtdaas"]
 
 
 def spark_mode() -> str:
-    mode = os.environ.get("RTDAAS_SPARK_MODE") or Variable.get("rtdaas_spark_mode", default_var="submit")
+    mode = os.environ.get("RTDAAS_SPARK_MODE") or Variable.get(
+        "rtdaas_spark_mode", default_var="submit"
+    )
     return mode if mode in ("submit", "k8s") else "submit"
 
 
@@ -86,15 +105,28 @@ def suite_path(name: str) -> str:
     return f"{SUITES_DIR}/{name}"
 
 
-def spark_app_template(name: str, app_file: str, args: list[str], image: str | None = None,
-                       env: dict[str, str] | None = None, executors: int = 2) -> dict:
+def spark_app_template(
+    name: str,
+    app_file: str,
+    args: list[str],
+    image: str | None = None,
+    env: dict[str, str] | None = None,
+    executors: int = 2,
+) -> dict:
     """A ``sparkoperator.k8s.io/v1beta2`` SparkApplication manifest (dict) for one job run."""
     env_list = [{"name": k, "value": v} for k, v in sorted((env or rtdaas_env()).items())]
-    env_from = [{"configMapRef": {"name": "rtdaas-config"}}, {"secretRef": {"name": "rtdaas-secrets"}}]
+    env_from = [
+        {"configMapRef": {"name": "rtdaas-config"}},
+        {"secretRef": {"name": "rtdaas-secrets"}},
+    ]
     return {
         "apiVersion": "sparkoperator.k8s.io/v1beta2",
         "kind": "SparkApplication",
-        "metadata": {"name": name[:63].rstrip("-"), "namespace": SPARK_NAMESPACE, "labels": {"app.kubernetes.io/part-of": "rtdaas"}},
+        "metadata": {
+            "name": name[:63].rstrip("-"),
+            "namespace": SPARK_NAMESPACE,
+            "labels": {"app.kubernetes.io/part-of": "rtdaas"},
+        },
         "spec": {
             "type": "Python",
             "pythonVersion": "3",
@@ -107,13 +139,19 @@ def spark_app_template(name: str, app_file: str, args: list[str], image: str | N
             "restartPolicy": {"type": "Never"},
             "sparkConf": {"spark.kubernetes.file.upload.path": "s3a://rtdaas-lake/spark-upload"},
             "driver": {
-                "cores": 1, "memory": "2g", "serviceAccount": SPARK_SERVICE_ACCOUNT,
-                "env": env_list, "envFrom": env_from,
+                "cores": 1,
+                "memory": "2g",
+                "serviceAccount": SPARK_SERVICE_ACCOUNT,
+                "env": env_list,
+                "envFrom": env_from,
                 "labels": {"app.kubernetes.io/part-of": "rtdaas"},
             },
             "executor": {
-                "cores": 2, "instances": executors, "memory": "3g",
-                "env": env_list, "envFrom": env_from,
+                "cores": 2,
+                "instances": executors,
+                "memory": "3g",
+                "env": env_list,
+                "envFrom": env_from,
                 "labels": {"app.kubernetes.io/part-of": "rtdaas"},
             },
         },
@@ -135,7 +173,9 @@ def spark_task(task_id: str, app_file: str, args: list[str], executors: int = 2,
             task_id=task_id,
             namespace=SPARK_NAMESPACE,
             kubernetes_conn_id=K8S_CONN_ID,
-            template_spec=spark_app_template(_k8s_name(task_id), app_file, args, executors=executors),
+            template_spec=spark_app_template(
+                _k8s_name(task_id), app_file, args, executors=executors
+            ),
             get_logs=True,
             delete_on_termination=True,
             **kwargs,
@@ -166,20 +206,31 @@ def spark_task_mapped(task_id: str, app_file: str, arg_lists, executors: int = 2
         @task(task_id=f"{task_id}_specs")
         def specs(lists: list[list[str]]) -> list[dict]:
             return [
-                spark_app_template(f"rtdaas-{task_id}-{i}".replace("_", "-"), app_file, a, executors=executors)
+                spark_app_template(
+                    f"rtdaas-{task_id}-{i}".replace("_", "-"), app_file, a, executors=executors
+                )
                 for i, a in enumerate(lists)
             ]
 
         return SparkKubernetesOperator.partial(
-            task_id=task_id, namespace=SPARK_NAMESPACE, kubernetes_conn_id=K8S_CONN_ID,
-            get_logs=True, delete_on_termination=True, **kwargs,
+            task_id=task_id,
+            namespace=SPARK_NAMESPACE,
+            kubernetes_conn_id=K8S_CONN_ID,
+            get_logs=True,
+            delete_on_termination=True,
+            **kwargs,
         ).expand(template_spec=specs(arg_lists))
 
     from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
     return SparkSubmitOperator.partial(
-        task_id=task_id, conn_id=SPARK_CONN_ID, application=job_path(app_file),
-        env_vars=rtdaas_env(), name=f"rtdaas-{task_id}", verbose=False, **kwargs,
+        task_id=task_id,
+        conn_id=SPARK_CONN_ID,
+        application=job_path(app_file),
+        env_vars=rtdaas_env(),
+        name=f"rtdaas-{task_id}",
+        verbose=False,
+        **kwargs,
     ).expand(application_args=arg_lists)
 
 
@@ -187,9 +238,13 @@ def notify_failure(context: dict) -> None:
     """``on_failure_callback``: post to a Slack incoming webhook if configured, else log."""
     ti = context.get("task_instance")
     dag_id = context.get("dag").dag_id if context.get("dag") else "?"
-    msg = f":rotating_light: rtdaas DAG `{dag_id}` task `{getattr(ti, 'task_id', '?')}` failed " \
-          f"(run {context.get('run_id')}). Log: {getattr(ti, 'log_url', 'n/a')}"
-    webhook = os.environ.get("RTDAAS_SLACK_WEBHOOK") or Variable.get("rtdaas_slack_webhook", default_var="")
+    msg = (
+        f":rotating_light: rtdaas DAG `{dag_id}` task `{getattr(ti, 'task_id', '?')}` failed "
+        f"(run {context.get('run_id')}). Log: {getattr(ti, 'log_url', 'n/a')}"
+    )
+    webhook = os.environ.get("RTDAAS_SLACK_WEBHOOK") or Variable.get(
+        "rtdaas_slack_webhook", default_var=""
+    )
     if webhook:
         try:
             import requests
@@ -206,7 +261,9 @@ def es_doc_count(index: str, query: dict | None = None) -> int:
     import requests
 
     es_url = rtdaas_env().get("ES_URL", "http://elasticsearch:9200").rstrip("/")
-    r = requests.post(f"{es_url}/{index}/_count", json={"query": query or {"match_all": {}}}, timeout=30)
+    r = requests.post(
+        f"{es_url}/{index}/_count", json={"query": query or {"match_all": {}}}, timeout=30
+    )
     r.raise_for_status()
     return int(r.json().get("count", 0))
 

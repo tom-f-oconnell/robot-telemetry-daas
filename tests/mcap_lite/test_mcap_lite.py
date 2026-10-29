@@ -15,7 +15,9 @@ def _write(path, n=5):
         sid = w.add_schema("std_msgs/String", "ros2msg", b"string data\n")
         cid = w.add_channel("/chatter", "cdr", sid, metadata={"k": "v"})
         for i in range(n):
-            w.write_message(cid, log_time_ns=1_000 + i, publish_time_ns=1_000 + i, data=bytes([i]) * 4)
+            w.write_message(
+                cid, log_time_ns=1_000 + i, publish_time_ns=1_000 + i, data=bytes([i]) * 4
+            )
     return path
 
 
@@ -24,8 +26,16 @@ def test_round_trip(tmp_path):
     msgs = list(read_messages(path))
     assert len(msgs) == 7
     schema, channel, message = msgs[0]
-    assert schema.name == "std_msgs/String" and schema.encoding == "ros2msg" and schema.data == b"string data\n"
-    assert channel.topic == "/chatter" and channel.message_encoding == "cdr" and channel.metadata == {"k": "v"}
+    assert (
+        schema.name == "std_msgs/String"
+        and schema.encoding == "ros2msg"
+        and schema.data == b"string data\n"
+    )
+    assert (
+        channel.topic == "/chatter"
+        and channel.message_encoding == "cdr"
+        and channel.metadata == {"k": "v"}
+    )
     assert message.data == b"\x00" * 4 and message.log_time_ns == 1_000
     assert [m.sequence for _, _, m in msgs] == list(range(7))
     assert [m.log_time_ns for _, _, m in msgs] == list(range(1_000, 1_007))

@@ -32,7 +32,9 @@ def test_messages_validate_against_avro_schemas(repo_root):
     schemas = {}
     for topic, type_name in TOPIC_TYPES.items():
         pkg, name = type_name.split("/")
-        schemas[topic] = json.loads((repo_root / "contracts" / "avro" / f"{pkg}.{name}.avsc").read_text())
+        schemas[topic] = json.loads(
+            (repo_root / "contracts" / "avro" / f"{pkg}.{name}.avsc").read_text()
+        )
     seen = set()
     for kafka_topic, ros_topic, msg in msgs:
         assert kafka_topic in schemas, kafka_topic
@@ -66,8 +68,24 @@ def test_deterministic_given_seed():
 
 
 def test_cli_writes_decodable_bags(tmp_path, msg_registry):
-    rc = sim_main(["run", "--robots", "2", "--duration", "3", "--rate", "20", "--seed", "1",
-                   "--mcap-out", str(tmp_path), "--no-realtime", "--start-time", "2026-10-28T10:00:00Z"])
+    rc = sim_main(
+        [
+            "run",
+            "--robots",
+            "2",
+            "--duration",
+            "3",
+            "--rate",
+            "20",
+            "--seed",
+            "1",
+            "--mcap-out",
+            str(tmp_path),
+            "--no-realtime",
+            "--start-time",
+            "2026-10-28T10:00:00Z",
+        ]
+    )
     assert rc == 0
     bags = sorted(tmp_path.rglob("*.mcap"))
     assert [b.relative_to(tmp_path).as_posix() for b in bags] == [
@@ -81,8 +99,12 @@ def test_cli_writes_decodable_bags(tmp_path, msg_registry):
         assert schema.encoding == "ros2msg" and channel.message_encoding == "cdr"
         decoded = codec.decode(schema.name, message.data)
         counts[schema.name] = counts.get(schema.name, 0) + 1
-        if schema.name == "rtdaas_msgs/ToolPose" and channel.topic.endswith("/PSM1/rtdaas/tool_pose"):
-            stamps.append(decoded["header"]["stamp"]["sec"] * 10**9 + decoded["header"]["stamp"]["nanosec"])
+        if schema.name == "rtdaas_msgs/ToolPose" and channel.topic.endswith(
+            "/PSM1/rtdaas/tool_pose"
+        ):
+            stamps.append(
+                decoded["header"]["stamp"]["sec"] * 10**9 + decoded["header"]["stamp"]["nanosec"]
+            )
     assert counts["rtdaas_msgs/ToolPose"] == 3 * 60  # 3 arms x 3 s x 20 Hz
     assert counts["sensor_msgs/JointState"] == 3 * 60
     assert counts["rtdaas_msgs/SystemEvent"] >= 2

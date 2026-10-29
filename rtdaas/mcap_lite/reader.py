@@ -148,16 +148,27 @@ def read_summary(source) -> dict[str, Any]:
     return {
         "profile": header.profile,
         "library": header.library,
-        "schemas": {sid: {"name": s.name, "encoding": s.encoding, "data": s.data} for sid, s in sorted(schemas.items())},
+        "schemas": {
+            sid: {"name": s.name, "encoding": s.encoding, "data": s.data}
+            for sid, s in sorted(schemas.items())
+        },
         "channels": {
-            cid: {"topic": c.topic, "message_encoding": c.message_encoding, "schema_id": c.schema_id, "metadata": c.metadata}
+            cid: {
+                "topic": c.topic,
+                "message_encoding": c.message_encoding,
+                "schema_id": c.schema_id,
+                "metadata": c.metadata,
+            }
             for cid, c in sorted(channels.items())
         },
         "message_count": stats.message_count,
         "channel_message_counts": dict(stats.channel_message_counts),
         "start_ns": stats.message_start_time,
         "end_ns": stats.message_end_time,
-        "footer": {"summary_start": footer.summary_start, "summary_offset_start": footer.summary_offset_start},
+        "footer": {
+            "summary_start": footer.summary_start,
+            "summary_offset_start": footer.summary_offset_start,
+        },
     }
 
 

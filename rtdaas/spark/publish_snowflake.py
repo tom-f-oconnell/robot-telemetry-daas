@@ -46,8 +46,15 @@ _MART_HEADER = re.compile(r"^--\s*@mart\s+([A-Za-z_]+)\.([A-Za-z_]+)(?:\s+([A-Za
 
 # Spark SQL simple type -> Snowflake / DuckDB type
 _TYPE_MAP = {
-    "string": "VARCHAR", "int": "INTEGER", "integer": "INTEGER", "bigint": "BIGINT", "long": "BIGINT",
-    "double": "DOUBLE", "float": "FLOAT", "boolean": "BOOLEAN", "timestamp": "TIMESTAMP_NTZ",
+    "string": "VARCHAR",
+    "int": "INTEGER",
+    "integer": "INTEGER",
+    "bigint": "BIGINT",
+    "long": "BIGINT",
+    "double": "DOUBLE",
+    "float": "FLOAT",
+    "boolean": "BOOLEAN",
+    "timestamp": "TIMESTAMP_NTZ",
     "date": "DATE",
 }
 
@@ -71,8 +78,10 @@ def load_marts(path: Path = MARTS_SQL, date: str = "", catalog: str = ddl.CATALO
     matches = list(_MART_HEADER.finditer(text))
     for i, m in enumerate(matches):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        body = text[m.end():end]
-        body = "\n".join(line for line in body.splitlines() if not line.strip().startswith("--")).strip()
+        body = text[m.end() : end]
+        body = "\n".join(
+            line for line in body.splitlines() if not line.strip().startswith("--")
+        ).strip()
         body = body.format(date=date, catalog=catalog)
         marts.append(Mart(m.group(1).upper(), m.group(2).upper(), m.group(3), body))
     return marts
@@ -106,21 +115,38 @@ def export_mart(spark, settings: Settings, mart: Mart, run_id: str, coalesce: in
 # Snowflake
 # ---------------------------------------------------------------------------
 
+
 def _s3_url(uri: str) -> str:
     return "s3://" + uri.split("://", 1)[1] if "://" in uri else uri
 
 
-def load_snowflake(settings: Settings, marts: list[tuple[Mart, object]], run_id: str, date: str) -> None:
+def load_snowflake(
+    settings: Settings, marts: list[tuple[Mart, object]], run_id: str, date: str
+) -> None:
     import snowflake.connector
 
-    missing = [k for k in ("snowflake_account", "snowflake_user", "snowflake_password", "snowflake_warehouse")
-               if not getattr(settings, k)]
+    missing = [
+        k
+        for k in (
+            "snowflake_account",
+            "snowflake_user",
+            "snowflake_password",
+            "snowflake_warehouse",
+        )
+        if not getattr(settings, k)
+    ]
     if missing:
-        raise SystemExit(f"Snowflake target requires settings: {', '.join(m.upper() for m in missing)}")
+        raise SystemExit(
+            f"Snowflake target requires settings: {', '.join(m.upper() for m in missing)}"
+        )
 
     conn = snowflake.connector.connect(
-        account=settings.snowflake_account, user=settings.snowflake_user, password=settings.snowflake_password,
-        warehouse=settings.snowflake_warehouse, database=settings.snowflake_database, role=settings.snowflake_role,
+        account=settings.snowflake_account,
+        user=settings.snowflake_user,
+        password=settings.snowflake_password,
+        warehouse=settings.snowflake_warehouse,
+        database=settings.snowflake_database,
+        role=settings.snowflake_role,
     )
     try:
         cur = conn.cursor()
@@ -138,7 +164,9 @@ def load_snowflake(settings: Settings, marts: list[tuple[Mart, object]], run_id:
                 f"FILE_FORMAT=(TYPE=PARQUET)"
             )
             if mart.partition_column:
-                cur.execute(f"DELETE FROM {mart.qualified} WHERE {mart.partition_column} = %s", (date,))
+                cur.execute(
+                    f"DELETE FROM {mart.qualified} WHERE {mart.partition_column} = %s", (date,)
+                )
             else:
                 cur.execute(f"TRUNCATE TABLE IF EXISTS {mart.qualified}")
             cur.execute(
@@ -155,11 +183,14 @@ def load_snowflake(settings: Settings, marts: list[tuple[Mart, object]], run_id:
 # DuckDB fallback
 # ---------------------------------------------------------------------------
 
+
 def _duckdb_type(simple: str) -> str:
     return {"timestamp": "TIMESTAMP"}.get(simple, _TYPE_MAP.get(simple, "VARCHAR"))
 
 
-def load_duckdb(settings: Settings, marts: list[tuple[Mart, object]], run_id: str, date: str) -> None:
+def load_duckdb(
+    settings: Settings, marts: list[tuple[Mart, object]], run_id: str, date: str
+) -> None:
     import duckdb
 
     db_path = Path(settings.serving_duckdb_path)
@@ -175,18 +206,26 @@ def load_duckdb(settings: Settings, marts: list[tuple[Mart, object]], run_id: st
                 con.execute(f"SET s3_access_key_id='{settings.s3_access_key}'")
                 con.execute(f"SET s3_secret_access_key='{settings.s3_secret_key}'")
                 con.execute("SET s3_url_style='path'")
-                con.execute(f"SET s3_use_ssl={'true' if settings.s3_endpoint.startswith('https') else 'false'}")
+                con.execute(
+                    f"SET s3_use_ssl={'true' if settings.s3_endpoint.startswith('https') else 'false'}"
+                )
                 glob = "s3://" + uri.split("://", 1)[1] + "*.parquet"
             else:
                 glob = uri.rstrip("/") + "/*.parquet"
-            cols = ", ".join(f"{f.name} {_duckdb_type(f.dataType.simpleString())}" for f in df.schema.fields)
+            cols = ", ".join(
+                f"{f.name} {_duckdb_type(f.dataType.simpleString())}" for f in df.schema.fields
+            )
             con.execute(f"CREATE SCHEMA IF NOT EXISTS {mart.schema}")
             con.execute(f"CREATE TABLE IF NOT EXISTS {mart.qualified} ({cols})")
             if mart.partition_column:
-                con.execute(f"DELETE FROM {mart.qualified} WHERE {mart.partition_column} = ?", [date])
+                con.execute(
+                    f"DELETE FROM {mart.qualified} WHERE {mart.partition_column} = ?", [date]
+                )
             else:
                 con.execute(f"DELETE FROM {mart.qualified}")
-            con.execute(f"INSERT INTO {mart.qualified} BY NAME SELECT * FROM read_parquet('{glob}')")
+            con.execute(
+                f"INSERT INTO {mart.qualified} BY NAME SELECT * FROM read_parquet('{glob}')"
+            )
             log.info("DuckDB: loaded %s for %s into %s", mart.qualified, date, db_path)
     finally:
         con.close()
@@ -196,18 +235,21 @@ def load_duckdb(settings: Settings, marts: list[tuple[Mart, object]], run_id: st
 # Catalog refresh
 # ---------------------------------------------------------------------------
 
+
 def catalog_entries(path: Path = CATALOG_YML) -> list[dict]:
     doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     default_owner = doc.get("owner_default", "data-platform@rtdaas")
     out = []
     for t in doc.get("tables") or []:
-        out.append({
-            "name": t["name"],
-            "owner": t.get("owner", default_owner),
-            "description": t.get("description", ""),
-            "sla_hours": float(t.get("sla_hours") or 0.0) or None,
-            "freshness_column": t.get("freshness_column"),
-        })
+        out.append(
+            {
+                "name": t["name"],
+                "owner": t.get("owner", default_owner),
+                "description": t.get("description", ""),
+                "sla_hours": float(t.get("sla_hours") or 0.0) or None,
+                "freshness_column": t.get("freshness_column"),
+            }
+        )
     return out
 
 
@@ -235,13 +277,15 @@ def write_catalog(spark, settings: Settings | None = None, now: dt.datetime | No
                 log.warning("catalog: cannot read %s (%s)", name, exc)
         sla = entry["sla_hours"]
         if last_updated is not None and getattr(last_updated, "tzinfo", None) is None:
-            last_updated = last_updated.replace(tzinfo=dt.timezone.utc)
+            last_updated = last_updated.replace(tzinfo=dt.UTC)
         freshness_ok = True
         if sla and last_updated is not None:
             freshness_ok = (now - last_updated) <= dt.timedelta(hours=sla)
         elif sla and row_count == 0:
             freshness_ok = False
-        rows.append((name, entry["owner"], entry["description"], sla, row_count, last_updated, freshness_ok))
+        rows.append(
+            (name, entry["owner"], entry["description"], sla, row_count, last_updated, freshness_ok)
+        )
 
     df = spark.createDataFrame(rows, schema=ddl.struct_type(ddl.CATALOG_TABLE.name))
     write_iceberg(df, ddl.CATALOG_TABLE.name, mode="replace")
@@ -253,18 +297,32 @@ def write_catalog(spark, settings: Settings | None = None, now: dt.datetime | No
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def parse_args(argv=None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--date", required=True, help="YYYY-MM-DD partition to publish")
-    p.add_argument("--target", choices=("snowflake", "duckdb"), default=os.environ.get("RTDAAS_PUBLISH_TARGET", "duckdb"))
+    p.add_argument(
+        "--target",
+        choices=("snowflake", "duckdb"),
+        default=os.environ.get("RTDAAS_PUBLISH_TARGET", "duckdb"),
+    )
     p.add_argument("--run-id", default=None)
     p.add_argument("--skip-catalog", action="store_true")
     p.add_argument("--marts", default=None, help="comma-separated SCHEMA.TABLE subset")
     return p.parse_args(argv)
 
 
-def run(spark, settings: Settings, date: str, target: str, run_id: str | None = None,
-        only: set[str] | None = None, refresh_catalog: bool = True) -> dict:
+def run(
+    spark,
+    settings: Settings,
+    date: str,
+    target: str,
+    run_id: str | None = None,
+    only: set[str] | None = None,
+    refresh_catalog: bool = True,
+) -> dict:
     ensure_tables(spark)
     run_id = run_id or uuid.uuid4().hex[:12]
     marts = [m for m in load_marts(date=date) if not only or m.qualified in only]
@@ -283,7 +341,15 @@ def main(argv=None) -> int:
     settings = get_settings()
     only = {s.strip().upper() for s in args.marts.split(",")} if args.marts else None
     spark = build_spark(f"rtdaas-publish-{args.date}", settings)
-    result = run(spark, settings, args.date, args.target, args.run_id, only, refresh_catalog=not args.skip_catalog)
+    result = run(
+        spark,
+        settings,
+        args.date,
+        args.target,
+        args.run_id,
+        only,
+        refresh_catalog=not args.skip_catalog,
+    )
     log.info("publish done: %s", result)
     return 0
 

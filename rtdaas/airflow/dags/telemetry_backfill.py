@@ -44,8 +44,12 @@ with DAG(
     max_active_runs=1,
     default_args={**DEFAULT_ARGS, "on_failure_callback": notify_failure},
     params={
-        "start_date": Param("2026-10-01", type="string", format="date", description="first day (inclusive)"),
-        "end_date": Param("2026-10-01", type="string", format="date", description="last day (inclusive)"),
+        "start_date": Param(
+            "2026-10-01", type="string", format="date", description="first day (inclusive)"
+        ),
+        "end_date": Param(
+            "2026-10-01", type="string", format="date", description="last day (inclusive)"
+        ),
         "robot_id": Param(None, type=["null", "string"], description="restrict to one robot id"),
     },
     tags=TAGS + ["backfill"],
@@ -75,14 +79,24 @@ with DAG(
         return dates[-1]
 
     dates = plan_dates()
-    batch = spark_task_mapped("batch_mcap", "batch_mcap.py", batch_args(dates), executors=4, max_active_tis_per_dag=4)
-    gate = spark_task_mapped("quality_gate", "quality_gate.py", gate_args(dates), executors=1, retries=0)
+    batch = spark_task_mapped(
+        "batch_mcap", "batch_mcap.py", batch_args(dates), executors=4, max_active_tis_per_dag=4
+    )
+    gate = spark_task_mapped(
+        "quality_gate", "quality_gate.py", gate_args(dates), executors=1, retries=0
+    )
 
     publish = spark_task(
-        "publish_snowflake", "publish_snowflake.py",
-        ["--date", "{{ ti.xcom_pull(task_ids='last_date') }}",
-         "--target", "{{ var.value.get('rtdaas_publish_target', 'duckdb') }}"],
-        executors=1, trigger_rule=TriggerRule.NONE_FAILED,
+        "publish_snowflake",
+        "publish_snowflake.py",
+        [
+            "--date",
+            "{{ ti.xcom_pull(task_ids='last_date') }}",
+            "--target",
+            "{{ var.value.get('rtdaas_publish_target', 'duckdb') }}",
+        ],
+        executors=1,
+        trigger_rule=TriggerRule.NONE_FAILED,
     )
 
     batch >> gate >> last_date(dates) >> publish

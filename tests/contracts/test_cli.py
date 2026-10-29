@@ -13,12 +13,45 @@ from rtdaas.contracts.msgspec import MsgRegistry
 
 def test_gen_and_gen_check(tmp_path: Path, msgs_dir: Path, registry_yml: Path, capsys):
     out = tmp_path / "avro"
-    assert cli.main(["gen", "--msgs", str(msgs_dir), "--registry-yml", str(registry_yml), "--out", str(out)]) == 0
+    assert (
+        cli.main(
+            ["gen", "--msgs", str(msgs_dir), "--registry-yml", str(registry_yml), "--out", str(out)]
+        )
+        == 0
+    )
     assert (out / "kafka" / "rtdaas.telemetry.tool_pose.avsc").exists()
     assert len(list(out.glob("*.avsc"))) == 10
-    assert cli.main(["gen", "--msgs", str(msgs_dir), "--registry-yml", str(registry_yml), "--out", str(out), "--check"]) == 0
+    assert (
+        cli.main(
+            [
+                "gen",
+                "--msgs",
+                str(msgs_dir),
+                "--registry-yml",
+                str(registry_yml),
+                "--out",
+                str(out),
+                "--check",
+            ]
+        )
+        == 0
+    )
     (out / "kafka" / "rtdaas.telemetry.tool_pose.avsc").write_text("{}")
-    assert cli.main(["gen", "--msgs", str(msgs_dir), "--registry-yml", str(registry_yml), "--out", str(out), "--check"]) == 2
+    assert (
+        cli.main(
+            [
+                "gen",
+                "--msgs",
+                str(msgs_dir),
+                "--registry-yml",
+                str(registry_yml),
+                "--out",
+                str(out),
+                "--check",
+            ]
+        )
+        == 2
+    )
     assert "STALE" in capsys.readouterr().out
 
 
@@ -41,8 +74,13 @@ def test_check_against_directory_base(tmp_path: Path, repo_root: Path, capsys):
     out = capsys.readouterr().out
     assert "BREAK   kafka/rtdaas.telemetry.tool_pose.avsc" in out and "$.msg.jaw_angle" in out
     # a brand-new schema in head is reported as NEW, not a violation
-    (head / "kafka" / "rtdaas.telemetry.extra.avsc").write_text((base / "kafka" / "rtdaas.telemetry.events.avsc").read_text())
-    shutil.copy(base / "kafka" / "rtdaas.telemetry.tool_pose.avsc", head / "kafka" / "rtdaas.telemetry.tool_pose.avsc")
+    (head / "kafka" / "rtdaas.telemetry.extra.avsc").write_text(
+        (base / "kafka" / "rtdaas.telemetry.events.avsc").read_text()
+    )
+    shutil.copy(
+        base / "kafka" / "rtdaas.telemetry.tool_pose.avsc",
+        head / "kafka" / "rtdaas.telemetry.tool_pose.avsc",
+    )
     assert cli.main(["check", "--base", str(base), "--head", str(head)]) == 0
     assert "NEW     kafka/rtdaas.telemetry.extra.avsc" in capsys.readouterr().out
 
@@ -52,10 +90,17 @@ def test_check_against_git_ref(tmp_path: Path, repo_root: Path, capsys):
     repo = tmp_path / "repo"
     (repo / "contracts").mkdir(parents=True)
     shutil.copytree(repo_root / "contracts" / "avro", repo / "contracts" / "avro")
-    env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    env = {
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@t",
+    }
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True, env={**env, "HOME": str(tmp_path)})
+    subprocess.run(
+        ["git", "commit", "-qm", "base"], cwd=repo, check=True, env={**env, "HOME": str(tmp_path)}
+    )
     p = repo / "contracts" / "avro" / "kafka" / "rtdaas.telemetry.heartbeat.avsc"
     schema = json.loads(p.read_text())
     schema["fields"][3]["type"]["fields"].append({"name": "site", "type": "string", "default": ""})
@@ -88,7 +133,17 @@ def test_register_uses_registry_client(monkeypatch, repo_root: Path, registry_ym
             return 7
 
     monkeypatch.setattr(cli, "RegistryClient", FakeClient)
-    rc = cli.main(["register", "--registry", "http://r/apis/ccompat/v7", "--avro", str(repo_root / "contracts" / "avro"), "--registry-yml", str(registry_yml)])
+    rc = cli.main(
+        [
+            "register",
+            "--registry",
+            "http://r/apis/ccompat/v7",
+            "--avro",
+            str(repo_root / "contracts" / "avro"),
+            "--registry-yml",
+            str(registry_yml),
+        ]
+    )
     assert rc == 2  # the events subject was reported incompatible by the fake
     out = capsys.readouterr().out
     assert "INCOMPATIBLE rtdaas.telemetry.events-value" in out

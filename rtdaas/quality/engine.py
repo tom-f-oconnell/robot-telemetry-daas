@@ -12,10 +12,11 @@ from __future__ import annotations
 import logging
 import operator
 import uuid
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -29,12 +30,26 @@ log = logging.getLogger(__name__)
 SEVERITIES = ("blocking", "warning")
 STATUSES = ("pass", "fail", "error", "skipped")
 RESULT_COLUMNS: tuple[str, ...] = (
-    "run_id", "suite", "table_name", "check_name", "severity", "status", "observed",
-    "threshold", "partition_value", "run_ts", "message",
+    "run_id",
+    "suite",
+    "table_name",
+    "check_name",
+    "severity",
+    "status",
+    "observed",
+    "threshold",
+    "partition_value",
+    "run_ts",
+    "message",
 )
 _OPS: dict[str, Callable[[float, float], bool]] = {
-    "<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge,
-    "==": operator.eq, "=": operator.eq, "!=": operator.ne,
+    "<": operator.lt,
+    "<=": operator.le,
+    ">": operator.gt,
+    ">=": operator.ge,
+    "==": operator.eq,
+    "=": operator.eq,
+    "!=": operator.ne,
 }
 
 
@@ -80,6 +95,7 @@ def load_suite(path: Path | str) -> dict:
 # --------------------------------------------------------------------------- check implementations
 # Each takes (frame or None, check dict, context dict) and returns (status, observed, threshold, message).
 
+
 def _ts_series(frame: pd.DataFrame, column: str) -> pd.Series:
     s = frame[column]
     if pd.api.types.is_datetime64_any_dtype(s.dtype):
@@ -91,10 +107,18 @@ def _ts_ns(frame: pd.DataFrame, column: str) -> np.ndarray:
     """Timestamps -> int64 nanoseconds since epoch, independent of the parsed resolution
     (pandas 3 infers ``datetime64[us]`` for microsecond ISO strings)."""
     t = _ts_series(frame, column)
-    return t.dt.tz_convert("UTC").dt.tz_localize(None).to_numpy().astype("datetime64[ns]").astype(np.int64)
+    return (
+        t.dt.tz_convert("UTC")
+        .dt.tz_localize(None)
+        .to_numpy()
+        .astype("datetime64[ns]")
+        .astype(np.int64)
+    )
 
 
-def _check_not_null(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str, float | None, str, str]:
+def _check_not_null(
+    frame: pd.DataFrame, check: dict, ctx: dict
+) -> tuple[str, float | None, str, str]:
     col = check["column"]
     max_frac = float(check.get("max_null_fraction", 0.0))
     if col not in frame.columns:
@@ -102,19 +126,35 @@ def _check_not_null(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str, f
     if len(frame) == 0:
         return "pass", 0.0, f"<= {max_frac}", "no rows"
     frac = float(frame[col].isna().mean())
-    return ("pass" if frac <= max_frac else "fail"), frac, f"<= {max_frac}", f"null fraction of {col}: {frac:.4f}"
+    return (
+        ("pass" if frac <= max_frac else "fail"),
+        frac,
+        f"<= {max_frac}",
+        f"null fraction of {col}: {frac:.4f}",
+    )
 
 
-def _check_row_count(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str, float | None, str, str]:
+def _check_row_count(
+    frame: pd.DataFrame, check: dict, ctx: dict
+) -> tuple[str, float | None, str, str]:
     n = len(frame)
     lo = check.get("min")
     hi = check.get("max")
     ok = (lo is None or n >= lo) and (hi is None or n <= hi)
-    threshold = " and ".join(p for p in [f">= {lo}" if lo is not None else "", f"<= {hi}" if hi is not None else ""] if p) or "any"
+    threshold = (
+        " and ".join(
+            p
+            for p in [f">= {lo}" if lo is not None else "", f"<= {hi}" if hi is not None else ""]
+            if p
+        )
+        or "any"
+    )
     return ("pass" if ok else "fail"), float(n), threshold, f"{n} rows"
 
 
-def _check_value_range(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str, float | None, str, str]:
+def _check_value_range(
+    frame: pd.DataFrame, check: dict, ctx: dict
+) -> tuple[str, float | None, str, str]:
     col = check["column"]
     if col not in frame.columns:
         return "fail", None, "", f"column {col!r} missing"
@@ -130,10 +170,17 @@ def _check_value_range(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str
         bad |= vals.to_numpy() > hi
     frac = float(bad.mean())
     status = "pass" if frac <= max_frac else "fail"
-    return status, frac, f"[{lo}, {hi}] violations <= {max_frac}", f"{int(bad.sum())}/{len(vals)} values of {col} outside range"
+    return (
+        status,
+        frac,
+        f"[{lo}, {hi}] violations <= {max_frac}",
+        f"{int(bad.sum())}/{len(vals)} values of {col} outside range",
+    )
 
 
-def _check_sample_rate(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str, float | None, str, str]:
+def _check_sample_rate(
+    frame: pd.DataFrame, check: dict, ctx: dict
+) -> tuple[str, float | None, str, str]:
     ts_col = check.get("ts_column", "ts")
     expected = float(check["expected_hz"])
     tol = float(check.get("tolerance_fraction", 0.1))
@@ -163,11 +210,15 @@ def _check_sample_rate(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str
         if dev > tol:
             offenders.append(f"{key}: {hz:.2f} Hz")
     status = "pass" if worst_dev <= tol else "fail"
-    msg = f"median rate {worst_hz:.2f} Hz (expected {expected} Hz)" + (f"; offenders: {', '.join(offenders[:5])}" if offenders else "")
+    msg = f"median rate {worst_hz:.2f} Hz (expected {expected} Hz)" + (
+        f"; offenders: {', '.join(offenders[:5])}" if offenders else ""
+    )
     return status, worst_hz, f"{expected} Hz ±{tol:.0%}", msg
 
 
-def _check_schema_match(frame: pd.DataFrame | None, check: dict, ctx: dict) -> tuple[str, float | None, str, str]:
+def _check_schema_match(
+    frame: pd.DataFrame | None, check: dict, ctx: dict
+) -> tuple[str, float | None, str, str]:
     table = ctx["table_name"]
     expected_key = check.get("expected", "spec")
     if expected_key == "spec":
@@ -184,25 +235,48 @@ def _check_schema_match(frame: pd.DataFrame | None, check: dict, ctx: dict) -> t
         if typ.startswith("struct<") and all(f"{col}_{f}" in actual for f in ARM_STRUCT_FIELDS):
             continue  # flattened struct (SQLite mirror)
         missing.append(col)
-    expected_flat = set(expected) | {f"{c}_{f}" for c, t in expected.items() if t.startswith("struct<") for f in ARM_STRUCT_FIELDS}
+    expected_flat = set(expected) | {
+        f"{c}_{f}"
+        for c, t in expected.items()
+        if t.startswith("struct<")
+        for f in ARM_STRUCT_FIELDS
+    }
     extra = sorted(actual - expected_flat)
     if missing:
-        return "fail", float(len(missing)), "all spec columns present", f"missing columns: {', '.join(missing)}"
+        return (
+            "fail",
+            float(len(missing)),
+            "all spec columns present",
+            f"missing columns: {', '.join(missing)}",
+        )
     msg = "all spec columns present" + (f"; extra columns: {', '.join(extra)}" if extra else "")
     return "pass", 0.0, "all spec columns present", msg
 
 
-def _check_unique(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str, float | None, str, str]:
-    cols = check["columns"] if isinstance(check.get("columns"), list) else [check.get("column") or check.get("columns")]
+def _check_unique(
+    frame: pd.DataFrame, check: dict, ctx: dict
+) -> tuple[str, float | None, str, str]:
+    cols = (
+        check["columns"]
+        if isinstance(check.get("columns"), list)
+        else [check.get("column") or check.get("columns")]
+    )
     missing = [c for c in cols if c not in frame.columns]
     if missing:
         return "fail", None, "0 duplicates", f"columns missing: {', '.join(missing)}"
     max_dups = int(check.get("max_duplicates", 0))
     dups = int(frame.duplicated(subset=cols).sum()) if len(frame) else 0
-    return ("pass" if dups <= max_dups else "fail"), float(dups), f"<= {max_dups} duplicates", f"{dups} duplicate rows on ({', '.join(cols)})"
+    return (
+        ("pass" if dups <= max_dups else "fail"),
+        float(dups),
+        f"<= {max_dups} duplicates",
+        f"{dups} duplicate rows on ({', '.join(cols)})",
+    )
 
 
-def _check_freshness(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str, float | None, str, str]:
+def _check_freshness(
+    frame: pd.DataFrame, check: dict, ctx: dict
+) -> tuple[str, float | None, str, str]:
     ts_col = check.get("ts_column", "ts")
     max_age_h = float(check["max_age_hours"])
     if ts_col not in frame.columns:
@@ -210,12 +284,19 @@ def _check_freshness(frame: pd.DataFrame, check: dict, ctx: dict) -> tuple[str, 
     if len(frame) == 0:
         return "fail", None, f"<= {max_age_h} h", "no rows"
     latest = _ts_series(frame, ts_col).max()
-    now = ctx.get("now") or datetime.now(timezone.utc)
+    now = ctx.get("now") or datetime.now(UTC)
     age_h = (pd.Timestamp(now) - latest).total_seconds() / 3600.0
-    return ("pass" if age_h <= max_age_h else "fail"), float(age_h), f"<= {max_age_h} h", f"latest {ts_col} is {age_h:.2f} h old"
+    return (
+        ("pass" if age_h <= max_age_h else "fail"),
+        float(age_h),
+        f"<= {max_age_h} h",
+        f"latest {ts_col} is {age_h:.2f} h old",
+    )
 
 
-def _check_sql(frame: pd.DataFrame | None, check: dict, ctx: dict) -> tuple[str, float | None, str, str]:
+def _check_sql(
+    frame: pd.DataFrame | None, check: dict, ctx: dict
+) -> tuple[str, float | None, str, str]:
     adapter: TableAdapter = ctx["adapter"]
     query = check["query"].replace("{table}", adapter.resolve_table(ctx["table_name"]))
     partition_value = ctx.get("partition_value")
@@ -228,7 +309,12 @@ def _check_sql(frame: pd.DataFrame | None, check: dict, ctx: dict) -> tuple[str,
     if observed is None:
         return "fail", None, f"{op_name} {threshold}", "query returned no numeric result"
     ok = _OPS[op_name](observed, threshold)
-    return ("pass" if ok else "fail"), float(observed), f"{op_name} {threshold}", f"query result {observed}"
+    return (
+        ("pass" if ok else "fail"),
+        float(observed),
+        f"{op_name} {threshold}",
+        f"query result {observed}",
+    )
 
 
 _CHECKS: dict[str, Callable[..., tuple[str, float | None, str, str]]] = {
@@ -270,30 +356,84 @@ def run_suite(
             except Exception as exc:  # noqa: BLE001 - adapter failures must not abort the suite
                 frame_error = f"{type(exc).__name__}: {exc}"
                 log.exception("failed to load %s", table)
-        ctx = {"adapter": adapter, "table_name": table, "partition_value": partition_value, "now": now}
+        ctx = {
+            "adapter": adapter,
+            "table_name": table,
+            "partition_value": partition_value,
+            "now": now,
+        }
         for check in checks:
             ctype = check["type"]
             name = check.get("name", ctype)
             severity = check.get("severity", "warning")
             impl = _CHECKS.get(ctype)
             if impl is None:
-                results.append(CheckResult(suite_name, table, name, severity, "error", None, "", partition_value, f"unknown check type {ctype!r}"))
+                results.append(
+                    CheckResult(
+                        suite_name,
+                        table,
+                        name,
+                        severity,
+                        "error",
+                        None,
+                        "",
+                        partition_value,
+                        f"unknown check type {ctype!r}",
+                    )
+                )
                 continue
             if ctype in _NEEDS_FRAME and frame is None:
                 status = "skipped" if table_spec.get("optional") else "error"
-                results.append(CheckResult(suite_name, table, name, severity, status, None, "", partition_value, f"table unavailable: {frame_error}"))
+                results.append(
+                    CheckResult(
+                        suite_name,
+                        table,
+                        name,
+                        severity,
+                        status,
+                        None,
+                        "",
+                        partition_value,
+                        f"table unavailable: {frame_error}",
+                    )
+                )
                 continue
             try:
                 status, observed, threshold, message = impl(frame, check, ctx)
             except KeyError as exc:
-                status, observed, threshold, message = "error", None, "", f"table/column unavailable: {exc}"
+                status, observed, threshold, message = (
+                    "error",
+                    None,
+                    "",
+                    f"table/column unavailable: {exc}",
+                )
             except Exception as exc:  # noqa: BLE001
                 log.exception("check %s.%s raised", table, name)
-                status, observed, threshold, message = "error", None, "", f"{type(exc).__name__}: {exc}"
-            results.append(CheckResult(suite_name, table, name, severity, status, observed, threshold, partition_value, message))
+                status, observed, threshold, message = (
+                    "error",
+                    None,
+                    "",
+                    f"{type(exc).__name__}: {exc}",
+                )
+            results.append(
+                CheckResult(
+                    suite_name,
+                    table,
+                    name,
+                    severity,
+                    status,
+                    observed,
+                    threshold,
+                    partition_value,
+                    message,
+                )
+            )
     log.info(
         "suite %s: %d checks, %d failed, %d errors",
-        suite_name, len(results), sum(r.status == "fail" for r in results), sum(r.status == "error" for r in results),
+        suite_name,
+        len(results),
+        sum(r.status == "fail" for r in results),
+        sum(r.status == "error" for r in results),
     )
     return results
 
@@ -320,9 +460,11 @@ def has_blocking_failures(results: Iterable[CheckResult]) -> bool:
     return any(r.severity == "blocking" and r.status in ("fail", "error") for r in results)
 
 
-def to_frame(results: list[CheckResult], run_id: str, run_ts: datetime | pd.Timestamp | None = None) -> pd.DataFrame:
+def to_frame(
+    results: list[CheckResult], run_id: str, run_ts: datetime | pd.Timestamp | None = None
+) -> pd.DataFrame:
     """``dq.check_results`` rows (spec §3.2) for a run."""
-    run_ts = pd.Timestamp(run_ts or datetime.now(timezone.utc))
+    run_ts = pd.Timestamp(run_ts or datetime.now(UTC))
     if run_ts.tzinfo is None:
         run_ts = run_ts.tz_localize("UTC")
     rows = []
@@ -342,5 +484,7 @@ def summary(results: Iterable[CheckResult]) -> str:
     lines = []
     for r in results:
         if r.status != "pass":
-            lines.append(f"[{r.status.upper():7}] {r.severity:8} {r.table_name}.{r.check_name}: {r.message}")
+            lines.append(
+                f"[{r.status.upper():7}] {r.severity:8} {r.table_name}.{r.check_name}: {r.message}"
+            )
     return "\n".join(lines)

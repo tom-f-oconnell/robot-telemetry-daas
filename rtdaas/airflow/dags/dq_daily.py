@@ -55,17 +55,26 @@ with DAG(
         day = (context["data_interval_end"] - dt.timedelta(days=1)).strftime("%Y-%m-%d")
         return [["--suite", suite_path(s), "--partition", day] for s in SUITES]
 
-    gates = spark_task_mapped("quality_gate", "quality_gate.py", suite_args(), executors=1, retries=0)
+    gates = spark_task_mapped(
+        "quality_gate", "quality_gate.py", suite_args(), executors=1, retries=0
+    )
 
     @task(trigger_rule=TriggerRule.ALL_DONE)
     def dq_summary(**context) -> str:
         ti = context["ti"]
-        failed = [t.map_index for t in ti.get_dagrun().get_task_instances(state=["failed", "upstream_failed"])
-                  if t.task_id == "quality_gate"]
+        failed = [
+            t.map_index
+            for t in ti.get_dagrun().get_task_instances(state=["failed", "upstream_failed"])
+            if t.task_id == "quality_gate"
+        ]
         if failed:
-            raise RuntimeError(f"blocking quality failures in suites: {[SUITES[i] for i in failed if i >= 0]}")
+            raise RuntimeError(
+                f"blocking quality failures in suites: {[SUITES[i] for i in failed if i >= 0]}"
+            )
         return "all suites passed"
 
-    maintenance = spark_task("iceberg_maintenance", "maintenance.py", ["--older-than-days", "7"], executors=2)
+    maintenance = spark_task(
+        "iceberg_maintenance", "maintenance.py", ["--older-than-days", "7"], executors=2
+    )
 
     gates >> dq_summary()

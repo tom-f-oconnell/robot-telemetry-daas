@@ -11,11 +11,21 @@ pytestmark = pytest.mark.airflow
 
 DAG_DIR = Path(__file__).resolve().parents[2] / "rtdaas" / "airflow" / "dags"
 EXPECTED = {
-    "telemetry_bag_ingest": {"wait_for_bags", "spark_batch_mcap", "quality_gate", "publish_snowflake", "index_es_sessions"},
+    "telemetry_bag_ingest": {
+        "wait_for_bags",
+        "spark_batch_mcap",
+        "quality_gate",
+        "publish_snowflake",
+        "index_es_sessions",
+    },
     "telemetry_backfill": {"publish_snowflake"},
     "jigsaws_ingest": {"spark_batch_jigsaws", "quality_gate", "publish_snowflake"},
     "dq_daily": {"quality_gate", "dq_summary", "iceberg_maintenance"},
-    "contracts_sync": {"check_committed_contracts", "set_compatibility_and_register", "verify_registry"},
+    "contracts_sync": {
+        "check_committed_contracts",
+        "set_compatibility_and_register",
+        "verify_registry",
+    },
 }
 
 

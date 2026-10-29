@@ -48,32 +48,89 @@ _DBL = {"type": "double"}
 _LONG = {"type": "long"}
 
 ES_MAPPINGS: dict[str, dict] = {
-    ES_INDEX_EVENTS: {"properties": {
-        "@timestamp": _DATE, "ts": _DATE, "recv_ts": _DATE, "robot_id": _KW, "arm": _KW,
-        "severity": {"type": "integer"}, "severity_name": _KW, "code": _KW,
-        "message": {"type": "text"}, "source": _KW, "bag_file": _KW}},
-    ES_INDEX_KPI: {"properties": {
-        "@timestamp": _DATE, "window_start": _DATE, "window_end": _DATE, "computed_at": _DATE,
-        "robot_id": _KW, "arm": _KW, "computed_by": _KW, "n_samples": _LONG,
-        "mean_speed_mps": _DBL, "max_speed_mps": _DBL, "path_length_m": _DBL, "idle_fraction": _DBL,
-        "jaw_cycles": _LONG, "warn_events": _LONG, "error_events": _LONG, "heartbeat_gap_s": _DBL}},
-    ES_INDEX_SESSIONS: {"properties": {
-        "@timestamp": _DATE, "start_ts": _DATE, "end_ts": _DATE, "processed_at": _DATE,
-        "session_id": _KW, "robot_id": _KW, "arm": _KW, "bag_file": _KW, "pipeline_version": _KW,
-        "duration_s": _DBL, "n_samples": _LONG, "path_length_m": _DBL, "mean_speed_mps": _DBL,
-        "idle_fraction": _DBL, "jaw_cycles": _LONG, "warn_events": _LONG, "error_events": _LONG,
-        "instrument_swaps": _LONG}},
-    ES_INDEX_GESTURES: {"properties": {
-        "trial_id": _KW, "task": _KW, "subject": _KW, "skill_level": _KW, "gesture": _KW,
-        "start_frame": _LONG, "end_frame": _LONG, "duration_s": _DBL, "path_length_psml": _DBL,
-        "path_length_psmr": _DBL, "mean_speed_psml": _DBL, "mean_speed_psmr": _DBL,
-        "gripper_cycles": _LONG, "motion_energy_mean": _DBL, "n_frames": _LONG}},
+    ES_INDEX_EVENTS: {
+        "properties": {
+            "@timestamp": _DATE,
+            "ts": _DATE,
+            "recv_ts": _DATE,
+            "robot_id": _KW,
+            "arm": _KW,
+            "severity": {"type": "integer"},
+            "severity_name": _KW,
+            "code": _KW,
+            "message": {"type": "text"},
+            "source": _KW,
+            "bag_file": _KW,
+        }
+    },
+    ES_INDEX_KPI: {
+        "properties": {
+            "@timestamp": _DATE,
+            "window_start": _DATE,
+            "window_end": _DATE,
+            "computed_at": _DATE,
+            "robot_id": _KW,
+            "arm": _KW,
+            "computed_by": _KW,
+            "n_samples": _LONG,
+            "mean_speed_mps": _DBL,
+            "max_speed_mps": _DBL,
+            "path_length_m": _DBL,
+            "idle_fraction": _DBL,
+            "jaw_cycles": _LONG,
+            "warn_events": _LONG,
+            "error_events": _LONG,
+            "heartbeat_gap_s": _DBL,
+        }
+    },
+    ES_INDEX_SESSIONS: {
+        "properties": {
+            "@timestamp": _DATE,
+            "start_ts": _DATE,
+            "end_ts": _DATE,
+            "processed_at": _DATE,
+            "session_id": _KW,
+            "robot_id": _KW,
+            "arm": _KW,
+            "bag_file": _KW,
+            "pipeline_version": _KW,
+            "duration_s": _DBL,
+            "n_samples": _LONG,
+            "path_length_m": _DBL,
+            "mean_speed_mps": _DBL,
+            "idle_fraction": _DBL,
+            "jaw_cycles": _LONG,
+            "warn_events": _LONG,
+            "error_events": _LONG,
+            "instrument_swaps": _LONG,
+        }
+    },
+    ES_INDEX_GESTURES: {
+        "properties": {
+            "trial_id": _KW,
+            "task": _KW,
+            "subject": _KW,
+            "skill_level": _KW,
+            "gesture": _KW,
+            "start_frame": _LONG,
+            "end_frame": _LONG,
+            "duration_s": _DBL,
+            "path_length_psml": _DBL,
+            "path_length_psmr": _DBL,
+            "mean_speed_psml": _DBL,
+            "mean_speed_psmr": _DBL,
+            "gripper_cycles": _LONG,
+            "motion_energy_mean": _DBL,
+            "n_frames": _LONG,
+        }
+    },
 }
 
 
 # ---------------------------------------------------------------------------
 # Session
 # ---------------------------------------------------------------------------
+
 
 def spark_conf(settings: Settings) -> dict[str, str]:
     """All Spark configuration for the Iceberg REST catalog + S3A access (spec §4.8)."""
@@ -122,7 +179,12 @@ def build_spark(app_name: str, settings: Settings | None = None) -> SparkSession
         builder = builder.config(k, v)
     spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel(os.environ.get("SPARK_LOG_LEVEL", "WARN"))
-    log.info("SparkSession %s ready (catalog=%s, uri=%s)", app_name, ddl.CATALOG, settings.iceberg_rest_uri)
+    log.info(
+        "SparkSession %s ready (catalog=%s, uri=%s)",
+        app_name,
+        ddl.CATALOG,
+        settings.iceberg_rest_uri,
+    )
     return spark
 
 
@@ -136,6 +198,7 @@ def ensure_tables(spark: SparkSession) -> None:
 # ---------------------------------------------------------------------------
 # Writes
 # ---------------------------------------------------------------------------
+
 
 def conform(df: DataFrame, table: str) -> DataFrame:
     """Select the table's columns in order, adding missing ones as typed NULLs."""
@@ -202,6 +265,7 @@ def empty_df(spark: SparkSession, table: str) -> DataFrame:
 # Column helpers
 # ---------------------------------------------------------------------------
 
+
 def strip_wire_header(col: str = "value") -> Column:
     """Drop the 5-byte Confluent wire header (magic byte + int32 schema id) from a binary column."""
     from pyspark.sql import functions as F
@@ -221,7 +285,9 @@ def ros_time_to_ts(sec_col: Column, nanosec_col: Column) -> Column:
     """``builtin_interfaces/Time`` (sec, nanosec) -> timestamp with microsecond precision."""
     from pyspark.sql import functions as F
 
-    micros = sec_col.cast("long") * F.lit(1_000_000) + F.floor(nanosec_col.cast("long") / F.lit(1000)).cast("long")
+    micros = sec_col.cast("long") * F.lit(1_000_000) + F.floor(
+        nanosec_col.cast("long") / F.lit(1000)
+    ).cast("long")
     return _timestamp_micros(micros)
 
 
@@ -247,6 +313,7 @@ def envelope_schema_json(topic: str, settings: Settings | None = None) -> str:
 # Elasticsearch
 # ---------------------------------------------------------------------------
 
+
 def json_safe(value: Any) -> Any:
     """Convert datetimes / numpy / NaN into JSON-serialisable values (recursively)."""
     if value is None:
@@ -257,7 +324,7 @@ def json_safe(value: Any) -> Any:
         return [json_safe(v) for v in value]
     if isinstance(value, dt.datetime):
         if value.tzinfo is None:
-            value = value.replace(tzinfo=dt.timezone.utc)
+            value = value.replace(tzinfo=dt.UTC)
         return value.isoformat()
     if isinstance(value, dt.date):
         return value.isoformat()
@@ -280,7 +347,9 @@ def es_client(settings: Settings | None = None):
     return Elasticsearch(settings.es_url, request_timeout=30)
 
 
-def es_ensure_index(index: str, mappings: dict | None = None, settings: Settings | None = None) -> None:
+def es_ensure_index(
+    index: str, mappings: dict | None = None, settings: Settings | None = None
+) -> None:
     """Create ``index`` with mappings if it does not exist."""
     es = es_client(settings)
     if not es.indices.exists(index=index):
@@ -308,7 +377,9 @@ def es_bulk(
                 doc["@timestamp"] = doc[ts_field]
             yield {"_op_type": "index", "_index": index, "_id": id_fn(row), "_source": doc}
 
-    ok, errors = helpers.bulk(es, actions(), chunk_size=1000, raise_on_error=False, stats_only=False)
+    ok, errors = helpers.bulk(
+        es, actions(), chunk_size=1000, raise_on_error=False, stats_only=False
+    )
     if errors:
         log.warning("ES bulk to %s: %d errors (first: %s)", index, len(errors), errors[0])
     log.info("ES bulk to %s: %d docs", index, ok)
@@ -321,4 +392,4 @@ def rows_as_dicts(df: DataFrame) -> list[dict]:
 
 
 def now_utc() -> dt.datetime:
-    return dt.datetime.now(tz=dt.timezone.utc)
+    return dt.datetime.now(tz=dt.UTC)

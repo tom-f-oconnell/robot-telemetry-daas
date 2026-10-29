@@ -47,16 +47,28 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="rtdaas-local", description=__doc__)
     p.add_argument("--log-level", default=None)
     sub = p.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("pipeline", help="bags/JIGSAWS -> SQLite mirror (+ quality suites + catalog)")
+    r = sub.add_parser(
+        "pipeline", help="bags/JIGSAWS -> SQLite mirror (+ quality suites + catalog)"
+    )
     r.add_argument("--bags", default=None, help="directory of MCAP bags (searched recursively)")
     r.add_argument("--jigsaws", default=None, help="JIGSAWS-layout dataset root")
     r.add_argument("--out", required=True, help="SQLite file to write")
-    r.add_argument("--msgs", default=str(DEFAULT_MSGS_DIR), help="ROS message definitions directory")
-    r.add_argument("--suite", action="append", help="quality suite YAML (repeatable; default: quality/checks/*.yml)")
-    r.add_argument("--partition", default=None, help="YYYY-MM-DD partition filter for quality checks")
+    r.add_argument(
+        "--msgs", default=str(DEFAULT_MSGS_DIR), help="ROS message definitions directory"
+    )
+    r.add_argument(
+        "--suite",
+        action="append",
+        help="quality suite YAML (repeatable; default: quality/checks/*.yml)",
+    )
+    r.add_argument(
+        "--partition", default=None, help="YYYY-MM-DD partition filter for quality checks"
+    )
     r.add_argument("--pipeline-version", default=__version__)
     r.add_argument("--no-video", action="store_true", help="skip video frame features")
-    r.add_argument("--fail-on-blocking", action="store_true", help="exit 2 if a blocking quality check fails")
+    r.add_argument(
+        "--fail-on-blocking", action="store_true", help="exit 2 if a blocking quality check fails"
+    )
     r.set_defaults(func=_cmd_pipeline)
     return p
 

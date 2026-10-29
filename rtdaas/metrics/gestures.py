@@ -11,9 +11,17 @@ log = logging.getLogger(__name__)
 
 GRIPPER_OPEN = 0.5
 GESTURE_METRIC_COLUMNS: tuple[str, ...] = (
-    "gesture", "start_frame", "end_frame", "duration_s",
-    "path_length_psml", "path_length_psmr", "mean_speed_psml", "mean_speed_psmr",
-    "gripper_cycles", "motion_energy_mean", "n_frames",
+    "gesture",
+    "start_frame",
+    "end_frame",
+    "duration_s",
+    "path_length_psml",
+    "path_length_psmr",
+    "mean_speed_psml",
+    "mean_speed_psmr",
+    "gripper_cycles",
+    "motion_energy_mean",
+    "n_frames",
 )
 
 
@@ -56,10 +64,14 @@ def gesture_metrics(
 
     motion = None
     if frames is not None and len(frames) and "motion_energy" in frames:
-        motion = pd.Series(frames["motion_energy"].to_numpy(dtype=np.float64), index=frames["frame_idx"].to_numpy())
+        motion = pd.Series(
+            frames["motion_energy"].to_numpy(dtype=np.float64), index=frames["frame_idx"].to_numpy()
+        )
 
     rows: list[dict] = []
-    for start, end, gesture in transcript[["start_frame", "end_frame", "gesture"]].itertuples(index=False):
+    for start, end, gesture in transcript[["start_frame", "end_frame", "gesture"]].itertuples(
+        index=False
+    ):
         start, end = int(start), int(end)
         mask = (frame_1based >= start) & (frame_1based <= end)
         n = int(mask.sum())
@@ -80,7 +92,8 @@ def gesture_metrics(
                 "path_length_psmr": pl_r,
                 "mean_speed_psml": sp_l,
                 "mean_speed_psmr": sp_r,
-                "gripper_cycles": _upward_crossings(grip_l[mask], GRIPPER_OPEN) + _upward_crossings(grip_r[mask], GRIPPER_OPEN),
+                "gripper_cycles": _upward_crossings(grip_l[mask], GRIPPER_OPEN)
+                + _upward_crossings(grip_r[mask], GRIPPER_OPEN),
                 "motion_energy_mean": me,
                 "n_frames": n,
             }

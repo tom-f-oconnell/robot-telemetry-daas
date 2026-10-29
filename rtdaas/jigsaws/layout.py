@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
@@ -32,14 +32,30 @@ log = logging.getLogger(__name__)
 TASKS: tuple[str, ...] = ("Suturing", "Knot_Tying", "Needle_Passing")
 ARM_ORDER: tuple[str, ...] = ("mtml", "mtmr", "psml", "psmr")
 ARM_FIELDS: tuple[str, ...] = (
-    "x", "y", "z",
-    "r11", "r12", "r13", "r21", "r22", "r23", "r31", "r32", "r33",
-    "vx", "vy", "vz",
-    "wx", "wy", "wz",
+    "x",
+    "y",
+    "z",
+    "r11",
+    "r12",
+    "r13",
+    "r21",
+    "r22",
+    "r23",
+    "r31",
+    "r32",
+    "r33",
+    "vx",
+    "vy",
+    "vz",
+    "wx",
+    "wy",
+    "wz",
     "gripper",
 )
 N_KINEMATIC_COLUMNS = len(ARM_ORDER) * len(ARM_FIELDS)  # 76
-KINEMATIC_COLUMNS: tuple[str, ...] = tuple(f"{arm}_{field}" for arm in ARM_ORDER for field in ARM_FIELDS)
+KINEMATIC_COLUMNS: tuple[str, ...] = tuple(
+    f"{arm}_{field}" for arm in ARM_ORDER for field in ARM_FIELDS
+)
 
 SKILL_LEVELS: dict[str, str] = {"N": "novice", "I": "intermediate", "E": "expert"}
 VIDEO_EXTENSIONS: tuple[str, ...] = (".avi", ".mp4", ".mkv", ".mov")
@@ -208,7 +224,9 @@ def label_frames(kin: pd.DataFrame, transcript: pd.DataFrame | None) -> pd.DataF
     labels = np.full(len(out), None, dtype=object)
     if transcript is not None and len(transcript):
         frame_1based = out["frame_idx"].to_numpy() + 1
-        for start, end, gesture in transcript[["start_frame", "end_frame", "gesture"]].itertuples(index=False):
+        for start, end, gesture in transcript[["start_frame", "end_frame", "gesture"]].itertuples(
+            index=False
+        ):
             mask = (frame_1based >= int(start)) & (frame_1based <= int(end))
             labels[mask] = gesture
     out["gesture"] = labels

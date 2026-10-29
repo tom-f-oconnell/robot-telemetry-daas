@@ -107,8 +107,16 @@ def kafka_record_schema(msg_schema: dict[str, Any], topic: str) -> dict[str, Any
         "namespace": KAFKA_NAMESPACE,
         "doc": f"Kafka value for topic {topic}: bridge envelope around {msg_schema.get('namespace')}.{msg_schema['name']}.",
         "fields": [
-            {"name": "robot_id", "type": "string", "doc": "Fleet-wide robot identifier, e.g. dv-001."},
-            {"name": "ros_topic", "type": "string", "doc": "Fully-qualified ROS 2 topic the message came from."},
+            {
+                "name": "robot_id",
+                "type": "string",
+                "doc": "Fleet-wide robot identifier, e.g. dv-001.",
+            },
+            {
+                "name": "ros_topic",
+                "type": "string",
+                "doc": "Fully-qualified ROS 2 topic the message came from.",
+            },
             {"name": "recv_time_ns", "type": "long", "doc": "bridge receive time, UNIX ns"},
             {"name": "msg", "type": msg_schema},
         ],
@@ -140,7 +148,9 @@ def generate_all(registry: MsgRegistry, topics: dict[str, str], out_dir: str | P
     for topic in sorted(topics):
         msg = registry.get(topics[topic])
         path = out_dir / "kafka" / f"{topic}.avsc"
-        path.write_text(dump_schema(kafka_record_schema(msg_to_avro(msg, registry), topic)), encoding="utf-8")
+        path.write_text(
+            dump_schema(kafka_record_schema(msg_to_avro(msg, registry), topic)), encoding="utf-8"
+        )
         written.append(path)
     return written
 
@@ -152,5 +162,7 @@ def render_all(registry: MsgRegistry, topics: dict[str, str]) -> dict[str, str]:
         out[f"{msg.package}.{msg.name}.avsc"] = dump_schema(msg_to_avro(msg, registry))
     for topic in sorted(topics):
         msg = registry.get(topics[topic])
-        out[f"kafka/{topic}.avsc"] = dump_schema(kafka_record_schema(msg_to_avro(msg, registry), topic))
+        out[f"kafka/{topic}.avsc"] = dump_schema(
+            kafka_record_schema(msg_to_avro(msg, registry), topic)
+        )
     return out

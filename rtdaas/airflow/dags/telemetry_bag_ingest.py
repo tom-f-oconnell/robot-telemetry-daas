@@ -1,6 +1,6 @@
 """DAG ``telemetry_bag_ingest`` — daily: bags for the day -> raw tables -> sessions/KPIs -> gate -> publish.
 
-    wait_for_bags (S3KeySensor) -> spark_batch_mcap -> quality_gate -> publish_snowflake -> index_es_sessions
+wait_for_bags (S3KeySensor) -> spark_batch_mcap -> quality_gate -> publish_snowflake -> index_es_sessions
 """
 
 from __future__ import annotations
@@ -74,17 +74,27 @@ with DAG(
         soft_fail=False,
     )
 
-    spark_batch_mcap = spark_task("spark_batch_mcap", "batch_mcap.py", ["--date", "{{ ds }}"], executors=4)
+    spark_batch_mcap = spark_task(
+        "spark_batch_mcap", "batch_mcap.py", ["--date", "{{ ds }}"], executors=4
+    )
 
     quality_gate = spark_task(
-        "quality_gate", "quality_gate.py",
+        "quality_gate",
+        "quality_gate.py",
         ["--suite", suite_path("telemetry.yml"), "--partition", "{{ ds }}"],
-        executors=1, retries=0,
+        executors=1,
+        retries=0,
     )
 
     publish_snowflake = spark_task(
-        "publish_snowflake", "publish_snowflake.py",
-        ["--date", "{{ ds }}", "--target", "{{ var.value.get('rtdaas_publish_target', 'duckdb') }}"],
+        "publish_snowflake",
+        "publish_snowflake.py",
+        [
+            "--date",
+            "{{ ds }}",
+            "--target",
+            "{{ var.value.get('rtdaas_publish_target', 'duckdb') }}",
+        ],
         executors=1,
     )
 

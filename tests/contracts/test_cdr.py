@@ -24,7 +24,9 @@ def test_golden_std_msgs_string(msg_registry: MsgRegistry):
 
 def test_empty_string_and_big_endian_decode(msg_registry: MsgRegistry):
     codec = CdrCodec(_registry_with_string(msg_registry))
-    assert codec.encode("std_msgs/String", {"data": ""}) == bytes.fromhex("00010000 01000000 00".replace(" ", ""))
+    assert codec.encode("std_msgs/String", {"data": ""}) == bytes.fromhex(
+        "00010000 01000000 00".replace(" ", "")
+    )
     be = b"\x00\x00\x00\x00" + struct.pack(">I", 3) + b"hi\x00"
     assert codec.decode("std_msgs/String", be) == {"data": "hi"}
 
@@ -73,7 +75,13 @@ def test_alignment_padding_after_odd_string(msg_registry: MsgRegistry):
         ),
         (
             "rtdaas_msgs/SystemEvent",
-            {"header": {"stamp": {"sec": 9, "nanosec": 0}, "frame_id": ""}, "arm": "", "severity": 2, "code": "JOINT_LIMIT_WARN", "message": "x"},
+            {
+                "header": {"stamp": {"sec": 9, "nanosec": 0}, "frame_id": ""},
+                "arm": "",
+                "severity": 2,
+                "code": "JOINT_LIMIT_WARN",
+                "message": "x",
+            },
         ),
         (
             "rtdaas_msgs/Heartbeat",

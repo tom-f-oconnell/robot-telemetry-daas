@@ -56,7 +56,10 @@ class DuckDBBackend(SqlBackendBase):
         )
         self.es = ElasticsearchClient(self.settings.es_url) if self.settings.es_url else None
         if self.es and not self.es.ping():
-            log.info("Elasticsearch not reachable at %s; events/gestures served from SQL", self.settings.es_url)
+            log.info(
+                "Elasticsearch not reachable at %s; events/gestures served from SQL",
+                self.settings.es_url,
+            )
             self.es = None
 
     # ------------------------------------------------------------------ setup
@@ -67,17 +70,19 @@ class DuckDBBackend(SqlBackendBase):
             self._conn.execute(
                 f"""CREATE OR REPLACE SECRET lake_s3 (
                         TYPE S3, KEY_ID '{s.s3_access_key}', SECRET '{s.s3_secret_key}',
-                        ENDPOINT '{s.s3_endpoint.replace('http://', '').replace('https://', '')}',
-                        URL_STYLE 'path', USE_SSL {'true' if s.s3_endpoint.startswith('https') else 'false'})"""
+                        ENDPOINT '{s.s3_endpoint.replace("http://", "").replace("https://", "")}',
+                        URL_STYLE 'path', USE_SSL {"true" if s.s3_endpoint.startswith("https") else "false"})"""
             )
             self._conn.execute(
-                f"""ATTACH '{s.iceberg_warehouse.replace('s3a://', 's3://')}' AS lake (
+                f"""ATTACH '{s.iceberg_warehouse.replace("s3a://", "s3://")}' AS lake (
                         TYPE ICEBERG, ENDPOINT '{s.iceberg_rest_uri}', AUTHORIZATION_TYPE 'none')"""
             )
             self.mode = "iceberg"
             log.info("attached Iceberg REST catalog %s as 'lake'", s.iceberg_rest_uri)
         except Exception as exc:
-            log.warning("Iceberg catalog unavailable (%s); falling back to Parquet stage/DuckDB file", exc)
+            log.warning(
+                "Iceberg catalog unavailable (%s); falling back to Parquet stage/DuckDB file", exc
+            )
             self._create_stage_views()
 
     def _create_stage_views(self) -> None:
@@ -135,14 +140,18 @@ class DuckDBBackend(SqlBackendBase):
     # ------------------------------------------------------------------ ES-backed search
     def events(self, q=None, robot_id=None, severity_min=None, start=None, end=None, limit=200):
         if self.es is not None:
-            hits = self.es.search_events(q=q, robot_id=robot_id, severity_min=severity_min, start=start, end=end, limit=limit)
+            hits = self.es.search_events(
+                q=q, robot_id=robot_id, severity_min=severity_min, start=start, end=end, limit=limit
+            )
             if hits is not None:
                 return hits
         return super().events(q, robot_id, severity_min, start, end, limit)
 
     def gestures(self, task=None, gesture=None, skill_level=None, limit=500):
         if self.es is not None:
-            hits = self.es.search_gestures(task=task, gesture=gesture, skill_level=skill_level, limit=limit)
+            hits = self.es.search_gestures(
+                task=task, gesture=gesture, skill_level=skill_level, limit=limit
+            )
             if hits is not None:
                 return hits
         return super().gestures(task, gesture, skill_level, limit)

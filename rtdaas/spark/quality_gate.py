@@ -39,12 +39,22 @@ EXIT_BLOCKED = 2
 
 
 def parse_args(argv=None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--suite", required=True, action="append", help="suite YAML (repeatable)")
-    p.add_argument("--partition", default=None, help="YYYY-MM-DD applied to each table's partition_column")
+    p.add_argument(
+        "--partition", default=None, help="YYYY-MM-DD applied to each table's partition_column"
+    )
     p.add_argument("--run-id", default=None)
-    p.add_argument("--no-record", action="store_true", help="do not append results to dq.check_results")
-    p.add_argument("--allow-blocking", action="store_true", help="exit 0 even on blocking failures (reporting runs)")
+    p.add_argument(
+        "--no-record", action="store_true", help="do not append results to dq.check_results"
+    )
+    p.add_argument(
+        "--allow-blocking",
+        action="store_true",
+        help="exit 0 even on blocking failures (reporting runs)",
+    )
     return p.parse_args(argv)
 
 
@@ -65,7 +75,12 @@ def run(
     for path in suites:
         suite = load_suite(path)
         res = run_suite(suite, adapter, partition_value=partition, run_id=run_id)
-        log.info("suite %s: %d checks, %d non-passing", suite.get("suite"), len(res), sum(r.status != "pass" for r in res))
+        log.info(
+            "suite %s: %d checks, %d non-passing",
+            suite.get("suite"),
+            len(res),
+            sum(r.status != "pass" for r in res),
+        )
         results.extend(res)
 
     if record and results:
@@ -82,13 +97,17 @@ def main(argv=None) -> int:
     settings = get_settings()
     suites = [Path(s) for s in args.suite]
     spark = build_spark("rtdaas-quality-gate", settings)
-    run_id, results = run(spark, settings, suites, args.partition, args.run_id, record=not args.no_record)
+    run_id, results = run(
+        spark, settings, suites, args.partition, args.run_id, record=not args.no_record
+    )
 
     report = summary(results)
     if report:
         log.warning("non-passing checks (run_id=%s):\n%s", run_id, report)
     blocked = has_blocking_failures(results)
-    log.info("quality gate run_id=%s partition=%s blocking_failures=%s", run_id, args.partition, blocked)
+    log.info(
+        "quality gate run_id=%s partition=%s blocking_failures=%s", run_id, args.partition, blocked
+    )
     if blocked and not args.allow_blocking:
         return EXIT_BLOCKED
     return EXIT_OK

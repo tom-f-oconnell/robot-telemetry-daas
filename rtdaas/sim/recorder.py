@@ -17,7 +17,9 @@ from rtdaas.mcap_lite.writer import McapWriter
 
 
 class McapRecorder:
-    def __init__(self, out_path: str | Path, registry: MsgRegistry, topics: dict[str, str] | None = None) -> None:
+    def __init__(
+        self, out_path: str | Path, registry: MsgRegistry, topics: dict[str, str] | None = None
+    ) -> None:
         """``topics`` maps Kafka topic -> message type; its schemas are registered up front."""
         self.path = Path(out_path)
         self.registry = registry
@@ -32,7 +34,9 @@ class McapRecorder:
     def _schema_id(self, type_name: str) -> int:
         sid = self._schema_ids.get(type_name)
         if sid is None:
-            sid = self._writer.add_schema(type_name, "ros2msg", self.registry.ros2msg_schema_text(type_name))
+            sid = self._writer.add_schema(
+                type_name, "ros2msg", self.registry.ros2msg_schema_text(type_name)
+            )
             self._schema_ids[type_name] = sid
         return sid
 

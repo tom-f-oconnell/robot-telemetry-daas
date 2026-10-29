@@ -41,7 +41,12 @@ log = logging.getLogger(__name__)
 
 
 class McapWriter:
-    def __init__(self, path: str | Path | BinaryIO, profile: str = "ros2", library: str = "rtdaas.mcap_lite 0.1") -> None:
+    def __init__(
+        self,
+        path: str | Path | BinaryIO,
+        profile: str = "ros2",
+        library: str = "rtdaas.mcap_lite 0.1",
+    ) -> None:
         if isinstance(path, (str, Path)):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             self._fh: BinaryIO = open(path, "wb")
@@ -85,13 +90,25 @@ class McapWriter:
         self._write(schema.pack())
         return sid
 
-    def add_channel(self, topic: str, message_encoding: str, schema_id: int, metadata: dict[str, str] | None = None) -> int:
+    def add_channel(
+        self,
+        topic: str,
+        message_encoding: str,
+        schema_id: int,
+        metadata: dict[str, str] | None = None,
+    ) -> int:
         if topic in self._channel_ids_by_topic:
             return self._channel_ids_by_topic[topic]
         if schema_id != 0 and schema_id not in self._schemas:
             raise ValueError(f"unknown schema id {schema_id}")
         cid = len(self._channels)  # channel ids start at 0 like rosbag2
-        channel = McapChannel(id=cid, topic=topic, message_encoding=message_encoding, schema_id=schema_id, metadata=dict(metadata or {}))
+        channel = McapChannel(
+            id=cid,
+            topic=topic,
+            message_encoding=message_encoding,
+            schema_id=schema_id,
+            metadata=dict(metadata or {}),
+        )
         self._channels[cid] = channel
         self._channel_ids_by_topic[topic] = cid
         self._counts[cid] = 0
@@ -99,13 +116,22 @@ class McapWriter:
         self._write(channel.pack())
         return cid
 
-    def write_message(self, channel_id: int, log_time_ns: int, publish_time_ns: int, data: bytes, sequence: int | None = None) -> None:
+    def write_message(
+        self,
+        channel_id: int,
+        log_time_ns: int,
+        publish_time_ns: int,
+        data: bytes,
+        sequence: int | None = None,
+    ) -> None:
         if channel_id not in self._channels:
             raise ValueError(f"unknown channel id {channel_id}")
         if sequence is None:
             sequence = self._sequence[channel_id]
         self._sequence[channel_id] = sequence + 1
-        self._write(McapMessage(channel_id, sequence, log_time_ns, publish_time_ns, bytes(data)).pack())
+        self._write(
+            McapMessage(channel_id, sequence, log_time_ns, publish_time_ns, bytes(data)).pack()
+        )
         self._counts[channel_id] += 1
         self._message_count += 1
         if self._start is None or log_time_ns < self._start:
@@ -152,7 +178,13 @@ class McapWriter:
         for g in groups:
             self._write(g.pack())
 
-        self._write(McapFooter(summary_start=summary_start, summary_offset_start=summary_offset_start, summary_crc=0).pack())
+        self._write(
+            McapFooter(
+                summary_start=summary_start,
+                summary_offset_start=summary_offset_start,
+                summary_crc=0,
+            ).pack()
+        )
         self._write(MAGIC)
         self._fh.flush()
         if self._owns:

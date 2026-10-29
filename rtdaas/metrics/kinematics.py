@@ -9,7 +9,7 @@ metres for ``x, y, z``; speeds are in m/s. They are pure functions so the Spark 
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
@@ -25,12 +25,26 @@ SEVERITY_WARN = 2
 SEVERITY_ERROR = 3
 
 KPI_METRIC_COLUMNS: tuple[str, ...] = (
-    "n_samples", "mean_speed_mps", "max_speed_mps", "path_length_m", "idle_fraction",
-    "jaw_cycles", "warn_events", "error_events", "heartbeat_gap_s",
+    "n_samples",
+    "mean_speed_mps",
+    "max_speed_mps",
+    "path_length_m",
+    "idle_fraction",
+    "jaw_cycles",
+    "warn_events",
+    "error_events",
+    "heartbeat_gap_s",
 )
 SESSION_METRIC_KEYS: tuple[str, ...] = (
-    "duration_s", "n_samples", "path_length_m", "mean_speed_mps", "idle_fraction",
-    "jaw_cycles", "warn_events", "error_events", "instrument_swaps",
+    "duration_s",
+    "n_samples",
+    "path_length_m",
+    "mean_speed_mps",
+    "idle_fraction",
+    "jaw_cycles",
+    "warn_events",
+    "error_events",
+    "instrument_swaps",
 )
 
 
@@ -45,7 +59,13 @@ def to_utc(ts: pd.Series | np.ndarray | list) -> pd.Series:
 def _to_ns(ts: pd.Series | np.ndarray | list) -> np.ndarray:
     """UTC timestamps -> int64 nanoseconds since epoch (tz-safe under pandas 2 and 3)."""
     t = to_utc(ts)
-    return t.dt.tz_convert("UTC").dt.tz_localize(None).to_numpy().astype("datetime64[ns]").astype(np.int64)
+    return (
+        t.dt.tz_convert("UTC")
+        .dt.tz_localize(None)
+        .to_numpy()
+        .astype("datetime64[ns]")
+        .astype(np.int64)
+    )
 
 
 def _ts_seconds(ts: pd.Series) -> np.ndarray:
@@ -115,7 +135,9 @@ def jaw_cycles(jaw_angle: pd.Series | np.ndarray, threshold: float = JAW_OPEN_RA
     return int(np.count_nonzero(~above[:-1] & above[1:]))
 
 
-def _count_events(events: pd.DataFrame | None, start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> tuple[int, int, int]:
+def _count_events(
+    events: pd.DataFrame | None, start: pd.Timestamp | None = None, end: pd.Timestamp | None = None
+) -> tuple[int, int, int]:
     """(warn_events, error_events, instrument_swaps) inside [start, end] (inclusive)."""
     if events is None or len(events) == 0:
         return 0, 0, 0
@@ -128,7 +150,11 @@ def _count_events(events: pd.DataFrame | None, start: pd.Timestamp | None = None
         if end is not None:
             mask &= ts_ns <= _stamp_ns(end)
         ev = ev.loc[mask]
-    sev = pd.to_numeric(ev["severity"], errors="coerce").fillna(0).to_numpy() if "severity" in ev else np.zeros(len(ev))
+    sev = (
+        pd.to_numeric(ev["severity"], errors="coerce").fillna(0).to_numpy()
+        if "severity" in ev
+        else np.zeros(len(ev))
+    )
     warn = int(np.count_nonzero(sev == SEVERITY_WARN))
     err = int(np.count_nonzero(sev >= SEVERITY_ERROR))
     swaps = int((ev["code"] == INSTRUMENT_SWAP).sum()) if "code" in ev else 0
@@ -144,7 +170,9 @@ def session_metrics(pose: pd.DataFrame, events: pd.DataFrame | None = None) -> d
     """
     n = len(pose)
     result: dict = {k: 0 for k in SESSION_METRIC_KEYS}
-    result.update({"duration_s": 0.0, "path_length_m": 0.0, "mean_speed_mps": 0.0, "idle_fraction": 0.0})
+    result.update(
+        {"duration_s": 0.0, "path_length_m": 0.0, "mean_speed_mps": 0.0, "idle_fraction": 0.0}
+    )
     start = end = None
     if n:
         pose = _ensure_sorted(pose)
@@ -154,7 +182,11 @@ def session_metrics(pose: pd.DataFrame, events: pd.DataFrame | None = None) -> d
         result["duration_s"] = float(t[-1] - t[0])
         result["n_samples"] = int(n)
         result["path_length_m"] = path_length(pose)
-        result["mean_speed_mps"] = float(result["path_length_m"] / result["duration_s"]) if result["duration_s"] > 0 else 0.0
+        result["mean_speed_mps"] = (
+            float(result["path_length_m"] / result["duration_s"])
+            if result["duration_s"] > 0
+            else 0.0
+        )
         result["idle_fraction"] = float(np.mean(v[1:] < IDLE_SPEED_MPS)) if n > 1 else 1.0
         result["jaw_cycles"] = jaw_cycles(pose["jaw_angle"]) if "jaw_angle" in pose else 0
     warn, err, swaps = _count_events(events, start, end)
@@ -190,7 +222,11 @@ def kpi_windows(
     step = np.zeros(len(pose))
     step[1:] = np.linalg.norm(np.diff(xyz, axis=0), axis=1)
     starts, delta = _window_bounds(pose["ts"], window)
-    jaw = pose["jaw_angle"].to_numpy(dtype=np.float64) if "jaw_angle" in pose else np.full(len(pose), np.nan)
+    jaw = (
+        pose["jaw_angle"].to_numpy(dtype=np.float64)
+        if "jaw_angle" in pose
+        else np.full(len(pose), np.nan)
+    )
 
     hb_ns = None
     if heartbeat is not None and len(heartbeat):
@@ -218,7 +254,9 @@ def kpi_windows(
                 "mean_speed_mps": float(sp_defined.mean()) if sp_defined.size else 0.0,
                 "max_speed_mps": float(sp_defined.max()) if sp_defined.size else 0.0,
                 "path_length_m": float(step[ii].sum()),
-                "idle_fraction": float(np.mean(sp_defined < IDLE_SPEED_MPS)) if sp_defined.size else 1.0,
+                "idle_fraction": float(np.mean(sp_defined < IDLE_SPEED_MPS))
+                if sp_defined.size
+                else 1.0,
                 "jaw_cycles": jaw_cycles(jaw[ii]),
                 "warn_events": warn,
                 "error_events": err,
@@ -261,7 +299,9 @@ def split_sessions(
             sessions: list[tuple[pd.Timestamp, pd.Timestamp]] = []
             for i, s in enumerate(starts):
                 next_start = starts[i + 1] if i + 1 < len(starts) else None
-                candidate_ends = [e for e in ends if e >= s and (next_start is None or e < next_start)]
+                candidate_ends = [
+                    e for e in ends if e >= s and (next_start is None or e < next_start)
+                ]
                 if candidate_ends:
                     e = candidate_ends[0]
                 elif next_start is not None:
@@ -294,7 +334,9 @@ def session_id(robot_id: str, start_ts: pd.Timestamp) -> str:
     return f"{robot_id}-{t.strftime('%Y%m%dT%H%M%S')}"
 
 
-def assign_sessions(ts: pd.Series, sessions: Iterable[tuple[pd.Timestamp, pd.Timestamp]]) -> np.ndarray:
+def assign_sessions(
+    ts: pd.Series, sessions: Iterable[tuple[pd.Timestamp, pd.Timestamp]]
+) -> np.ndarray:
     """Map each timestamp to the index of its session (-1 if outside every session)."""
     t = _to_ns(ts)
     out = np.full(len(t), -1, dtype=np.int64)

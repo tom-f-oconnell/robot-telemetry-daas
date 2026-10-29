@@ -51,10 +51,20 @@ class ElasticsearchClient:
             rng["lte"] = end
         return {"range": {field: rng}}
 
-    def search_events(self, q=None, robot_id=None, severity_min=None, start=None, end=None, limit=200):
+    def search_events(
+        self, q=None, robot_id=None, severity_min=None, start=None, end=None, limit=200
+    ):
         must: list[dict] = []
         if q:
-            must.append({"query_string": {"query": q, "fields": ["code", "message", "arm"], "default_operator": "AND"}})
+            must.append(
+                {
+                    "query_string": {
+                        "query": q,
+                        "fields": ["code", "message", "arm"],
+                        "default_operator": "AND",
+                    }
+                }
+            )
         if robot_id:
             must.append({"term": {"robot_id": robot_id}})
         if severity_min is not None:
@@ -62,11 +72,19 @@ class ElasticsearchClient:
         rng = self._range("ts", start, end)
         if rng:
             must.append(rng)
-        body = {"size": int(limit), "sort": [{"ts": "desc"}], "query": {"bool": {"must": must or [{"match_all": {}}]}}}
+        body = {
+            "size": int(limit),
+            "sort": [{"ts": "desc"}],
+            "query": {"bool": {"must": must or [{"match_all": {}}]}},
+        }
         return self._search(EVENTS_INDEX, body)
 
     def search_gestures(self, task=None, gesture=None, skill_level=None, limit=500):
-        must: list[dict] = [{"term": {k: v}} for k, v in (("task", task), ("gesture", gesture), ("skill_level", skill_level)) if v]
+        must: list[dict] = [
+            {"term": {k: v}}
+            for k, v in (("task", task), ("gesture", gesture), ("skill_level", skill_level))
+            if v
+        ]
         body = {
             "size": int(limit),
             "sort": [{"task": "asc"}, {"trial_id": "asc"}, {"start_frame": "asc"}],
