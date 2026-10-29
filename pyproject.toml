@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtdaas"
+version = "0.1.0"
+description = "Robot Telemetry Data-as-a-Service: ROS 2 -> Kafka/Spark/Airflow -> Iceberg/Elasticsearch/Snowflake platform"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Thomas O'Connell" }]
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "pydantic>=2.5",
+  "PyYAML>=6.0",
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+api = [
+  "starlette>=0.37",
+  "uvicorn[standard]>=0.27",
+  "python-multipart>=0.0.9",
+  "duckdb>=1.1",
+  "elasticsearch>=8.12,<9",
+  "prometheus-client>=0.20",
+]
+kafka = [
+  "confluent-kafka>=2.5",
+  "fastavro>=1.9",
+]
+spark = [
+  "pyspark==3.5.3",
+  "pyarrow>=14",
+  "elasticsearch>=8.12,<9",
+  "opencv-python-headless>=4.9",
+  "snowflake-connector-python>=3.10",
+  "duckdb>=1.1",
+  "fastavro>=1.9",
+]
+video = [
+  "opencv-python-headless>=4.9",
+]
+airflow = [
+  "apache-airflow==2.10.3",
+  "apache-airflow-providers-amazon>=9.0",
+  "apache-airflow-providers-apache-spark>=4.11",
+  "apache-airflow-providers-cncf-kubernetes>=9.0",
+  "apache-airflow-providers-elasticsearch>=5.5",
+]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=5",
+  "ruff>=0.6",
+  "mypy>=1.10",
+  "httpx>=0.27",
+  "mcap>=1.2",
+  "mkdocs-material>=9.5",
+  "chispa>=0.10",
+]
+
+[project.scripts]
+rtdaas-contracts = "rtdaas.contracts.cli:main"
+rtdaas-sim = "rtdaas.sim.cli:main"
+rtdaas-jigsaws = "rtdaas.jigsaws.cli:main"
+rtdaas-quality = "rtdaas.quality.cli:main"
+rtdaas-local = "rtdaas.local.cli:main"
+rtdaas-api = "rtdaas.serving.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["rtdaas*"]
+
+[tool.setuptools.package-data]
+rtdaas = ["serving/openapi.yaml", "serving/catalog.yml", "serving/static/**/*", "spark/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "spark: requires pyspark (run in CI 'spark' job)",
+  "airflow: requires apache-airflow (run in CI 'airflow' job)",
+  "integration: requires running services",
+  "slow: slow tests",
+]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["ros2", "infra", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true

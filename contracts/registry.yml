@@ -1,0 +1,29 @@
+# Data-contract registry: which ROS message type backs each Kafka topic, and how
+# the schema registry is configured. `rtdaas-contracts gen` reads this file.
+compatibility: BACKWARD
+subject_suffix: -value
+topics:
+  rtdaas.telemetry.joint_states:
+    type: sensor_msgs/JointState
+    partitions: 12
+    retention_ms: 604800000      # 7 days
+    ros_topic_pattern: "/{robot_id}/{arm}/measured_js"
+    description: Joint positions, velocities and efforts for every arm, as published by the dVRK.
+  rtdaas.telemetry.tool_pose:
+    type: rtdaas_msgs/ToolPose
+    partitions: 12
+    retention_ms: 604800000
+    ros_topic_pattern: "/{robot_id}/{arm}/rtdaas/tool_pose"
+    description: Instrument tip Cartesian pose, jaw angle and speed, composed by the tool_pose_adapter node.
+  rtdaas.telemetry.events:
+    type: rtdaas_msgs/SystemEvent
+    partitions: 3
+    retention_ms: 2592000000     # 30 days
+    ros_topic_pattern: "/{robot_id}/rtdaas/events"
+    description: Discrete system events (session boundaries, instrument swaps, clutch, joint-limit warnings, e-stop).
+  rtdaas.telemetry.heartbeat:
+    type: rtdaas_msgs/Heartbeat
+    partitions: 3
+    retention_ms: 2592000000
+    ros_topic_pattern: "/{robot_id}/rtdaas/heartbeat"
+    description: 1 Hz liveness and coarse operating state per robot.

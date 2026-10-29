@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+data/
+site/
+.env
+*.sqlite
+*.duckdb
+.terraform/
+*.tfstate*
+.terraform.lock.hcl
+ros2/build/ ros2/install/ ros2/log/
