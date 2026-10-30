@@ -382,10 +382,17 @@ def resolve_media(video_path: str | None, media_root: Path) -> Path | None:
     """Resolve a trial's video path to a readable file.
 
     Absolute paths are honoured if they exist (local pipeline output); otherwise the path is
-    taken relative to ``MEDIA_ROOT`` and must stay inside it (no ``..`` escapes).
+    taken relative to ``MEDIA_ROOT`` and must stay inside it (no ``..`` escapes). Object-store
+    URIs (``s3a://<bucket>/<key>``, as written by the Spark jobs) resolve to ``MEDIA_ROOT/<key>``,
+    i.e. ``MEDIA_ROOT`` is treated as a local mirror of the raw bucket.
     """
     if not video_path:
         return None
+    scheme, sep, rest = video_path.partition("://")
+    if sep and scheme in ("s3", "s3a", "s3n"):
+        video_path = rest.partition("/")[2]  # drop the bucket
+        if not video_path:
+            return None
     p = Path(video_path)
     if p.is_absolute() and p.is_file():
         return p

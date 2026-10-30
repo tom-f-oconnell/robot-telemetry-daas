@@ -99,8 +99,10 @@ with DAG(
         [
             "--root",
             f"s3a://{RAW_BUCKET}/jigsaws",
-            "{% if params.task %}--task{% endif %}",
-            "{% if params.task %}{{ params.task }}{% endif %}",
+            # always a pair: a conditional arg would render to "" and argparse rejects a stray
+            # empty positional; an empty --task value means "every task"
+            "--task",
+            "{{ params.task or '' }}",
         ],
         executors=4,
         execution_timeout=dt.timedelta(hours=6),

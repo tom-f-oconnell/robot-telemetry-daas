@@ -24,6 +24,7 @@ api = [
   "uvicorn[standard]>=0.27",
   "python-multipart>=0.0.9",
   "duckdb>=1.1",
+  "pytz>=2024.1",  # DuckDB returns TIMESTAMPTZ via pytz; pandas >= 3 no longer pulls it in
   "elasticsearch>=8.12,<9",
   "prometheus-client>=0.20",
 ]
@@ -39,6 +40,7 @@ spark = [
   "imageio-ffmpeg>=0.5",
   "snowflake-connector-python>=3.10",
   "duckdb>=1.1",
+  "pytz>=2024.1",  # see api
   "fastavro>=1.9",
   "zstandard>=0.22",
   "lz4>=4.3",

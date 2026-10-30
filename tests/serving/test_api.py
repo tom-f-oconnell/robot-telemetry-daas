@@ -101,6 +101,19 @@ def test_video_range(client):
     assert bad.status_code == 416
 
 
+def test_resolve_media_object_store_uri(tmp_path):
+    from rtdaas.serving.app import resolve_media
+
+    video = tmp_path / "jigsaws" / "Suturing" / "video" / "Suturing_B001_capture1.mp4"
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"\0")
+    uri = "s3a://rtdaas-raw/jigsaws/Suturing/video/Suturing_B001_capture1.mp4"
+    assert resolve_media(uri, tmp_path) == video
+    assert resolve_media("s3://rtdaas-raw/jigsaws/missing.mp4", tmp_path) is None
+    assert resolve_media("s3a://rtdaas-raw/../../etc/passwd", tmp_path) is None
+    assert resolve_media("s3a://rtdaas-raw", tmp_path) is None
+
+
 def test_gestures_and_quality(client):
     g = client.get("/api/gestures", params={"task": "Suturing"}).json()["gestures"]
     assert g and g[0]["task"] == "Suturing" and re.match(r"G\d+", g[0]["gesture"])

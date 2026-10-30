@@ -33,8 +33,9 @@ airflow connections add rtdaas_s3 \
   --conn-password "${S3_SECRET_KEY:-minioadmin}" \
   --conn-extra "{\"endpoint_url\": \"${S3_ENDPOINT:-http://minio:9000}\", \"region_name\": \"us-east-1\"}"
 
-airflow connections delete rtdaas_spark >/dev/null 2>&1 || true
-airflow connections add rtdaas_spark \
+# spark_default is what the DAGs' SparkSubmitOperator uses (rtdaas/airflow/dags/_common.py)
+airflow connections delete spark_default >/dev/null 2>&1 || true
+airflow connections add spark_default \
   --conn-type spark \
   --conn-host spark://spark-master \
   --conn-port 7077 \
@@ -48,6 +49,13 @@ if [[ -n "${SNOWFLAKE_ACCOUNT:-}" && -n "${SNOWFLAKE_USER:-}" ]]; then
     --conn-login "${SNOWFLAKE_USER}" \
     --conn-password "${SNOWFLAKE_PASSWORD:-}" \
     --conn-extra "{\"account\": \"${SNOWFLAKE_ACCOUNT}\", \"warehouse\": \"${SNOWFLAKE_WAREHOUSE:-}\", \"database\": \"${SNOWFLAKE_DATABASE:-RTDAAS}\", \"role\": \"${SNOWFLAKE_ROLE:-}\"}"
+fi
+
+# Runs as root (compose `user: "0:0"`): hand the logs volume to the uid the other Airflow
+# containers run as, last so it also covers anything created above.
+if [[ $(id -u) == 0 ]]; then
+  echo "Handing /opt/airflow/logs to ${RTDAAS_UID:-50000}:0 ..."
+  chown -R "${RTDAAS_UID:-50000}:0" /opt/airflow/logs
 fi
 
 echo "airflow-init done."

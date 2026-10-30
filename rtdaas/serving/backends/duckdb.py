@@ -7,6 +7,10 @@ Two modes, chosen at construction:
 
        ATTACH '<warehouse>' AS lake (TYPE ICEBERG, ENDPOINT '<ICEBERG_REST_URI>', ...)
 
+   DuckDB caches an attached catalog's tables and snapshots, so ``lake`` is re-attached once it
+   is older than ``ICEBERG_REFRESH_S``; otherwise tables created or commits made after startup
+   would never show up.
+
    Tables resolve to ``lake.telemetry.sessions`` etc.  Timestamps are native, arrays are native
    lists and ``procedures.kinematics`` struct columns are read as ``psml.x``.
 
@@ -24,12 +28,15 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 
 from rtdaas.config import Settings
 from rtdaas.serving.backends._sqlbase import SqlBackendBase
 from rtdaas.serving.es import ElasticsearchClient
 
 log = logging.getLogger(__name__)
+
+ICEBERG_REFRESH_S = 30.0
 
 
 class DuckDBBackend(SqlBackendBase):
@@ -73,10 +80,8 @@ class DuckDBBackend(SqlBackendBase):
                         ENDPOINT '{s.s3_endpoint.replace("http://", "").replace("https://", "")}',
                         URL_STYLE 'path', USE_SSL {"true" if s.s3_endpoint.startswith("https") else "false"})"""
             )
-            self._conn.execute(
-                f"""ATTACH '{s.iceberg_warehouse.replace("s3a://", "s3://")}' AS lake (
-                        TYPE ICEBERG, ENDPOINT '{s.iceberg_rest_uri}', AUTHORIZATION_TYPE 'none')"""
-            )
+            self._conn.execute(self._attach_sql())
+            self._attached_at = time.monotonic()
             self.mode = "iceberg"
             log.info("attached Iceberg REST catalog %s as 'lake'", s.iceberg_rest_uri)
         except Exception as exc:
@@ -84,6 +89,22 @@ class DuckDBBackend(SqlBackendBase):
                 "Iceberg catalog unavailable (%s); falling back to Parquet stage/DuckDB file", exc
             )
             self._create_stage_views()
+
+    def _attach_sql(self) -> str:
+        s = self.settings
+        return f"""ATTACH '{s.iceberg_warehouse.replace("s3a://", "s3://")}' AS lake (
+                    TYPE ICEBERG, ENDPOINT '{s.iceberg_rest_uri}', AUTHORIZATION_TYPE 'none')"""
+
+    def _refresh_lake(self) -> None:
+        """Re-attach ``lake`` when stale (see module docstring). Call with ``self._lock`` held."""
+        if self.mode != "iceberg" or time.monotonic() - self._attached_at < ICEBERG_REFRESH_S:
+            return
+        try:
+            self._conn.execute("DETACH DATABASE IF EXISTS lake")
+            self._conn.execute(self._attach_sql())
+            self._attached_at = time.monotonic()
+        except Exception as exc:  # keep the old timestamp so the next query retries
+            log.warning("re-attaching Iceberg catalog failed: %s", exc)
 
     def _create_stage_views(self) -> None:
         """Views over the Snowflake Parquet stage for the published marts."""
@@ -119,12 +140,14 @@ class DuckDBBackend(SqlBackendBase):
 
     def query(self, sql: str, params: tuple = ()) -> list[dict]:
         with self._lock:
+            self._refresh_lake()
             cur = self._conn.execute(sql, list(params))
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
 
     def execute(self, sql: str, params: tuple = ()) -> None:
         with self._lock:
+            self._refresh_lake()
             self._conn.execute(sql, list(params))
 
     def table_exists(self, name: str) -> bool:
@@ -132,6 +155,7 @@ class DuckDBBackend(SqlBackendBase):
             return True
         try:
             with self._lock:
+                self._refresh_lake()
                 self._conn.execute(f"SELECT 1 FROM {self.table(name)} LIMIT 0")
             return True
         except Exception:

@@ -21,10 +21,15 @@ RUN set -eux; \
     curl -fsSL "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz" -o /tmp/spark.tgz; \
     mkdir -p "${SPARK_HOME}"; \
     tar -xzf /tmp/spark.tgz -C "${SPARK_HOME}" --strip-components=1; \
-    rm /tmp/spark.tgz; \
-    chown -R airflow:root "${SPARK_HOME}"
+    rm /tmp/spark.tgz
+# Jobs run their driver here (client mode), so it needs the same connector jars as the cluster.
+COPY infra/docker/spark-jars.sh /tmp/spark-jars.sh
+RUN SPARK_VERSION=${SPARK_VERSION} bash /tmp/spark-jars.sh "${SPARK_HOME}/jars" \
+ && rm /tmp/spark-jars.sh \
+ && chown -R airflow:root "${SPARK_HOME}"
 ENV PATH="${SPARK_HOME}/bin:${PATH}" \
-    JAVA_HOME=/usr/lib/jvm/default-java
+    JAVA_HOME=/usr/lib/jvm/default-java \
+    RTDAAS_SPARK_PACKAGES=0
 
 USER airflow
 # Providers pinned with the official constraints file for this Airflow/Python combination.
@@ -43,6 +48,7 @@ COPY --chown=airflow:root contracts /opt/rtdaas/contracts
 COPY --chown=airflow:root quality /opt/rtdaas/quality
 RUN pip install --no-cache-dir --no-deps /opt/rtdaas \
  && pip install --no-cache-dir "numpy>=1.26" "pandas>=2.1" "pydantic>=2.5" "PyYAML>=6.0" "requests>=2.31" \
+      "duckdb>=1.1" \
       --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
 
 COPY --chown=airflow:root rtdaas/airflow/dags /opt/airflow/dags

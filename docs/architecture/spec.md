@@ -525,7 +525,7 @@ def write_iceberg(df, table: str, mode: str = "append") -> None           # tabl
 def merge_iceberg(spark, df, table: str, keys: list[str]) -> None         # MERGE INTO dedupe upsert via temp view
 def es_bulk(rows: Iterable[dict], index: str, id_fn: Callable[[dict], str], settings) -> int   # elasticsearch-py helpers.bulk
 def strip_wire_header(col)                   # F.expr("substring(value, 6, length(value)-5)")
-# streaming_kpis.py   spark-submit rtdaas/spark/streaming_kpis.py [--trigger 30s]
+# streaming_kpis.py   spark-submit rtdaas/spark/streaming_kpis.py [--trigger "30 seconds"]
 # batch_mcap.py       spark-submit rtdaas/spark/batch_mcap.py --date YYYY-MM-DD [--robot ID] [--input s3a://rtdaas-raw/bags]
 # batch_jigsaws.py    spark-submit rtdaas/spark/batch_jigsaws.py --root s3a://rtdaas-raw/jigsaws [--task Suturing]
 # quality_gate.py     spark-submit rtdaas/spark/quality_gate.py --suite quality/checks/telemetry.yml --partition YYYY-MM-DD   exit 2 on blocking failures

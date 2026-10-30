@@ -65,6 +65,9 @@ class Settings(BaseModel):
     serving_backend: str = "sqlite"
     serving_sqlite_path: str = "./data/rtdaas.sqlite"
     serving_duckdb_path: str = "./data/rtdaas.duckdb"
+    # where `publish_snowflake --target duckdb` loads the marts; defaults to serving_duckdb_path.
+    # Point it elsewhere when the API is running: DuckDB allows one writing process per file.
+    publish_duckdb_path: str | None = None
     media_root: str = "./data"
     api_host: str = "0.0.0.0"
     api_port: int = 8080

@@ -152,6 +152,9 @@ def spark_conf(settings: Settings) -> dict[str, str]:
         "spark.hadoop.fs.s3a.secret.key": settings.s3_secret_key,
         "spark.hadoop.fs.s3a.path.style.access": "true",
         "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+        # the REST catalog reports s3:// table locations; S3FileIO handles those for data, but
+        # remove_orphan_files lists them through a Hadoop FileSystem (S3A reads fs.s3a.* as-is)
+        "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
         "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
         "spark.hadoop.fs.s3a.aws.credentials.provider": "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
         "spark.sql.session.timeZone": "UTC",
@@ -242,6 +245,9 @@ def merge_iceberg(
     ``t`` / ``s``) restricts which matched rows are updated, e.g. ``"t.computed_by <> 'batch'"``.
     """
     src = conform(df, table).dropDuplicates(keys)
+    # Temp views are per-session, and inside foreachBatch the micro-batch DataFrame belongs to a
+    # cloned session, so register, merge and drop through the source's own session, not ``spark``.
+    session = src.sparkSession
     view = f"rtdaas_src_{uuid.uuid4().hex}"
     src.createOrReplaceTempView(view)
     try:
@@ -249,12 +255,12 @@ def merge_iceberg(
         matched = "WHEN MATCHED"
         if matched_condition:
             matched += f" AND ({matched_condition})"
-        spark.sql(
+        session.sql(
             f"MERGE INTO {ddl.CATALOG}.{table} t USING {view} s ON {on} "
             f"{matched} THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *"
         )
     finally:
-        spark.catalog.dropTempView(view)
+        session.catalog.dropTempView(view)
 
 
 def empty_df(spark: SparkSession, table: str) -> DataFrame:

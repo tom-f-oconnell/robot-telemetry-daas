@@ -3,8 +3,9 @@
 #
 #   up      build images (unless RTDAAS_IMAGE_PREFIX points at a registry), start core + demo
 #           profiles, wait for the services, generate a synthetic JIGSAWS dataset under
-#           infra/compose/data/jigsaws, upload it to MinIO, then trigger telemetry_bag_ingest and
-#           jigsaws_ingest once the simulator has written its first bags.
+#           infra/compose/data/jigsaws and a batch of simulated bags under infra/compose/data/bags-batch,
+#           upload both to MinIO, trigger jigsaws_ingest and telemetry_bag_ingest, and start the
+#           live simulator (Kafka) + the streaming job.
 #   down    stop everything (volumes kept)
 #   status  print service health and the URLs
 set -euo pipefail
@@ -54,23 +55,37 @@ up() {
   "$WAIT" "$API_URL/api/health" 120
 
   log "generating a synthetic JIGSAWS dataset and uploading it to s3://rtdaas-raw/jigsaws"
-  "${COMPOSE[@]}" run --rm --no-deps --entrypoint rtdaas-jigsaws sim synth --out /data/jigsaws --trials 2
-  "${COMPOSE[@]}" run --rm --no-deps --entrypoint aws minio-init \
+  # --profile flags so compose can resolve sim's depends_on (kafka-init etc.), even with --no-deps
+  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps --entrypoint rtdaas-jigsaws sim synth --out /data/jigsaws --trials 2
+  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps --entrypoint aws minio-init \
     --endpoint-url http://minio:9000 s3 sync /data/jigsaws s3://rtdaas-raw/jigsaws || true
+
+  # The live simulator only closes its bags when it exits, and nothing lands them in S3, so seed
+  # a closed batch (simulated time, no Kafka) for telemetry_bag_ingest. Date it yesterday (UTC):
+  # unpausing the @daily, catchup=False DAG immediately schedules the latest complete interval,
+  # i.e. ds = yesterday, and with max_active_runs=1 that run is the one that gets to ingest.
+  local bag_day
+  bag_day="$(date -u -d yesterday +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)"  # GNU || BSD
+  log "simulating ${SIM_BATCH_ROBOTS:-2} robots x ${SIM_BATCH_SECONDS:-120} s of bags for $bag_day and uploading them to s3://rtdaas-raw/bags"
+  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps sim run --robots "${SIM_BATCH_ROBOTS:-2}" \
+    --duration "${SIM_BATCH_SECONDS:-120}" --rate 50 --no-realtime \
+    --start-time "${bag_day}T12:00:00Z" --mcap-out /data/bags-batch
+  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps --entrypoint aws minio-init \
+    --endpoint-url http://minio:9000 s3 sync /data/bags-batch s3://rtdaas-raw/bags
 
   log "starting the simulator and the streaming job (demo profile)"
   "${COMPOSE[@]}" "${PROFILES[@]}" up -d sim streaming
 
+  # Unpausing telemetry_bag_ingest is what starts its run (ds = yesterday, see above).
+  # dq_daily stays paused: unpaused it would fire at once, before anything has been ingested;
+  # trigger it from the UI once the ingest runs are green.
   log "unpausing DAGs and triggering the first runs"
-  for d in telemetry_bag_ingest jigsaws_ingest dq_daily contracts_sync; do
+  for d in telemetry_bag_ingest jigsaws_ingest contracts_sync; do
     curl -fsS -u airflow:airflow -H 'Content-Type: application/json' -X PATCH \
       "$AIRFLOW_URL/api/v1/dags/$d" -d '{"is_paused": false}' >/dev/null || true
   done
   trigger_dag contracts_sync '{}'
   trigger_dag jigsaws_ingest '{}'
-  log "waiting 90 s for the simulator to close its first bags, then triggering bag ingest"
-  sleep 90
-  trigger_dag telemetry_bag_ingest "{\"logical_date\": \"$(date -u +%Y-%m-%d)T00:00:00Z\"}"
   status
 }
 

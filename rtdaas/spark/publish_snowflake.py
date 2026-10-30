@@ -42,7 +42,11 @@ log = logging.getLogger(__name__)
 
 MARTS_SQL = Path(__file__).with_name("marts.sql")
 CATALOG_YML = Path(rtdaas.__file__).parent / "serving" / "catalog.yml"
-_MART_HEADER = re.compile(r"^--\s*@mart\s+([A-Za-z_]+)\.([A-Za-z_]+)(?:\s+([A-Za-z_]+))?\s*$", re.M)
+# horizontal whitespace only after the name: \s would let the optional partition column match
+# the first word of the next line (e.g. SELECT) when a header has none
+_MART_HEADER = re.compile(
+    r"^--[ \t]*@mart[ \t]+([A-Za-z_]+)\.([A-Za-z_]+)(?:[ \t]+([A-Za-z_]+))?[ \t]*$", re.M
+)
 
 # Spark SQL simple type -> Snowflake / DuckDB type
 _TYPE_MAP = {
@@ -193,7 +197,7 @@ def load_duckdb(
 ) -> None:
     import duckdb
 
-    db_path = Path(settings.serving_duckdb_path)
+    db_path = Path(settings.publish_duckdb_path or settings.serving_duckdb_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(db_path))
     try:

@@ -16,24 +16,25 @@ USER root
 
 # libgl1 / libglib2.0-0 are required by opencv-python-headless at import time on some
 # distros; curl for jar downloads; procps for Spark's scripts.
+# The base image's Python is jammy's 3.10, but rtdaas needs >= 3.11, and PySpark needs the
+# executors' minor version to match the driver's (Airflow submits in client mode from
+# python:3.11), so add 3.11 from deadsnakes and run everything from a venv on it.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 curl ca-certificates procps \
+      gnupg software-properties-common \
+ && add-apt-repository -y ppa:deadsnakes/ppa \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends python3.11 python3.11-venv \
+ && python3.11 -m venv /opt/venv \
  && rm -rf /var/lib/apt/lists/*
+ENV PATH=/opt/venv/bin:$PATH
 
-# Connector jars (exact Maven Central URLs).
-RUN set -eux; cd "${SPARK_HOME}/jars"; \
-    curl -fsSLO "${MAVEN}/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/${ICEBERG_VERSION}/iceberg-spark-runtime-3.5_2.12-${ICEBERG_VERSION}.jar"; \
-    curl -fsSLO "${MAVEN}/org/apache/iceberg/iceberg-aws-bundle/${ICEBERG_VERSION}/iceberg-aws-bundle-${ICEBERG_VERSION}.jar"; \
-    curl -fsSLO "${MAVEN}/org/apache/spark/spark-sql-kafka-0-10_2.12/${SPARK_VERSION}/spark-sql-kafka-0-10_2.12-${SPARK_VERSION}.jar"; \
-    curl -fsSLO "${MAVEN}/org/apache/spark/spark-token-provider-kafka-0-10_2.12/${SPARK_VERSION}/spark-token-provider-kafka-0-10_2.12-${SPARK_VERSION}.jar"; \
-    curl -fsSLO "${MAVEN}/org/apache/kafka/kafka-clients/3.4.1/kafka-clients-3.4.1.jar"; \
-    curl -fsSLO "${MAVEN}/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar"; \
-    curl -fsSLO "${MAVEN}/org/apache/spark/spark-avro_2.12/${SPARK_VERSION}/spark-avro_2.12-${SPARK_VERSION}.jar"; \
-    curl -fsSLO "${MAVEN}/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar"; \
-    curl -fsSLO "${MAVEN}/software/amazon/awssdk/bundle/${AWS_SDK_BUNDLE_VERSION}/bundle-${AWS_SDK_BUNDLE_VERSION}.jar"; \
-    curl -fsSLO "${MAVEN}/software/amazon/awssdk/url-connection-client/${AWS_SDK_BUNDLE_VERSION}/url-connection-client-${AWS_SDK_BUNDLE_VERSION}.jar"; \
-    curl -fsSLO "${MAVEN}/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar"; \
-    chown 185:0 ./*.jar
+# Connector jars (exact Maven Central URLs); shared with airflow.Dockerfile.
+COPY infra/docker/spark-jars.sh /tmp/spark-jars.sh
+RUN ICEBERG_VERSION=${ICEBERG_VERSION} SPARK_VERSION=${SPARK_VERSION} \
+    HADOOP_AWS_VERSION=${HADOOP_AWS_VERSION} AWS_SDK_BUNDLE_VERSION=${AWS_SDK_BUNDLE_VERSION} \
+    MAVEN=${MAVEN} bash /tmp/spark-jars.sh "${SPARK_HOME}/jars" \
+ && chown 185:0 "${SPARK_HOME}"/jars/*.jar && rm /tmp/spark-jars.sh
 
 # Install the rtdaas package (pure-Python core + spark extra).
 WORKDIR /opt/rtdaas
@@ -41,12 +42,15 @@ COPY pyproject.toml README.md ./
 COPY rtdaas ./rtdaas
 COPY contracts ./contracts
 COPY quality ./quality
-RUN pip install --no-cache-dir "/opt/rtdaas[spark]" \
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir "/opt/rtdaas[spark]" \
+ && python -c "import rtdaas.spark.common" \
  && chown -R 185:0 /opt/rtdaas
 
 ENV RTDAAS_HOME=/opt/rtdaas \
-    PYSPARK_PYTHON=python3 \
-    PYSPARK_DRIVER_PYTHON=python3 \
+    RTDAAS_SPARK_PACKAGES=0 \
+    PYSPARK_PYTHON=/opt/venv/bin/python \
+    PYSPARK_DRIVER_PYTHON=/opt/venv/bin/python \
     PYTHONUNBUFFERED=1
 
 USER 185
