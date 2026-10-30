@@ -20,13 +20,13 @@ resources:
 images:
 - name: ghcr.io/OWNER/rtdaas-api
   newName: ghcr.io/tom-f-oconnell/rtdaas-api
-  newTag: d4de958e66d7d8eb68c99847fb9c58df2ac78119
+  newTag: 51524100639d6f2d368c3a227a8192fb13538ea9
 - name: ghcr.io/OWNER/rtdaas-bridge
   newName: ghcr.io/tom-f-oconnell/rtdaas-bridge
-  newTag: d4de958e66d7d8eb68c99847fb9c58df2ac78119
+  newTag: 51524100639d6f2d368c3a227a8192fb13538ea9
 - name: ghcr.io/OWNER/rtdaas-sim
   newName: ghcr.io/tom-f-oconnell/rtdaas-sim
-  newTag: d4de958e66d7d8eb68c99847fb9c58df2ac78119
+  newTag: 51524100639d6f2d368c3a227a8192fb13538ea9
 - name: ghcr.io/OWNER/rtdaas-spark
   newName: ghcr.io/tom-f-oconnell/rtdaas-spark
-  newTag: d4de958e66d7d8eb68c99847fb9c58df2ac78119
+  newTag: 51524100639d6f2d368c3a227a8192fb13538ea9
