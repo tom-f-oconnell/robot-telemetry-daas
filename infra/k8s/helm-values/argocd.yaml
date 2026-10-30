@@ -15,7 +15,7 @@ configs:
         - /spec/replicas
   repositories:
     rtdaas:
-      url: https://github.com/<owner>/robot-telemetry-daas.git
+      url: https://github.com/tom-f-oconnell/robot-telemetry-daas.git
       type: git
     strimzi:
       url: quay.io/strimzi-helm

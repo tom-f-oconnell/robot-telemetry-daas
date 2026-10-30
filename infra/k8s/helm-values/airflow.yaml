@@ -1,11 +1,11 @@
 # apache-airflow/airflow chart 1.15.x values for the rtdaas namespace.
 # DAGs are git-synced from this repository; the image carries the rtdaas package.
 airflowVersion: "2.10.3"
-defaultAirflowRepository: ghcr.io/<owner>/rtdaas-airflow
+defaultAirflowRepository: ghcr.io/tom-f-oconnell/rtdaas-airflow
 defaultAirflowTag: latest
 images:
   airflow:
-    repository: ghcr.io/<owner>/rtdaas-airflow
+    repository: ghcr.io/tom-f-oconnell/rtdaas-airflow
     tag: latest
     pullPolicy: Always
 
@@ -62,7 +62,7 @@ workers:
 dags:
   gitSync:
     enabled: true
-    repo: https://github.com/<owner>/robot-telemetry-daas.git
+    repo: https://github.com/tom-f-oconnell/robot-telemetry-daas.git
     branch: main
     subPath: rtdaas/airflow/dags
     period: 60s
@@ -117,7 +117,7 @@ env:
   - name: AIRFLOW_VAR_RTDAAS_SPARK_MODE
     value: k8s
   - name: AIRFLOW_VAR_RTDAAS_SPARK_IMAGE
-    value: ghcr.io/<owner>/rtdaas-spark:latest
+    value: ghcr.io/tom-f-oconnell/rtdaas-spark:latest
   - name: AIRFLOW_VAR_RTDAAS_SPARK_NAMESPACE
     value: rtdaas
   - name: AIRFLOW_VAR_RTDAAS_HOME

@@ -1,7 +1,8 @@
 # N Ubuntu 24.04 VMs on a local libvirt/KVM host, ready for Ansible + k3s.
 #
-# Host prerequisites: libvirtd, qemu-kvm, and the user running terraform in the
-# `libvirt` group. Provider connection defaults to qemu:///system (set in envs/local).
+# Host prerequisites: libvirtd, qemu-system-x86, genisoimage (cloud-init ISOs), xsltproc (the
+# `xml` block below), and the user running terraform in the `libvirt` group. Provider connection
+# defaults to qemu:///system (set in envs/local).
 
 locals {
   node_names = [for i in range(var.node_count) : format("%s-node-%02d", var.name_prefix, i + 1)]
@@ -84,8 +85,14 @@ resource "libvirt_domain" "node" {
     wait_for_lease = true
   }
 
+  # `file`, not `volume_id`: with a pool-volume source Ubuntu's AppArmor helper does not follow
+  # the backing chain and qemu gets "Permission denied" on the base image. A volume's id is its path.
   disk {
-    volume_id = libvirt_volume.root[count.index].id
+    file = libvirt_volume.root[count.index].id
+  }
+
+  xml {
+    xslt = file("${path.module}/templates/qcow2-disk.xsl")
   }
 
   console {

@@ -1,8 +1,8 @@
 # App-of-apps: Argo CD watches infra/k8s/argocd/apps/ and creates one Application
 # per file. Applied once by Ansible (roles/argocd); everything else is GitOps.
 #
-# TODO(owner): replace <owner> with your GitHub user/org (also in apps/*.yaml and
-# helm-values/airflow.yaml). Image references in manifests/rtdaas/ use the
+# Forks: replace tom-f-oconnell with your GitHub user/org here, in apps/*.yaml and in
+# helm-values/{airflow,argocd}.yaml. Image references in manifests/rtdaas/ use the
 # placeholder OWNER (valid image syntax); .github/workflows/deploy.yml rewrites
 # them with `kustomize edit set image` on every build of main.
 apiVersion: argoproj.io/v1alpha1
