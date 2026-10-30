@@ -53,8 +53,11 @@ with DAG(
     @task
     def suite_args(**context) -> list[list[str]]:
         # data_interval_end is the run's logical day; the partitions checked are the previous day.
-        day = (context["data_interval_end"] - dt.timedelta(days=1)).strftime("%Y-%m-%d")
-        return [["--suite", suite_path(s), "--partition", day] for s in SUITES]
+        end = context["data_interval_end"]
+        day = (end - dt.timedelta(days=1)).strftime("%Y-%m-%d")
+        # streaming.yml checks liveness: yesterday's partition would always look stale
+        partitions = {"streaming.yml": end.strftime("%Y-%m-%d")}
+        return [["--suite", suite_path(s), "--partition", partitions.get(s, day)] for s in SUITES]
 
     gates = spark_task_mapped(
         "quality_gate", "quality_gate.py", suite_args(), executors=1, retries=0
