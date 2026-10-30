@@ -3,6 +3,15 @@
 mode: standalone
 replicas: 1
 
+# Pin the same releases as infra/compose/docker-compose.yml. The chart's default quay.io tag
+# has been retired upstream (pulls return 401), so always set these explicitly.
+image:
+  repository: minio/minio
+  tag: RELEASE.2024-10-13T13-34-11Z
+mcImage:
+  repository: minio/mc
+  tag: RELEASE.2024-10-08T09-37-26Z
+
 rootUser: minioadmin
 rootPassword: minioadmin   # dev only; override via existingSecret in real deployments
 # existingSecret: minio-root
