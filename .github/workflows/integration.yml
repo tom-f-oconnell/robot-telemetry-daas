@@ -18,18 +18,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Create kind cluster (1 control-plane + 2 workers)
-        uses: helm/kind-action@v1
-        with:
-          cluster_name: ${{ env.KIND_CLUSTER }}
-          version: v0.24.0
-          node_image: kindest/node:v1.31.0
-          config: |
-            kind: Cluster
-            apiVersion: kind.x-k8s.io/v1alpha4
-            nodes:
-              - role: control-plane
-              - role: worker
-              - role: worker
+        env:
+          KIND_VERSION: v0.27.0
+          NODE_IMAGE: kindest/node:v1.32.2
+        run: |
+          sudo curl -fsSLo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          sudo chmod +x /usr/local/bin/kind
+          cat > /tmp/kind.yaml <<'EOF'
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+            - role: control-plane
+            - role: worker
+            - role: worker
+          EOF
+          bash scripts/ci-annotate.sh "kind create" -- kind create cluster --name "$KIND_CLUSTER" --image "$NODE_IMAGE" --config /tmp/kind.yaml --wait 180s
+          kubectl cluster-info
+          kubectl get nodes -o wide
 
       - name: Build sim + api images and load into kind
         run: |
@@ -71,7 +76,7 @@ jobs:
                 auto.create.topics.enable: false
             entityOperator: { topicOperator: {} }
           EOF
-          kubectl -n kafka wait kafka/rtdaas --for=condition=Ready --timeout=10m
+          bash scripts/ci-annotate.sh "strimzi" -- kubectl -n kafka wait kafka/rtdaas --for=condition=Ready --timeout=10m
           # Topics (partitions/retention per contracts/registry.yml; RF 1 for the test cluster)
           cat <<'EOF' | kubectl apply -n kafka -f -
           apiVersion: kafka.strimzi.io/v1beta2
@@ -121,7 +126,7 @@ jobs:
           sed -e 's#ghcr.io/OWNER/rtdaas-api:latest#rtdaas-api:it#' -e 's#imagePullPolicy: IfNotPresent#imagePullPolicy: Never#' \
               -e 's#replicas: 2#replicas: 1#' infra/k8s/manifests/rtdaas/api.yaml | kubectl apply -f -
           kubectl -n rtdaas set env deployment/rtdaas-api SERVING_BACKEND=sqlite
-          kubectl -n rtdaas rollout status deployment/rtdaas-api --timeout=5m
+          bash scripts/ci-annotate.sh "api rollout" -- kubectl -n rtdaas rollout status deployment/rtdaas-api --timeout=5m
           cat <<'EOF' | kubectl apply -f -
           apiVersion: batch/v1
           kind: Job
@@ -142,7 +147,7 @@ jobs:
                     volumeMounts: [{ name: data, mountPath: /data }]
                 volumes: [{ name: data, emptyDir: {} }]
           EOF
-          kubectl -n rtdaas wait job/sim-60s --for=condition=complete --timeout=5m
+          bash scripts/ci-annotate.sh "sim job" -- kubectl -n rtdaas wait job/sim-60s --for=condition=complete --timeout=5m
           kubectl -n rtdaas logs job/sim-60s | tail -n 20
 
       - name: Assert the API is healthy and Kafka received telemetry
@@ -164,6 +169,14 @@ jobs:
         if: failure()
         run: |
           mkdir -p /tmp/it-logs
+          { kubectl get pods -A -o wide; kubectl get events -A --sort-by=.lastTimestamp | tail -n 60; } 2>&1 | tee /tmp/it-logs/summary.txt
+          LABEL="cluster state" python3 - /tmp/it-logs/summary.txt <<'PY'
+          import os, sys
+          data = open(sys.argv[1], errors="replace").read()[-14000:]
+          enc = lambda t: t.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          for i in range(0, len(data), 3500):
+              print(f"::warning title=cluster state::{enc(data[i:i+3500])}")
+          PY
           for ns in rtdaas kafka minio; do
             kubectl -n "$ns" get all > "/tmp/it-logs/${ns}-resources.txt" 2>&1 || true
             for pod in $(kubectl -n "$ns" get pods -o name 2>/dev/null); do
