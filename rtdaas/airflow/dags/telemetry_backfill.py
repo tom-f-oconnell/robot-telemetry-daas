@@ -82,7 +82,7 @@ with DAG(
 
     dates = plan_dates()
     batch = spark_task_mapped(
-        "batch_mcap", "batch_mcap.py", batch_args(dates), executors=4, max_active_tis_per_dag=4
+        "batch_mcap", "batch_mcap.py", batch_args(dates), executors=2, max_active_tis_per_dag=4
     )
     gate = spark_task_mapped(
         "quality_gate", "quality_gate.py", gate_args(dates), executors=1, retries=0
