@@ -44,7 +44,10 @@ ros2 bag record -s mcap -o bags/dv_001 /dv_001/PSM1/measured_js /dv_001/PSM1/rtd
     /dv_001/rtdaas/events /dv_001/rtdaas/heartbeat
 ```
 
-then copy the `.mcap` to `s3://rtdaas-raw/bags/dv_001/<yyyy>/<mm>/<dd>/`.
+then land it with `rtdaas-land --root bags` (`pip install rtdaas[land]`, S3 settings from the
+environment): it uploads every closed bag to `s3://rtdaas-raw/bags/<robot>/<yyyy>/<mm>/<dd>/`, taking
+the robot and the day from the bag's own topics and timestamps, skips bags still being written and
+never overwrites a different file at the same key. `--watch` keeps it running; `--dry-run` shows the keys.
 
 ## Without ROS: the simulator
 

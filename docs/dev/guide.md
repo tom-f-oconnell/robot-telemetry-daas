@@ -28,6 +28,7 @@ pip install -e .[spark] && make test-spark   # needs Java 17
 | regenerate contracts | `rtdaas-contracts gen` |
 | check a contract change | `rtdaas-contracts check --base origin/main --mode BACKWARD` |
 | synthetic data | `rtdaas-jigsaws synth --out data/jigsaws` · `rtdaas-sim run --robots 2 --duration 120 --mcap-out data/bags --no-realtime` |
+| land bags in the raw bucket | `rtdaas-land --root data/bags` (`--watch`, `--dry-run`) |
 | run the pipeline without Spark | `rtdaas-local pipeline --bags data/bags --jigsaws data/jigsaws --out data/rtdaas.sqlite` |
 | run a quality suite | `rtdaas-quality run --suite quality/checks/telemetry.yml --backend sqlite --db data/rtdaas.sqlite` |
 | serve the API/UI | `rtdaas-api` (SQLite backend by default) |

@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import signal
 import sys
 import time
 from datetime import UTC, datetime
@@ -52,6 +53,10 @@ def _parse_start(value: str | None) -> int:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     return int(dt.timestamp() * NS)
+
+
+class _Stopped(Exception):
+    """Raised from the SIGTERM handler to unwind the tick loop."""
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -106,17 +111,34 @@ def cmd_run(args: argparse.Namespace) -> int:
             if rec is not None:
                 rec.record(ros_topic, TOPIC_TYPES[kafka_topic], msg, t_ns)
 
+    # `docker stop` sends SIGTERM, whose default action exits without unwinding: the bags would
+    # be left without their footer (never "closed", so never landed). Stop like the duration ran
+    # out instead: end the sessions at the current tick, close the bags, flush Kafka.
+    def _on_sigterm(signum, _frame):
+        raise _Stopped(signum)
+
     try:
-        for k in range(n_ticks):
-            t_ns = start_ns + k * dt_ns
-            for sim in sims:
-                emit(sim, sim.tick(t_ns), t_ns)
-            if realtime:
-                target = wall_start + (k + 1) / args.rate
-                delay = target - time.monotonic()
-                if delay > 0:
-                    time.sleep(delay)
-        t_end = start_ns + n_ticks * dt_ns
+        previous_handler = signal.signal(signal.SIGTERM, _on_sigterm)
+    except ValueError:  # not the main thread (embedded use): keep the default behaviour
+        previous_handler = None
+    ticks_done = 0
+    stopped_early = False
+    try:
+        try:
+            for k in range(n_ticks):
+                t_ns = start_ns + k * dt_ns
+                for sim in sims:
+                    emit(sim, sim.tick(t_ns), t_ns)
+                ticks_done = k + 1
+                if realtime:
+                    target = wall_start + (k + 1) / args.rate
+                    delay = target - time.monotonic()
+                    if delay > 0:
+                        time.sleep(delay)
+        except _Stopped:
+            stopped_early = True
+            log.info("SIGTERM after %d of %d ticks: ending the sessions early", ticks_done, n_ticks)
+        t_end = start_ns + ticks_done * dt_ns
         for sim in sims:
             emit(sim, sim.end(t_end), t_end)
     finally:
@@ -124,6 +146,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             rec.close()
         if producer is not None:
             producer.flush()
+        if previous_handler is not None:
+            signal.signal(signal.SIGTERM, previous_handler)
 
     summary = {
         "robots": [s.cfg.robot_id for s in sims],
@@ -135,6 +159,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         else [],
         "kafka": bool(producer),
         "elapsed_s": round(time.monotonic() - wall_start, 3),
+        "stopped_early": stopped_early,
     }
     print(json.dumps(summary, indent=2))
     return 0

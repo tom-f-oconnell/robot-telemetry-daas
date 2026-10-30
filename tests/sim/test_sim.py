@@ -120,3 +120,37 @@ def test_cli_writes_decodable_bags(tmp_path, msg_registry):
 
 def test_cli_rejects_missing_sink():
     assert sim_main(["run", "--robots", "1", "--duration", "1"]) == 1
+
+
+def test_sigterm_closes_the_bags_and_ends_the_session(tmp_path, msg_registry):
+    """`docker stop` must not leave unfinished bags behind (they would never be landed)."""
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    from rtdaas.landing import find_bags, is_closed
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "rtdaas.sim.cli", "run", "--robots", "1", "--duration", "60"]
+        + ["--rate", "20", "--realtime", "--mcap-out", str(tmp_path)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    deadline = time.monotonic() + 20
+    while not find_bags(tmp_path) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    time.sleep(1.0)  # a second of ticks
+    proc.send_signal(signal.SIGTERM)
+    out, _ = proc.communicate(timeout=20)
+    assert proc.returncode == 0
+    assert json.loads(out)["stopped_early"] is True
+    (bag,) = find_bags(tmp_path)
+    assert is_closed(bag)
+    codec = CdrCodec(msg_registry)
+    codes = [
+        codec.decode(schema.name, message.data)["code"]
+        for schema, _, message in read_messages(bag)
+        if schema.name == "rtdaas_msgs/SystemEvent"
+    ]
+    assert codes[0] == "SESSION_START" and codes[-1] == "SESSION_END"

@@ -6,7 +6,7 @@ recommended). Three profiles:
 | Profile | Services |
 |---|---|
 | `core` | kafka (KRaft), kafka-init, apicurio (schema registry), registry-init, minio + minio-init, iceberg-rest, elasticsearch, spark-master, spark-worker, postgres, airflow-init / webserver / scheduler, api |
-| `demo` | sim (3 simulated robots → Kafka + MCAP bags under `./data/bags`), streaming (the Structured Streaming job) |
+| `demo` | sim (3 simulated robots → Kafka + MCAP bags under `./data/bags`), streaming (the Structured Streaming job), bag-lander (`rtdaas-land --watch`: closed bags → `s3://rtdaas-raw/bags/…`) |
 | `observability` | prometheus, kafka-exporter, grafana (provisioned dashboard), kibana |
 
 ```bash
@@ -45,6 +45,13 @@ them in `infra/compose/.env` when running `docker compose` directly).
   that runs as root, to hand the logs volume to `RTDAAS_UID` (the other Airflow containers run
   as `RTDAAS_UID:0`, which the official image supports).
 
+## State that survives `make demo-down`
+
+Named volumes keep Kafka, MinIO, Elasticsearch, Postgres (Airflow's metadata) and the Iceberg
+catalog (`iceberg-catalog`: the REST catalog's SQLite file; without it, removing the container
+dropped every table definition while the data files stayed in MinIO). `docker compose ... down -v`
+removes them all; `./data` is a host directory and is left alone.
+
 ## Images
 
 Built from `infra/docker/*.Dockerfile` with the repo as context:
@@ -65,7 +72,8 @@ Set `RTDAAS_IMAGE_PREFIX` / `RTDAAS_IMAGE_TAG` to run published GHCR images inst
    (`s3://rtdaas-raw/jigsaws`) and a closed batch of simulated bags dated *yesterday* (UTC)
    (`s3://rtdaas-raw/bags/<robot>/<yyyy>/<mm>/<dd>/`). The live sim then streams to Kafka for
    `SIM_DURATION_S` (600 s) and the streaming job writes the raw tables and `telemetry.kpi_1m`
-   every 30 s. (The live sim's own bags stay under `./data/bags`; nothing uploads them.)
+   every 30 s. Its bags close when it exits (also on `docker stop`), and `bag-lander` then lands
+   them under today's date, for the next scheduled `telemetry_bag_ingest` run.
 2. Airflow: unpausing `telemetry_bag_ingest` immediately schedules yesterday's run, which picks
    up the seeded bags (`wait_for_bags → spark_batch_mcap → quality_gate → publish_snowflake →
    index_es_sessions`); `jigsaws_ingest` and `contracts_sync` are triggered directly. With two

@@ -217,6 +217,13 @@ services:
       CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
       CATALOG_S3_ENDPOINT: http://minio:9000
       CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      # The image's default catalog DB is a file in the container's /tmp, so removing the
+      # container (make demo-down) dropped every table definition while the data stayed in
+      # MinIO. Keep it on a volume, as the k8s manifest does with a PVC. /home/iceberg is owned
+      # by the image's user, so the fresh volume inherits that ownership.
+      CATALOG_URI: jdbc:sqlite:file:/home/iceberg/iceberg_rest.db
+    volumes:
+      - iceberg-catalog:/home/iceberg
     depends_on:
       minio-init:
         condition: service_completed_successfully
@@ -463,6 +470,26 @@ services:
         condition: service_completed_successfully
     restart: "no"
 
+  # Lands closed bags from ./data/bags in s3://rtdaas-raw/bags/<robot>/<yyyy>/<mm>/<dd>/, where
+  # telemetry_bag_ingest picks them up (the live sim's bags close when it exits). scripts/demo.sh
+  # also runs it once over the seeded batch.
+  bag-lander:
+    image: ${RTDAAS_IMAGE_PREFIX:-rtdaas}-sim:${RTDAAS_IMAGE_TAG:-dev}
+    container_name: rtdaas-bag-lander
+    profiles: ["demo"]
+    user: "${RTDAAS_UID:-10001}:${RTDAAS_GID:-10001}"  # see api
+    entrypoint: ["rtdaas-land"]
+    command: ["--root", "/data/bags", "--watch", "--interval", "15"]
+    environment:
+      <<: *rtdaas-env
+      HOME: /tmp
+    volumes:
+      - ./data:/data
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # ------------------------------------------------------------------ observability
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -519,6 +546,7 @@ services:
         condition: service_healthy
 
 volumes:
+  iceberg-catalog:
   kafka-data:
   minio-data:
   es-data:

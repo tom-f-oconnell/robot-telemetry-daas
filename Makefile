@@ -23,8 +23,8 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 # ---------------------------------------------------------------- development
-install: ## Editable install with dev, API and video extras
-	$(PIP) install -e ".[dev,api,video]"
+install: ## Editable install with dev, API, video and land extras
+	$(PIP) install -e ".[dev,api,video,land]"
 
 test: ## Pure-Python unit tests (no Spark/Airflow/services needed)
 	$(PYTHON) -m pytest -m "not spark and not airflow and not integration"

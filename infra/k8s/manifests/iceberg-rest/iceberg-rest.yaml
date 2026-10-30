@@ -32,6 +32,8 @@ spec:
         app.kubernetes.io/name: iceberg-rest
         app.kubernetes.io/part-of: rtdaas
     spec:
+      securityContext:
+        fsGroup: 1000  # the image runs as iceberg (1000); make the PVC writable for the SQLite catalog
       containers:
         - name: catalog
           image: tabulario/iceberg-rest:1.6.0

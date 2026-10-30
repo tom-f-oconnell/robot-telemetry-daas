@@ -71,11 +71,10 @@ up() {
   "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps sim run --robots "${SIM_BATCH_ROBOTS:-2}" \
     --duration "${SIM_BATCH_SECONDS:-120}" --rate 50 --no-realtime \
     --start-time "${bag_day}T12:00:00Z" --mcap-out /data/bags-batch
-  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps --entrypoint aws minio-init \
-    --endpoint-url http://minio:9000 s3 sync /data/bags-batch s3://rtdaas-raw/bags
+  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps bag-lander --root /data/bags-batch
 
-  log "starting the simulator and the streaming job (demo profile)"
-  "${COMPOSE[@]}" "${PROFILES[@]}" up -d sim streaming
+  log "starting the simulator, the streaming job and the bag lander (demo profile)"
+  "${COMPOSE[@]}" "${PROFILES[@]}" up -d sim streaming bag-lander
 
   # Unpausing telemetry_bag_ingest is what starts its run (ds = yesterday, see above).
   # dq_daily stays paused: unpaused it would fire at once, before anything has been ingested;

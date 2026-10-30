@@ -62,8 +62,10 @@ ros2 bag record -s mcap -o bags/dv_001 \
   /dv_001/PSM2/measured_js /dv_001/PSM2/rtdaas/tool_pose \
   /dv_001/ECM/measured_js  /dv_001/ECM/rtdaas/tool_pose \
   /dv_001/rtdaas/events    /dv_001/rtdaas/heartbeat
-# then land the .mcap under s3://rtdaas-raw/bags/dv_001/<yyyy>/<mm>/<dd>/
 ```
+
+Then `rtdaas-land --root bags` uploads every closed bag to
+`s3://rtdaas-raw/bags/<robot>/<yyyy>/<mm>/<dd>/` (see `docs/infra/ros2.md`).
 
 The batch job decodes bags with the message definitions embedded in the file, so bags recorded
 with an older `rtdaas_msgs` version still load.

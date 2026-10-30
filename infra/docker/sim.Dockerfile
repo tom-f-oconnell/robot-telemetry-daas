@@ -20,8 +20,9 @@ COPY pyproject.toml README.md ./
 COPY rtdaas ./rtdaas
 COPY contracts ./contracts
 COPY quality ./quality
-# video extra so `rtdaas-jigsaws synth` (used by scripts/demo.sh) can render videos in this image
-RUN pip install "/opt/rtdaas[kafka,video]" \
+# video extra so `rtdaas-jigsaws synth` (used by scripts/demo.sh) can render videos in this image;
+# land extra for `rtdaas-land` (the bag-lander service)
+RUN pip install "/opt/rtdaas[kafka,video,land]" \
  && mkdir -p /data && chown -R rtdaas:rtdaas /data /opt/rtdaas
 
 VOLUME ["/data"]
