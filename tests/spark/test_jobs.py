@@ -100,6 +100,8 @@ def test_decode_bag_through_spark(spark, tmp_path, msg_registry):
 def test_merge_on_clause_bounds_to_source_days(spark):
     import datetime as dt
 
+    from pyspark.sql import functions as F
+
     from rtdaas.spark.common import merge_on_clause
 
     utc = dt.UTC
@@ -123,5 +125,11 @@ def test_merge_on_clause_bounds_to_source_days(spark):
         "AND t.ts >= TIMESTAMP '2026-10-29 00:00:00' AND t.ts < TIMESTAMP '2026-10-31 00:00:00'"
     )
     assert merge_on_clause(src.limit(0), keys, "ts") is None
+    scoped = merge_on_clause(
+        src.union(src.withColumn("robot_id", F.lit("dv_002"))), keys, "ts", "robot_id"
+    )
+    assert scoped.endswith("AND t.robot_id IN ('dv_001', 'dv_002')")
+    with_null = src.union(src.withColumn("robot_id", F.lit(None).cast("string")))
+    assert "IN (" not in merge_on_clause(with_null, keys, "ts", "robot_id")
     with pytest.raises(ValueError):
         merge_on_clause(src, ["robot_id", "arm"], "ts")

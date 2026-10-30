@@ -374,7 +374,12 @@ def run(
         counts[short] = n
         # the stream appends to the same tables: bound the merge to the bags' days
         merge_iceberg(
-            spark, df, RAW_TABLE_NAMES[short], ddl.RAW_MERGE_KEYS[short], time_column="ts"
+            spark,
+            df,
+            RAW_TABLE_NAMES[short],
+            ddl.RAW_MERGE_KEYS[short],
+            time_column="ts",
+            scope_column="robot_id",
         )
     log.info("raw rows merged: %s", counts)
 
@@ -417,6 +422,7 @@ def run(
         "telemetry.kpi_1m",
         ["robot_id", "arm", "window_start"],
         time_column="window_start",
+        scope_column="robot_id",
     )
     n_kpi = kpis.count()
     log.info("sessions=%d kpi windows=%d", n_sessions, n_kpi)

@@ -355,6 +355,7 @@ def make_kpi_sink(spark, settings: Settings):
                 ["robot_id", "arm", "window_start"],
                 matched_condition="t.computed_by <> 'batch'",
                 time_column="window_start",  # batch merges the same table
+                scope_column="robot_id",
             )
             dicts = rows_as_dicts(rows)
             es_bulk(

@@ -231,31 +231,53 @@ def write_iceberg(df: DataFrame, table: str, mode: str = "append") -> None:
         raise ValueError(f"unknown write mode {mode!r}")
 
 
-def merge_on_clause(src: DataFrame, keys: list[str], time_column: str | None = None) -> str | None:
-    """``ON`` condition for merging ``src`` on ``keys``, bounded to ``src``'s days if asked.
+MAX_SCOPE_VALUES = 100
 
-    With ``time_column`` (which must be one of ``keys``) the target side is restricted to the
-    whole days spanned by the source's ``time_column``. That cannot drop a match, since a match
-    needs ``t.<col> = s.<col>``, but it turns Iceberg's conflict check (serializable MERGE) from
-    "any file committed since the merge started" into "files in these days": the stream appending
-    today no longer fails a batch merge of yesterday. Bounds are formatted inside Spark so they are
-    parsed back in the same session time zone. Returns ``None`` for an empty source.
+
+def merge_on_clause(
+    src: DataFrame,
+    keys: list[str],
+    time_column: str | None = None,
+    scope_column: str | None = None,
+) -> str | None:
+    """``ON`` condition for merging ``src`` on ``keys``, bounded to what ``src`` covers.
+
+    Both bounds restrict the target side to values the source actually has, which cannot drop a
+    match (a match needs ``t.<col> = s.<col>``; both columns must be merge keys), but they shrink
+    Iceberg's conflict check (serializable MERGE) from "any file committed since the merge
+    started" to "files that could hold these rows":
+
+    - ``time_column``: the whole days spanned by the source, so the stream appending today no
+      longer fails a batch merge of yesterday. Bounds are formatted inside Spark so they are
+      parsed back in the same session time zone.
+    - ``scope_column`` (e.g. ``robot_id``): the source's distinct values, so a backfill of today's
+      bags for some robots does not conflict with the stream writing other robots. Skipped when
+      there are more than ``MAX_SCOPE_VALUES`` values or a NULL (``IN`` would drop that match).
+
+    Returns ``None`` for an empty source.
     """
     on = " AND ".join(f"t.{k} <=> s.{k}" for k in keys)
-    if not time_column:
-        return on
-    if time_column not in keys:
-        raise ValueError(f"time_column {time_column!r} must be a merge key ({keys})")
-    from pyspark.sql import functions as F
+    for col in (time_column, scope_column):
+        if col and col not in keys:
+            raise ValueError(f"{col!r} must be a merge key ({keys})")
+    if time_column:
+        from pyspark.sql import functions as F
 
-    fmt = "yyyy-MM-dd HH:mm:ss"
-    lo, hi = src.agg(
-        F.date_format(F.date_trunc("DAY", F.min(time_column)), fmt),
-        F.date_format(F.date_add(F.to_date(F.max(time_column)), 1).cast("timestamp"), fmt),
-    ).first()
-    if lo is None:
-        return None
-    return f"{on} AND t.{time_column} >= TIMESTAMP '{lo}' AND t.{time_column} < TIMESTAMP '{hi}'"
+        fmt = "yyyy-MM-dd HH:mm:ss"
+        lo, hi = src.agg(
+            F.date_format(F.date_trunc("DAY", F.min(time_column)), fmt),
+            F.date_format(F.date_add(F.to_date(F.max(time_column)), 1).cast("timestamp"), fmt),
+        ).first()
+        if lo is None:
+            return None
+        on += f" AND t.{time_column} >= TIMESTAMP '{lo}' AND t.{time_column} < TIMESTAMP '{hi}'"
+    if scope_column:
+        rows = src.select(scope_column).distinct().limit(MAX_SCOPE_VALUES + 1).collect()
+        values = [r[0] for r in rows]
+        if 0 < len(values) <= MAX_SCOPE_VALUES and None not in values:
+            quoted = ", ".join("'" + str(v).replace("'", "''") + "'" for v in sorted(values))
+            on += f" AND t.{scope_column} IN ({quoted})"
+    return on
 
 
 def merge_iceberg(
@@ -265,17 +287,18 @@ def merge_iceberg(
     keys: list[str],
     matched_condition: str | None = None,
     time_column: str | None = None,
+    scope_column: str | None = None,
 ) -> None:
     """Upsert ``df`` into ``lake.<table>`` with ``MERGE INTO`` on ``keys``.
 
     The source is de-duplicated on ``keys`` first (Iceberg rejects a merge where one
     target row matches several source rows). ``matched_condition`` (SQL over aliases
     ``t`` / ``s``) restricts which matched rows are updated, e.g. ``"t.computed_by <> 'batch'"``.
-    Pass ``time_column`` for tables that another job writes concurrently (see
-    :func:`merge_on_clause`).
+    Pass ``time_column`` / ``scope_column`` for tables that another job writes concurrently
+    (see :func:`merge_on_clause`).
     """
     src = conform(df, table).dropDuplicates(keys)
-    on = merge_on_clause(src, keys, time_column)
+    on = merge_on_clause(src, keys, time_column, scope_column)
     if on is None:
         return
     # Temp views are per-session, and inside foreachBatch the micro-batch DataFrame belongs to a
