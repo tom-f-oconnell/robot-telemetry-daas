@@ -11,7 +11,23 @@ from pydantic import BaseModel, Field
 
 from rtdaas import __version__
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+def _find_repo_root() -> Path:
+    """Locate the checkout that holds ``contracts/`` and ``quality/``.
+
+    Editable installs find them next to the package; the container images install the package
+    from ``/opt/rtdaas`` and keep the checkout there; ``RTDAAS_ROOT`` overrides both.
+    """
+    candidates: list[Path] = []
+    if os.environ.get("RTDAAS_ROOT"):
+        candidates.append(Path(os.environ["RTDAAS_ROOT"]))
+    candidates += [Path(__file__).resolve().parent.parent, Path("/opt/rtdaas"), Path.cwd()]
+    for c in candidates:
+        if (c / "contracts" / "registry.yml").is_file():
+            return c
+    return candidates[0]
+
+
+REPO_ROOT = _find_repo_root()
 DEFAULT_MSGS_DIR = REPO_ROOT / "contracts" / "msgs"
 DEFAULT_AVRO_DIR = REPO_ROOT / "contracts" / "avro"
 DEFAULT_REGISTRY_YML = REPO_ROOT / "contracts" / "registry.yml"

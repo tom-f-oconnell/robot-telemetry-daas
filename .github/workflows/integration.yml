@@ -117,7 +117,9 @@ jobs:
         run: |
           kubectl -n rtdaas run registry-init --image=rtdaas-sim:it --image-pull-policy=Never --restart=Never \
             --command -- rtdaas-contracts register --registry http://apicurio.rtdaas.svc.cluster.local:8080/apis/ccompat/v7 --avro /opt/rtdaas/contracts/avro
-          kubectl -n rtdaas wait pod/registry-init --for=jsonpath='{.status.phase}'=Succeeded --timeout=3m
+          if ! kubectl -n rtdaas wait pod/registry-init --for=jsonpath='{.status.phase}'=Succeeded --timeout=3m; then
+            bash scripts/ci-annotate.sh "registry-init logs" -- sh -c 'kubectl -n rtdaas logs registry-init; exit 1'
+          fi
           kubectl -n rtdaas logs registry-init
 
       - name: Deploy the API (sqlite backend so no Iceberg/ES needed) and run the simulator for 60 s
@@ -171,6 +173,11 @@ jobs:
         run: |
           mkdir -p /tmp/it-logs
           { kubectl get pods -A -o wide; kubectl get events -A --sort-by=.lastTimestamp | tail -n 60; } 2>&1 | tee /tmp/it-logs/summary.txt
+          # logs of every pod that is not Running/Succeeded, as annotations (artifacts need the blob store)
+          for ref in $(kubectl get pods -A --no-headers 2>/dev/null | awk '$4 != "Running" && $4 != "Succeeded" && $4 != "Completed" {print $1"/"$2}'); do
+            ns=${ref%%/*}; pod=${ref##*/}
+            bash scripts/ci-annotate.sh "pod $ns/$pod" -- sh -c "kubectl -n $ns logs $pod --all-containers --tail=80; kubectl -n $ns describe pod $pod | tail -n 25; exit 1" || true
+          done
           LABEL="cluster state" python3 - /tmp/it-logs/summary.txt <<'PY'
           import os, sys
           data = open(sys.argv[1], errors="replace").read()[-14000:]
