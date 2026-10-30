@@ -16,6 +16,9 @@ COMPOSE=(docker compose --project-directory "$COMPOSE_DIR" -f "$COMPOSE_DIR/dock
 PROFILES=(--profile core --profile demo)
 export RTDAAS_IMAGE_PREFIX="${RTDAAS_IMAGE_PREFIX:-rtdaas}"
 export RTDAAS_IMAGE_TAG="${RTDAAS_IMAGE_TAG:-dev}"
+# api/sim write to the ./data bind mount; run them as the invoking user so the files stay ours
+export RTDAAS_UID="${RTDAAS_UID:-$(id -u)}"
+export RTDAAS_GID="${RTDAAS_GID:-$(id -g)}"
 AIRFLOW_URL="${AIRFLOW_URL:-http://localhost:8085}"
 API_URL="${API_URL:-http://localhost:8000}"
 WAIT="$HERE/wait-for.sh"

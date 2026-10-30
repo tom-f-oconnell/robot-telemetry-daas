@@ -213,7 +213,8 @@ services:
       minio-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8181/v1/config >/dev/null || exit 1"]
+      # the image ships bash + java only (no curl/wget), so speak HTTP over /dev/tcp
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8181 && printf 'GET /v1/config HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && read -r line <&3 && [[ $$line == *' 200 '* ]]"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -402,6 +403,10 @@ services:
       dockerfile: infra/docker/api.Dockerfile
     container_name: rtdaas-api
     profiles: ["core"]
+    # ./data is a host bind mount; run as the host user so files there stay writable on both sides
+    # (scripts/demo.sh exports RTDAAS_UID/GID). HOME=/tmp because that uid has no passwd entry and
+    # DuckDB installs its iceberg/httpfs extensions under ~/.duckdb.
+    user: "${RTDAAS_UID:-10001}:${RTDAAS_GID:-10001}"
     ports:
       - "8000:8080"
     environment:
@@ -412,6 +417,7 @@ services:
       MEDIA_ROOT: /data
       API_HOST: 0.0.0.0
       API_PORT: 8080
+      HOME: /tmp
     volumes:
       - ./data:/data
     depends_on:
@@ -431,11 +437,13 @@ services:
       dockerfile: infra/docker/sim.Dockerfile
     container_name: rtdaas-sim
     profiles: ["demo"]
+    user: "${RTDAAS_UID:-10001}:${RTDAAS_GID:-10001}"  # see api
     command: ["run", "--robots", "${SIM_ROBOTS:-3}", "--duration", "${SIM_DURATION_S:-600}", "--rate", "${SIM_RATE_HZ:-50}", "--kafka", "--mcap-out", "/data/bags"]
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
       SCHEMA_REGISTRY_URL: http://apicurio:8080/apis/ccompat/v7
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      HOME: /tmp
     volumes:
       - ./data:/data
     depends_on:
