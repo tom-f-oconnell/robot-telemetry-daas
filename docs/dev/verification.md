@@ -87,11 +87,31 @@ in the Airflow image, the `spark_default` connection, temp views inside `foreach
 the API, `s3://` for Hadoop, `s3a://` video paths, the bridge params template, merge scoping
 between batch and stream, and robot ids that are valid ROS 2 names (`dv_001`, was `dv-001`).
 
+## Executed on real VMs (libvirt + k3s, 2026-10-30)
+
+Ubuntu 26.04 host, 4 × 12 GB Ubuntu 24.04 VMs, from nothing to a healthy cluster in about 12 minutes
+(Terraform 1, Ansible 3, Argo CD and image pulls 8).
+
+| Area | How verified | Result |
+|---|---|---|
+| `envs/local` Terraform, `site.yml` | destroyed and rebuilt from zero | pass |
+| Argo CD app-of-apps | all 12 applications Synced and Healthy, including after later commits | pass |
+| Stream on k8s | sim → Strimzi Kafka → `SparkApplication/streaming-kpis` → Iceberg + ES | pass |
+| All 5 DAGs, `RTDAAS_SPARK_MODE=k8s` | `SparkKubernetesOperator` under KubernetesExecutor, including the mapped backfill and JIGSAWS (synthetic) | pass |
+| Serving | API on the DuckDB backend, Ingress for API / Airflow / Kibana / Argo CD | pass |
+| Monitoring | Prometheus scrapes the API and spark-operator, no target down | pass |
+
+That run fixed more than 25 things, none of them in the pure-Python core; see "Gotchas" in `CLAUDE.md`.
+The biggest: Argo CD pruned Strimzi's PVCs, Elasticsearch never became ready under ECK with security
+off, and 4 × 8 GB could not schedule a batch job.
+
 ## Written, compiles, not yet executed
 
 | Area | Why not yet | Where it runs |
 |---|---|---|
-| Terraform, Ansible, the Argo CD applications and Helm values for Airflow / spark-operator / ECK / kube-prometheus-stack | no VMs in CI | `make tf-local` + `make ansible` |
+| `envs/aws` Terraform and the overlay's S3 settings (the Airflow S3 connection still points at MinIO) | costs money | `make tf-aws` + `make ansible` |
+| `rtdaas-bridge` on k8s (`replicas: 0`: it needs a dVRK on the same ROS domain) | run in compose against the dVRK simulation instead | `manifests/rtdaas/bridge.yaml` |
+| Kafka metrics: Strimzi exports them, but no ServiceMonitor or PodMonitor scrapes them yet | not written | `manifests/kafka` |
 
 ## What to run first after cloning
 

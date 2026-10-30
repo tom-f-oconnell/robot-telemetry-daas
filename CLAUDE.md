@@ -1,6 +1,6 @@
 # CLAUDE.md — handoff for Claude Code
 
-Last updated 2026-10-30 (after the first `make demo` session; initial build 2026-10-29). Read this first; then
+Last updated 2026-10-30 (after `make demo` and the first k3s run on real VMs; initial build 2026-10-29). Read this first; then
 `docs/architecture/spec.md` (the interface/schema contract everything is built against) and
 `docs/dev/verification.md` (what has actually executed, where).
 
@@ -54,7 +54,7 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (148 tests, ~8 s) — must stay green
+make test               # unit tier (151 tests, ~10 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
 make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
@@ -97,10 +97,12 @@ Also verified 2026-10-30: the `integration` workflow on the new images; the brid
 kinematic simulation (`infra/docker/dvrk-sim.Dockerfile`, see ros2/README.md) through to Iceberg/ES with arm
 motion and fleet_monitor's CRTK mode; marts published to Iceberg (ADR 0012), multi-date and idempotent.
 
+Verified on real VMs (libvirt + k3s, 2026-10-30; see verification.md): Terraform + Ansible from zero, all 12 Argo CD
+apps Synced and Healthy, streaming on the Spark operator, all 5 DAGs in `k8s` mode, Ingress, Prometheus.
+
 Open (highest-value next work):
-1. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs, incl. Spark/Airflow in `k8s` mode and
-   the iceberg-rest manifest (PVC + `fsGroup`, SQLite busy timeout) — only compose-verified so far. The
-   `integration` workflow deploys the API with the *sqlite* backend, so it does not cover them.
+1. `envs/aws` has never run, and its Airflow S3 connection still points at MinIO. On k8s, nothing scrapes Kafka's
+   metrics yet, and `rtdaas-bridge` stays at `replicas: 0` (it needs a dVRK on the ROS domain).
 2. Real JIGSAWS data (request from JHU CIRL; `--root` at it). Its videos are AVI, which browsers cannot play:
    the trial page's player needs H.264 copies (an import step that transcodes is the obvious addition).
 3. A batch merge and the stream writing the *same robot on the same day* can still conflict (merges are scoped
@@ -207,6 +209,30 @@ From the first `make demo` (each is fixed; the notes are so the fix is not undon
 - **Robot ids are ROS names**: `dv_001`, not `dv-001` (renamed fleet-wide 2026-10-30). The id is the ROS
   namespace and the bag pipeline reads `robot_id` back from the topic path, so one form must serve both;
   ROS 2 names allow no `-`.
+
+From the first k3s run on real VMs (each is fixed; the notes are so the fix is not undone):
+
+- **Argo CD uses annotation tracking.** With the default label, Strimzi copies the instance label from the Kafka CR to
+  what it creates, and Argo CD prunes those objects as its own: the PVCs vanished and brokers stayed Pending.
+- **ECK cannot run with `xpack.security.enabled: false`**: its file-based settings fail to load, and the readiness
+  port never opens. Elasticsearch keeps security on with an anonymous superuser (same no-credentials access).
+- **libvirt**: pin provider `~> 0.8.0` (0.9 is a rewrite). Root disks attach by `file`, not `volume_id` (with a pool
+  volume, AppArmor blocks the backing image: "Permission denied"), and the provider attaches a file as raw, hence
+  `qcow2-disk.xsl`. A failed create leaves a defined domain outside the state: `virsh undefine` it.
+- **Don't put the VM disks on an auto-snapshotted ZFS pool**: snapshots pin what the VMs write and delete, so free
+  space fell far faster than the disks grew, and deleting things freed nothing until they expired. `pool_path`.
+- **`SparkKubernetesOperator` reads any templated string ending in `.yml` as a template file** (`--suite x.yml`:
+  TemplateNotFound), hence `template_ext = ()` in `_common.py`. DAGs import `_common` from next to the file first, so
+  a git-synced DAG and its helper change together.
+- **Sizing**: the stack reserves ~28 GB and a batch job ~7 GB (Spark adds 40 % overhead), so 12 GB per VM. A Pending
+  executor is a capacity problem, and a batch driver can take the slot of a Recreate rollout, leaving the API down.
+- **The Spark operator runs a spark-submit JVM per submission in its own pod**: 2 Gi. When it was OOM-killed, jobs in
+  flight failed with "driver pod already exist" although their checks had passed, and streaming stuck in PENDING_RERUN.
+- **Probes use `/api/live`**, and backend handlers are plain `def` (thread pool). `/api/health` counts every table's
+  rows, so it outgrew the probe timeout, and in `async def` a blocking DuckDB call stalled the event loop for all.
+- **One API replica**: a DuckDB file takes one process. The in-memory registry forgets schemas on restart, so a sidecar
+  in the Apicurio pod keeps registering them. Airflow keys are fixed in values (the chart's hook Secrets regenerate on
+  every sync). Task logs go to the lake bucket (worker pods are deleted, and their logs with them).
 
 ## Useful commands
 
