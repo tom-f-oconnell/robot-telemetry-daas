@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from rtdaas import __version__
 
+
 def _find_repo_root() -> Path:
     """Locate the checkout that holds ``contracts/`` and ``quality/``.
 

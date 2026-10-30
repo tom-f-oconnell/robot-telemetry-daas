@@ -38,6 +38,8 @@ After the first push, the CI matrix ran with freshly installed dependencies on `
 | `ci / spark` (PySpark 3.5.3, Temurin 17) | `tests/spark/test_jobs.py`: Spark `StructType` for every Iceberg table, the streaming KPI aggregation (`unify → kpi_aggregate → fold_robot_wide`) on a static frame with warn-event and heartbeat-gap folding, `sc.binaryFiles → decode_bag → createDataFrame` on simulator bags | pass |
 | `ci / airflow` (Airflow 2.10.3, official constraints) | `DagBag` loads all 5 DAGs with no import errors; expected task ids, tags, `max_active_runs`, `catchup=False`; `S3KeySensor` key pattern | pass |
 | `ci / lint`, `ci / docs` | ruff check + format, `mkdocs build --strict` | pass |
+| `integration` (3-node kind cluster, Kubernetes 1.32) | Strimzi operator + single-broker KRaft Kafka with the 4 `KafkaTopic` CRs, Apicurio registry, the object store manifest, `rtdaas-contracts register` against the real registry API, the API Deployment from `infra/k8s/manifests/rtdaas`, the simulator producing Avro/Confluent-wire records to Kafka for 60 s, `kcat` reading keyed records back | pass |
+| `deploy` | after each image build, pins the new tags in `kustomization.yaml` and commits (Argo CD hand-off) | pass |
 | `images` | all five images built with buildx and pushed to GHCR — including `rtdaas-bridge`, i.e. the C++ ROS 2 → Kafka bridge, the rclpy adapters and the launch package compiled with `colcon` against ROS 2 Jazzy, avro-cpp 1.11.3 and librdkafka | pass |
 
 Getting there took four short iterations, all in the thin layers, exactly as expected: a
@@ -55,7 +57,7 @@ replaced the MinIO Helm chart with a plain manifest and a frozen MinIO build.
 | Airflow DAG *runs* (the integrity tests only load them) | needs Spark + S3 + the stack | compose stack |
 | Kafka producer (`rtdaas.sim.producer`), Elasticsearch client, Snowflake/DuckDB loaders, DuckDB API backend | no services in CI | compose stack |
 | The C++ bridge *at runtime* (it compiles and links; the introspection walk has not yet run against live dVRK topics) | needs ROS 2 + the dVRK simulation | `ros2 launch rtdaas_launch fleet_sim.launch.py` against the compose stack |
-| Terraform, Ansible, Argo CD applications, Helm values, Kubernetes manifests | no cluster in CI | `make tf-local` + `make ansible`; `integration.yml` covers a kind cluster with Strimzi, Apicurio, MinIO, the simulator and the API |
+| Terraform, Ansible, the Argo CD applications and Helm values for Airflow / spark-operator / ECK / kube-prometheus-stack | no VMs in CI | `make tf-local` + `make ansible` |
 
 ## What to run first after cloning
 
