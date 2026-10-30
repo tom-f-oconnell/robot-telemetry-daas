@@ -77,8 +77,14 @@ with an older `rtdaas_msgs` version still load.
 - Integer fields wider than Avro `long` (`uint64` above 2^63) are rejected by the mapper.
 - DDS discovery across container/pod boundaries needs the CycloneDDS configuration shipped in the
   image (`/config/cyclonedds.xml`) or host networking.
-- The C++ package has not been compiled in this repository's CI yet (no ROS runner); the
-  `bridge.Dockerfile` build is the compile check. API details that were written from the
-  documentation rather than exercised against a live ROS 2 Jazzy install: the
-  `rosbag2_cpp::get_typesupport_handle` signature and the introspection `MessageMembers` walk
-  for bounded sequences.
+- Robot ids such as `dv-001` are not valid ROS 2 names (no `-` in namespaces or topic
+  segments), so `fleet_sim.launch.py` needs `robot_ids:=` with ROS-safe ids (e.g. `dv_001`)
+  until ids and namespaces are reconciled; the static `config/bridge.yaml` has the same problem.
+  The bag pipeline derives `robot_id` from the topic path, so ids recorded from ROS carry the
+  ROS-safe form.
+- `tool_pose_adapter` keeps republishing the last pose at its rate after the dVRK topics stop.
+- The C++ package is compiled by the `bridge.Dockerfile` build in CI, and the image has run
+  against the compose stack (adapters + bridge, `launch_dvrk:=false`, dVRK-shaped topics
+  published by hand): `rosbag2_cpp::get_typesupport_handle` and the introspection walk work for
+  every message in the contract. The walk's bounded-sequence branch is still unexercised (no
+  contract message uses one), and nothing has yet run against the dVRK simulation itself.

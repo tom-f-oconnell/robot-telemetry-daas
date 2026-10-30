@@ -1,6 +1,6 @@
 # CLAUDE.md — handoff for Claude Code
 
-Last updated 2026-10-29 (end of the initial build session). Read this first; then
+Last updated 2026-10-30 (after the first `make demo` session; initial build 2026-10-29). Read this first; then
 `docs/architecture/spec.md` (the interface/schema contract everything is built against) and
 `docs/dev/verification.md` (what has actually executed, where).
 
@@ -53,10 +53,10 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (140 tests, ~8 s) — must stay green
+make test               # unit tier (142 tests, ~8 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
-make demo               # full compose stack (needs Docker, ~16 GB RAM) — NOT YET EXERCISED, see below
+make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
 pip install -e .[spark] && make test-spark      # needs Java 17
 ```
 
@@ -85,15 +85,26 @@ Verified in GitHub Actions (all green on `main`):
   `rtdaas-contracts register` against the real registry, API Deployment, simulator → Kafka for 60 s, kcat reads keys.
 - `deploy`: pins image tags into `infra/k8s/manifests/rtdaas/kustomization.yaml` after each image build.
 
-NOT yet executed anywhere (highest-value next work):
-1. `make demo` — Spark jobs against a real Iceberg REST catalog + Kafka + Elasticsearch, Airflow DAG *runs*,
-   publish to DuckDB/Snowflake, the DuckDB API backend. Expect a few rounds of small fixes in
-   `rtdaas/spark/common.py` (jar/catalog config), `infra/compose/docker-compose.yml`, the DAG operators
-   (`spark_default` connection, `SparkSubmitOperator` args), and `rtdaas/serving/backends/duckdb.py`.
-2. The C++ bridge at runtime against the dVRK kinematic simulation (`ros2 launch rtdaas_launch fleet_sim.launch.py`);
-   `ros2/README.md` lists the two API details written from docs rather than exercised.
-3. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs.
-4. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
+Verified on the compose stack (`make demo`, 2026-10-30; details in `docs/dev/verification.md`): sim → Kafka →
+streaming → Iceberg + ES; all 5 DAGs run green (dq_daily's telemetry gate correctly blocks an empty day);
+publish → DuckDB; every API route on the DuckDB backend against live Iceberg; the CI-built `rtdaas-bridge`
+image at runtime (`launch_dvrk:=false robot_ids:=dv_001`, dVRK-shaped topics published by hand) through to
+the API. ~15 fixes, all in the thin layers.
+
+Open (highest-value next work):
+1. **Robot ids vs ROS names (needs a decision).** `dv-001` is not a valid ROS 2 namespace/topic segment, so
+   `fleet_sim.launch.py` fails with its default ids, and `ros2/rtdaas_kafka_bridge/config/bridge.yaml` +
+   `infra/k8s/manifests/rtdaas/bridge.yaml` use invalid topic names. The bag pipeline derives `robot_id` from
+   the topic path (`rtdaas/local/bags.py`, `rtdaas/spark/decode.py`), so either rename ids fleet-wide to a
+   ROS-safe form or add an invertible namespace↔id mapping on both sides.
+2. `tool_pose_adapter` republishes the last pose at 50 Hz forever after its inputs stop, so a dead dVRK reads
+   as an idle robot (speed 0) rather than an offline one. Probably wants a staleness cutoff.
+3. Re-run `make demo` from empty volumes: the committed `demo.sh` flow was validated step by step on a live
+   stack, not in one clean pass.
+4. The bridge against the real dVRK kinematic simulation (needs the dVRK workspace); the bounded-sequence
+   branch of the introspection walk is still unexercised (no contract message uses one).
+5. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs; Snowflake publish (needs credentials).
+6. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
 
 ## CI mechanics worth knowing
 
@@ -127,6 +138,31 @@ NOT yet executed anywhere (highest-value next work):
 - UI loads Plotly from a CDN and degrades to a notice when offline; tests never depend on the CDN.
 - `tests/serving` skip without the `api` extra (`pytest.importorskip("starlette")`) so the spark/airflow CI jobs collect cleanly.
 - Spark tests need `RTDAAS_SPARK_PACKAGES=0` (jars are baked into the image; CI runs local SparkSession without Iceberg).
+
+From the first `make demo` (each is fixed; the notes are so the fix is not undone):
+
+- **Client mode**: Airflow submits with `--deploy-mode client`, so the *driver runs in the Airflow container*. It
+  needs the same connector jars as the cluster (`infra/docker/spark-jars.sh`, shared by both Dockerfiles) and the
+  same Python minor version as the executors (3.11; the Spark image adds it from deadsnakes into `/opt/venv`
+  because `apache/spark` ships jammy's 3.10). `spark.jars.packages` set from Python is too late under
+  `spark-submit` — the JVM is already up. Old pip on that base silently installs pyproject packages as `UNKNOWN`.
+- The Spark provider builds `--master` as `<host>:<port>`, so the `spark_default` connection's host must carry
+  `spark://` (compose uses the JSON connection form). A missing connection silently means `--master yarn`.
+- `foreachBatch` hands a *cloned* session: temp views must be created and queried through `df.sparkSession`.
+- DuckDB's Iceberg `ATTACH` is a snapshot of the catalog: the API re-attaches after 30 s
+  (`ICEBERG_REFRESH_S`). DuckDB returns `TIMESTAMPTZ` via `pytz`, which pandas 3 no longer installs.
+- One writer per DuckDB file: the API holds `/data/rtdaas.duckdb`, so publish goes to `PUBLISH_DUCKDB_PATH`.
+- The REST catalog reports `s3://` locations; Hadoop needs `fs.s3.impl` = S3A for `remove_orphan_files`.
+- `./data` is a host bind mount: api/sim run as `RTDAAS_UID:RTDAAS_GID`, Airflow as `RTDAAS_UID:0`
+  (`demo.sh` exports `id -u`/`id -g`; `airflow-init` runs as root to hand over the logs volume).
+- Unpausing a `catchup=False` scheduled DAG immediately creates a run for the last complete interval, and with
+  `max_active_runs=1` a manual run queues behind it — `demo.sh` seeds *yesterday's* bags for that run. Airflow
+  also won't start a manual run whose logical date is in the future.
+- `iceberg-rest` ships no curl (healthcheck speaks HTTP over bash `/dev/tcp`); `compose run` of a profiled
+  service needs the `--profile` flags even with `--no-deps`; Spark wants `--trigger "30 seconds"`, not `30s`.
+- `str.format` templates substitute inside comments too (`bridge.yaml.template`: double the braces).
+- Airflow DAG args: a Jinja arg that renders to `""` becomes a stray positional — always pass flag/value pairs.
+- Clearing a task that is already `up_for_retry` after a restart kills its retry mid-run; let it retry.
 
 ## Useful commands
 

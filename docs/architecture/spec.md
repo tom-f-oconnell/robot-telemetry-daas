@@ -683,6 +683,7 @@ last_updated, freshness_ok`) that `GET /api/catalog` serves. The Catalog UI page
 | `SERVING_BACKEND`        | `sqlite`                                  | api                     |
 | `SERVING_SQLITE_PATH`    | `./data/rtdaas.sqlite`                    | api, local pipeline     |
 | `SERVING_DUCKDB_PATH`    | `./data/rtdaas.duckdb`                    | api                     |
+| `PUBLISH_DUCKDB_PATH`    | unset (= `SERVING_DUCKDB_PATH`)           | publish (`--target duckdb`) |
 | `MEDIA_ROOT`             | `./data`                                  | api (trial video files) |
 | `API_HOST` / `API_PORT`  | `0.0.0.0` / `8080`                        | api                     |
 | `PIPELINE_VERSION`       | `rtdaas.__version__`                      | jobs                    |
