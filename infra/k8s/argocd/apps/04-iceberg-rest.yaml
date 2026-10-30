@@ -13,7 +13,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/<owner>/robot-telemetry-daas.git
+    repoURL: https://github.com/tom-f-oconnell/robot-telemetry-daas.git
     targetRevision: main
     path: infra/k8s/manifests/iceberg-rest
   destination:

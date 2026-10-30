@@ -149,29 +149,34 @@ services:
     restart: "no"
 
   # ------------------------------------------------------------------ storage
+  # MinIO withdrew its public images in 2025; this is a frozen MinIO build that auto-creates the
+  # buckets. Swap for rustfs/rustfs (MinIO-compatible) or point S3_ENDPOINT at real S3 — see
+  # infra/k8s/manifests/minio/minio.yaml for the same choice on Kubernetes.
   minio:
-    image: quay.io/minio/minio:latest
+    image: bitnamilegacy/minio:latest
     container_name: rtdaas-minio
     profiles: ["core"]
-    command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+      MINIO_DEFAULT_BUCKETS: ${S3_BUCKET_RAW:-rtdaas-raw}:none,${S3_BUCKET_LAKE:-rtdaas-lake}:none
       MINIO_REGION: us-east-1
+      MINIO_CONSOLE_PORT_NUMBER: "9001"
     volumes:
-      - minio-data:/data
+      - minio-data:/bitnami/minio/data
     healthcheck:
-      test: ["CMD-SHELL", "mc ready local >/dev/null 2>&1 || curl -fsS http://localhost:9000/minio/health/live >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/ready >/dev/null"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
       start_period: 10s
 
+  # Bucket layout markers + a generic S3 client for scripts (aws-cli works against any S3 endpoint).
   minio-init:
-    image: quay.io/minio/mc:latest
+    image: amazon/aws-cli:2.22.35
     container_name: rtdaas-minio-init
     profiles: ["core"]
     depends_on:
@@ -180,12 +185,14 @@ services:
     entrypoint: ["/bin/sh", "/init/minio-buckets.sh"]
     environment:
       S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minioadmin}
+      AWS_DEFAULT_REGION: us-east-1
       S3_BUCKET_RAW: ${S3_BUCKET_RAW:-rtdaas-raw}
       S3_BUCKET_LAKE: ${S3_BUCKET_LAKE:-rtdaas-lake}
     volumes:
       - ./init:/init:ro
+      - ./data:/data
     restart: "no"
 
   iceberg-rest:

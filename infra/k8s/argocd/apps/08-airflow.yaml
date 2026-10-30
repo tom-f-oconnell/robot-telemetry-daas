@@ -17,7 +17,7 @@ spec:
         releaseName: airflow
         valueFiles:
           - $values/infra/k8s/helm-values/airflow.yaml
-    - repoURL: https://github.com/<owner>/robot-telemetry-daas.git
+    - repoURL: https://github.com/tom-f-oconnell/robot-telemetry-daas.git
       targetRevision: main
       ref: values
   destination:

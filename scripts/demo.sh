@@ -52,8 +52,8 @@ up() {
 
   log "generating a synthetic JIGSAWS dataset and uploading it to s3://rtdaas-raw/jigsaws"
   "${COMPOSE[@]}" run --rm --no-deps --entrypoint rtdaas-jigsaws sim synth --out /data/jigsaws --trials 2
-  "${COMPOSE[@]}" run --rm --no-deps --entrypoint sh minio-init -c \
-    'mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && mc mirror --overwrite /data/jigsaws local/rtdaas-raw/jigsaws' || true
+  "${COMPOSE[@]}" run --rm --no-deps --entrypoint aws minio-init \
+    --endpoint-url http://minio:9000 s3 sync /data/jigsaws s3://rtdaas-raw/jigsaws || true
 
   log "starting the simulator and the streaming job (demo profile)"
   "${COMPOSE[@]}" "${PROFILES[@]}" up -d sim streaming

@@ -34,7 +34,7 @@ make demo-down
   `contracts/registry.yml`.
 - `registry-init` runs `rtdaas-contracts register` so the subjects exist with BACKWARD
   compatibility before any producer starts.
-- `minio-init` creates the `rtdaas-raw` and `rtdaas-lake` buckets.
+- `minio-init` (aws-cli) makes sure the `rtdaas-raw` and `rtdaas-lake` buckets exist and writes the layout markers; the same container is reused by `scripts/demo.sh` to upload the synthetic JIGSAWS dataset.
 - `airflow-init` migrates the metadata DB, creates the admin user, sets the Airflow Variable
   `rtdaas_spark_mode=submit` and the `rtdaas_s3` connection pointing at MinIO.
 

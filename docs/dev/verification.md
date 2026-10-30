@@ -43,7 +43,9 @@ After the first push, the CI matrix ran with freshly installed dependencies on `
 Getting there took four short iterations, all in the thin layers, exactly as expected: a
 collection-time import of Starlette in the serving tests (now skipped without the `api`
 extra), ruff findings, and two `-Werror` warnings in avro-cpp's source build under GCC 13 /
-Boost 1.83 (built as C++17 with those diagnostics relaxed; only the library targets are built).
+Boost 1.83 (built as C++17 with those diagnostics relaxed; only the library targets are built),
+and MinIO having withdrawn its public container images (every `minio/*` tag fails to pull), which
+replaced the MinIO Helm chart with a plain manifest and a frozen MinIO build.
 
 ## Written, compiles, not yet executed
 

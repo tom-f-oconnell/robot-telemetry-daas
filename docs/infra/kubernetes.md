@@ -52,7 +52,7 @@ environment overlay ConfigMap, and `infra/k8s/argocd/root.yaml`).
 | strimzi-operator | Helm `strimzi-kafka-operator` 0.43 | |
 | kafka-cluster | `manifests/kafka` | `Kafka` + `KafkaNodePool` (KRaft, 3 brokers), 4 `KafkaTopic` CRs from `registry.yml` |
 | apicurio | `manifests/apicurio` | in-memory registry for demo; swap to the SQL variant for persistence |
-| minio | Helm `minio` 5.3 | standalone, buckets pre-created (local env only) |
+| minio | `manifests/minio` | plain Deployment (MinIO withdrew its public images in 2025, which also broke the upstream chart); frozen `bitnamilegacy/minio` build by default, RustFS or real S3 are documented swaps; buckets auto-created (local env only) |
 | iceberg-rest | `manifests/iceberg-rest` | REST catalog over the lake bucket |
 | spark-operator | Helm (kubeflow) 2.0 | watches namespace `rtdaas` |
 | eck-operator + elasticsearch | Helm `eck-operator` 2.14 + `Elasticsearch` CR | 1 node, security off for demo |

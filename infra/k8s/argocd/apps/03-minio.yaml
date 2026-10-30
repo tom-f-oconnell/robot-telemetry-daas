@@ -9,17 +9,12 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  sources:
-    - repoURL: https://charts.min.io/
-      chart: minio
-      targetRevision: 5.3.0
-      helm:
-        releaseName: minio
-        valueFiles:
-          - $values/infra/k8s/helm-values/minio.yaml
-    - repoURL: https://github.com/<owner>/robot-telemetry-daas.git
-      targetRevision: main
-      ref: values
+  # Plain manifests rather than the upstream Helm chart: MinIO's public images were withdrawn
+  # in 2025, so the image is pinned in manifests/minio/minio.yaml (see the comment there).
+  source:
+    repoURL: https://github.com/tom-f-oconnell/robot-telemetry-daas.git
+    targetRevision: main
+    path: infra/k8s/manifests/minio
   destination:
     server: https://kubernetes.default.svc
     namespace: minio
