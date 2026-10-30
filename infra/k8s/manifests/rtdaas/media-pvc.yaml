@@ -1,8 +1,7 @@
 # Shared /data volume for the API (SQLite mirror in sqlite mode, trial videos for
 # /api/trials/{id}/video) and the demo simulator's local bag copies.
-# ReadWriteMany is needed when api replicas > 1; k3s' local-path provisioner only
-# offers RWO, so the API runs with RWO + Recreate strategy there. On a cluster with
-# an RWX class (EFS, Longhorn, NFS) set storageClassName accordingly.
+# k3s' local-path provisioner only offers RWO, so the API runs with RWO + Recreate strategy
+# (the old pod must release the volume and the DuckDB file before the new one starts).
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

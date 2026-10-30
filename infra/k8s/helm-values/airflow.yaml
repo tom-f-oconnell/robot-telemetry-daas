@@ -76,6 +76,8 @@ logs:
 # at RDS/CloudSQL in production.
 postgresql:
   enabled: true
+  image:
+    repository: bitnamilegacy/postgresql  # Bitnami withdrew the versioned images from bitnami/*
   primary:
     persistence:
       size: 20Gi

@@ -8,6 +8,9 @@ configs:
     server.insecure: true
   cm:
     timeout.reconciliation: 120s
+    # Not the default label: operators copy a CR's labels onto what they create, so Argo CD took
+    # Strimzi's PVCs and Services for its own and pruned them.
+    application.resourceTrackingMethod: annotation
     # Kustomize + Helm multi-source apps are used in apps/*.yaml.
     kustomize.buildOptions: --enable-helm
     resource.customizations.ignoreDifferences.apps_Deployment: |

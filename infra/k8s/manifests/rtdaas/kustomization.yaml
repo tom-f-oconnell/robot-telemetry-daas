@@ -6,6 +6,8 @@ kind: Kustomization
 namespace: rtdaas
 commonLabels:
   app.kubernetes.io/part-of: rtdaas
+configurations:
+- kustomizeconfig.yaml
 resources:
 - namespace.yaml
 - configmap.yaml

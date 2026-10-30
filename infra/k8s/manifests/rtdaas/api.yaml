@@ -13,9 +13,9 @@ metadata:
     app.kubernetes.io/name: rtdaas-api
     app.kubernetes.io/part-of: rtdaas
 spec:
-  # 2 replicas per spec §7. Both mount the same RWO media PVC, which only works when
-  # they land on the same node (k3s local-path); use an RWX storage class otherwise.
-  replicas: 2
+  # One replica: the DuckDB backend keeps its jobs table in a file on the media PVC, and a DuckDB
+  # file takes one process (a second replica crash-loops on the lock).
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -121,14 +121,3 @@ spec:
                 name: rtdaas-api
                 port:
                   name: http
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: rtdaas-api
-  namespace: rtdaas
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: rtdaas-api

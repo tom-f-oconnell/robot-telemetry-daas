@@ -55,10 +55,10 @@ environment overlay ConfigMap, and `infra/k8s/argocd/root.yaml`).
 | minio | `manifests/minio` | plain Deployment (MinIO withdrew its public images in 2025, which also broke the upstream chart); frozen `bitnamilegacy/minio` build by default, RustFS or real S3 are documented swaps; buckets auto-created (local env only) |
 | iceberg-rest | `manifests/iceberg-rest` | REST catalog over the lake bucket |
 | spark-operator | Helm (kubeflow) 2.0 | watches namespace `rtdaas` |
-| eck-operator + elasticsearch | Helm `eck-operator` 2.14 + `Elasticsearch` CR | 1 node, security off for demo |
+| eck-operator + elasticsearch | Helm `eck-operator` 2.14 + `Elasticsearch` CR | 1 node, no credentials for demo (anonymous superuser) |
 | airflow | Helm `airflow` 1.15 | KubernetesExecutor, git-sync of `rtdaas/airflow/dags`, env from the rtdaas ConfigMap/Secret |
 | kube-prometheus-stack | Helm 65.x | ServiceMonitors for api and Kafka |
-| rtdaas | `manifests/rtdaas` (kustomize) | api (2 replicas, Ingress `rtdaas.local`), `SparkApplication/streaming-kpis`, sim, bridge |
+| rtdaas | `manifests/rtdaas` (kustomize) | api (Ingress `rtdaas.local`), `SparkApplication/streaming-kpis`, sim, bridge |
 
 Sync policy is automated with prune + self-heal; `CreateNamespace=true`.
 

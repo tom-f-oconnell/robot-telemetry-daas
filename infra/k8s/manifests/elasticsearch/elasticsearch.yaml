@@ -1,5 +1,7 @@
 # ECK-managed single-node Elasticsearch for the demo cluster.
-# Service: http://rtdaas-es-http.rtdaas.svc.cluster.local:9200 (security disabled).
+# Service: http://rtdaas-es-http.rtdaas.svc.cluster.local:9200, plain HTTP and no credentials.
+# Not xpack.security.enabled=false: ECK's file-based settings fail to load without security, and
+# Elasticsearch stays unready. Anonymous superuser gives clients the same access.
 apiVersion: elasticsearch.k8s.elastic.co/v1
 kind: Elasticsearch
 metadata:
@@ -16,9 +18,9 @@ spec:
       count: 1
       config:
         node.store.allow_mmap: false
-        xpack.security.enabled: false
-        xpack.security.http.ssl.enabled: false
-        xpack.security.transport.ssl.enabled: false
+        xpack.security.authc.anonymous:
+          username: anonymous
+          roles: superuser
       podTemplate:
         spec:
           containers:
@@ -53,7 +55,12 @@ spec:
       selfSignedCertificate:
         disabled: true
   config:
-    xpack.security.enabled: false
+    xpack.security.authc.providers:
+      anonymous.anonymous1:
+        order: 0
+        credentials: elasticsearch_anonymous_user
+      basic.basic1:
+        order: 1
   podTemplate:
     spec:
       containers:

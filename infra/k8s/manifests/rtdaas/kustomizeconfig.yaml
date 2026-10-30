@@ -1,0 +1,5 @@
+# Lets `images:` in kustomization.yaml rewrite the SparkApplication's image, which is not in a
+# field kustomize knows about (the placeholder otherwise reaches the cluster as InvalidImageName).
+images:
+- path: spec/image
+  kind: SparkApplication
