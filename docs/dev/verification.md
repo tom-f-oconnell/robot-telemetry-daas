@@ -62,6 +62,10 @@ replaced the MinIO Helm chart with a plain manifest and a frozen MinIO build.
 | `dq_daily` DAG | mapped gates over all three suites (telemetry correctly blocks on an empty partition), `iceberg_maintenance` (compaction 15 → 3 files, snapshot expiry, orphan scan) | pass |
 | DuckDB API backend | every GET route against the live Iceberg catalog (incl. trajectory, kinematics, video with Range); catalog re-attached while running so new commits show up without a restart | pass |
 | Elasticsearch client | events / gestures search through the API; KPI and session indices | pass |
+| Catalog persistence | `make demo-down && make demo` with data in all 11 tables: identical row counts afterwards (the catalog used to be lost) | pass |
+| Bag landing (`rtdaas-land`) | one-shot over the seeded batch (already present → skipped), `bag-lander --watch` landing the live sim's bags once closed, `docker stop` of the sim closing its bags (exit 0, sessions ended), stale-open-bag warning | pass |
+| Web UI on the DuckDB backend | headless Chrome over all 10 pages: data on every page, Plotly charts on the session and trial pages, no console errors; bag events on the session page | pass |
+| `dq_daily` all green | scheduled run for 2026-10-29: all three suites pass, `dq_summary` and `iceberg_maintenance` succeed | pass |
 | Adapter liveness (ROS 2 Jazzy, bridge image with the adapters mounted) | dVRK-shaped topics for 5 s, silent, back: heartbeat `ready` → `offline` (`active_arms: []`, WARN `STATE_OFFLINE`) → `ready`; `tool_pose` 0 msgs while silent; events through to Elasticsearch | pass |
 | C++ bridge at runtime | CI-built `rtdaas-bridge` image, `fleet_sim.launch.py launch_dvrk:=false` with its default ids (`dv_001`), dVRK-shaped `measured_cp` / `measured_js` / `jaw/measured_js` published by hand: adapters → bridge → Kafka (records decode with fastavro against the registry) → streaming → API | pass |
 

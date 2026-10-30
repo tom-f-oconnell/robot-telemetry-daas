@@ -27,6 +27,13 @@ topic path (`/dv_001/PSM1/…`), `ts` from the message header and `recv_ts` from
 Because the function is plain Python it is unit-tested against bags written by the simulator,
 and runs identically inside Spark and in `rtdaas-local pipeline`.
 
+Bags reach the landing zone through `rtdaas-land` (`rtdaas/landing`), which derives the
+`<robot>/<yyyy>/<mm>/<dd>/` key from the bag itself and only uploads closed files; the compose
+stack runs it as the `bag-lander` service. Besides the Iceberg tables, `batch_mcap` indexes the
+bag events and the exact KPI windows into Elasticsearch under the stream's document ids, so the
+API's event search and the dashboards show bag data and the batch numbers replace the stream's
+approximations there as they do in Iceberg.
+
 ## Sessions and KPIs
 
 Per robot, events and heartbeats for the day are small and are collected to the driver to run

@@ -24,6 +24,7 @@ rtdaas/
   contracts/       .msg parser, Avro gen, pure-Python Avro codec + compat checker, registry client, CDR codec, CLI
   mcap_lite/       dependency-free MCAP v1 writer/reader (chunked + zstd/lz4 via optional libs)
   sim/             ROS-free fleet simulator → Kafka (confluent_kafka) and ros2-bag-compatible MCAP
+  landing/         rtdaas-land: closed MCAP bags → s3://<raw>/bags/<robot>/<yyyy>/<mm>/<dd>/ (boto3, [land] extra)
   jigsaws/         JIGSAWS layout parser, synthetic dataset generator (H.264 video), OpenCV frame features
   metrics/         session "economy of motion" metrics, 1-min KPI windows, gesture metrics (pure pandas/numpy)
   quality/         YAML check suites + one engine; adapters for pandas / SQLite / Spark
@@ -53,7 +54,7 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (142 tests, ~8 s) — must stay green
+make test               # unit tier (148 tests, ~8 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
 make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
@@ -93,10 +94,18 @@ API. ~15 fixes, all in the thin layers. Then a clean `make demo` (empty volumes 
 it surfaced the batch/stream MERGE conflict below, fixed and A/B-verified.
 
 Open (highest-value next work):
-1. The bridge against the real dVRK kinematic simulation (needs the dVRK workspace); the bounded-sequence
-   branch of the introspection walk is still unexercised (no contract message uses one).
-2. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs; Snowflake publish (needs credentials).
-3. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
+1. Dispatch the `integration` workflow: it has not run since the 2026-10-30 changes (its nightly 04:17 run did
+   not fire that day). It deploys the API with the *sqlite* backend, so the DuckDB/Iceberg serving path and
+   the iceberg-rest manifest (PVC + `fsGroup`, both changed) are still only verified on compose.
+2. The bridge against the real dVRK kinematic simulation (needs the dVRK ROS 2 workspace: Ubuntu 24.04 build
+   per dvrk.readthedocs.io; `dvrk_model`'s `ros2/launch/arm.launch.py` runs `dvrk_system` with
+   `system-<ARM>_<gen>_KIN_SIMULATED.json`, whose PSM config fixes the instrument, and starts rviz2
+   unconditionally; `QT_QPA_PLATFORM=offscreen` for headless). Also exercises fleet_monitor's CRTK
+   `operating_state` mode, which has never run. The bounded-sequence branch of the introspection walk is
+   still unexercised (no contract message uses one).
+3. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs, incl. Spark/Airflow in `k8s` mode;
+   Snowflake publish (needs credentials).
+4. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
 
 ## CI mechanics worth knowing
 
@@ -169,6 +178,20 @@ From the first `make demo` (each is fixed; the notes are so the fix is not undon
 - **rclpy raises "Logger severity cannot be changed between calls"** when one logging call site is used with
   different severities: one call per severity. `fleet_monitor._emit` had this and would have died on the first
   WARN/ERROR event (e.g. `JOINT_LIMIT_WARN`) on a real dVRK.
+- **The Iceberg catalog lives on the `iceberg-catalog` volume.** tabulario/iceberg-rest's default
+  `CATALOG_URI` is `jdbc:sqlite:file:/tmp/iceberg_rest_mode=memory` — a *file* (mode=memory is part of the
+  name) in the container layer, so `make demo-down` dropped every table definition while the data stayed in
+  MinIO. Compose mounts the volume at `/home/iceberg` (owned by the image user, so the volume inherits it).
+  After a down/up Airflow still remembers which runs succeeded: clear a run to re-ingest it.
+- **The simulator turns SIGTERM into a normal stop** (`docker stop`, `make demo-down`): Python's default
+  SIGTERM exits without unwinding, which left bags without their footer — never "closed", never landed.
+  `rtdaas-land` warns about open bags unchanged for `--stale-after` s.
+- **The UI only draws charts when the Plotly CDN loads**, so chart code went unexercised in the offline build
+  sandbox: it called `window.plot`/`restyle`/`relayout` (Plotly's API is `window.Plotly.*`) and stacked panels
+  with grid `"independent"` and `yaxis: "y1"` (overlapping axes). Stacked time panels use `"coupled"`.
+- **Elasticsearch gets events and KPI windows from both the stream and `batch_mcap`**, under shared ids
+  (`es_event_id`, `es_kpi_id`); before, bag events never reached ES, and the DuckDB backend serves events from
+  ES whenever it is reachable, so they were invisible in the API/UI.
 - **Robot ids are ROS names**: `dv_001`, not `dv-001` (renamed fleet-wide 2026-10-30). The id is the ROS
   namespace and the bag pipeline reads `robot_id` back from the topic path, so one form must serve both;
   ROS 2 names allow no `-`.
@@ -182,5 +205,6 @@ rtdaas-jigsaws synth --out data/jigsaws --trials 2
 rtdaas-local pipeline --bags data/bags --jigsaws data/jigsaws --out data/rtdaas.sqlite
 rtdaas-quality run --suite quality/checks/telemetry.yml --backend sqlite --db data/rtdaas.sqlite --out-table
 rtdaas-api                                         # SERVING_BACKEND=sqlite|duckdb, see spec §9 for env vars
+rtdaas-land --root data/bags [--watch] [--dry-run]  # land closed bags in the raw bucket
 gh api repos/tom-f-oconnell/robot-telemetry-daas/actions/runs?per_page=5   # CI status without the UI
 ```
