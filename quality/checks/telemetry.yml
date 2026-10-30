@@ -132,7 +132,7 @@ tables:
         severity: warning
       - name: known_states
         type: sql
-        query: "SELECT COUNT(*) FROM {table} WHERE state NOT IN ('idle', 'homing', 'ready', 'teleop', 'fault')"
+        query: "SELECT COUNT(*) FROM {table} WHERE state NOT IN ('idle', 'homing', 'ready', 'teleop', 'fault', 'offline')"
         op: "=="
         threshold: 0
         severity: warning

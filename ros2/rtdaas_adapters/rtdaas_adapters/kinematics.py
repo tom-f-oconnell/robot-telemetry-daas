@@ -33,6 +33,13 @@ STATE_HOMING = "homing"
 STATE_READY = "ready"
 STATE_TELEOP = "teleop"
 STATE_FAULT = "fault"
+# The arm was heard from and then went silent for longer than the input timeout (the dVRK
+# process died or stopped publishing). Not a CRTK state: derived from message arrival.
+STATE_OFFLINE = "offline"
+
+# Seconds without input after which an arm counts as offline: the adapter stops republishing
+# its last pose and the fleet monitor marks it offline. The dVRK publishes at >= 100 Hz.
+INPUT_TIMEOUT_S = 0.5
 
 SEVERITY_INFO = 1
 SEVERITY_WARN = 2
@@ -146,39 +153,82 @@ def operating_state_to_heartbeat_state(
     return STATE_IDLE
 
 
+def is_stale(last_rx: float | None, now: float, timeout: float = INPUT_TIMEOUT_S) -> bool:
+    """True if input was received at ``last_rx`` and nothing since for more than ``timeout``.
+
+    ``None`` (never received) is not stale: an arm that never reported is absent, not offline.
+    """
+    return last_rx is not None and now - last_rx > timeout
+
+
 @dataclass
 class StateTracker:
     """Tracks per-arm heartbeat states and tells the monitor which events to emit.
 
     ``update(arm, new_state)`` returns a list of (severity, code, message) tuples for
-    transitions that happened: INFO ``STATE_<NEW>`` for every change, ERROR ``ESTOP``
-    when an arm enters ``fault``, INFO ``FAULT_CLEARED`` when it leaves it.
+    transitions that happened: INFO ``STATE_<NEW>`` for every change (WARN for
+    ``STATE_OFFLINE``), ERROR ``ESTOP`` when an arm enters ``fault``, INFO ``FAULT_CLEARED``
+    when it leaves it. ``mark_offline`` / ``mark_alive`` handle input loss and recovery,
+    restoring the state the arm had before it went silent.
     """
 
     states: dict[str, str] = field(default_factory=dict)
+    _before_offline: dict[str, str] = field(default_factory=dict)
 
     def update(self, arm: str, new_state: str) -> list[tuple[int, str, str]]:
         old = self.states.get(arm)
+        # Fault transitions are judged against the last real state: going silent is not
+        # FAULT_CLEARED, and coming back still in fault is not a new ESTOP.
+        prev = self._before_offline.get(arm) if old == STATE_OFFLINE else old
         self.states[arm] = new_state
+        if new_state != STATE_OFFLINE:
+            self._before_offline.pop(arm, None)  # an explicit state supersedes the remembered one
         if old == new_state:
             return []
         events: list[tuple[int, str, str]] = []
+        severity = SEVERITY_WARN if new_state == STATE_OFFLINE else SEVERITY_INFO
         if old is not None:
-            events.append((SEVERITY_INFO, f"STATE_{new_state.upper()}", f"{arm}: {old} -> {new_state}"))
+            events.append((severity, f"STATE_{new_state.upper()}", f"{arm}: {old} -> {new_state}"))
         else:
-            events.append((SEVERITY_INFO, f"STATE_{new_state.upper()}", f"{arm}: initial state {new_state}"))
-        if new_state == STATE_FAULT:
+            events.append((severity, f"STATE_{new_state.upper()}", f"{arm}: initial state {new_state}"))
+        if new_state == STATE_FAULT and prev != STATE_FAULT:
             events.append((SEVERITY_ERROR, "ESTOP", f"{arm} entered FAULT"))
-        elif old == STATE_FAULT:
+        elif prev == STATE_FAULT and new_state not in (STATE_FAULT, STATE_OFFLINE):
             events.append((SEVERITY_INFO, "FAULT_CLEARED", f"{arm} left FAULT -> {new_state}"))
         return events
 
+    def mark_offline(self, arm: str) -> list[tuple[int, str, str]]:
+        """The arm went silent: remember its state and move it to ``offline``."""
+        old = self.states.get(arm)
+        if old is None or old == STATE_OFFLINE:
+            return []
+        self._before_offline[arm] = old
+        return self.update(arm, STATE_OFFLINE)
+
+    def mark_alive(self, arm: str, default: str | None = None) -> list[tuple[int, str, str]]:
+        """Input from the arm arrived.
+
+        An offline arm gets back the state it had (state topics such as CRTK
+        ``operating_state`` only publish on change, so nothing else would restore it). An arm
+        never seen before is set to ``default`` if given (presence-only monitoring).
+        """
+        old = self.states.get(arm)
+        if old == STATE_OFFLINE:
+            # get, not pop: update() needs the remembered state to judge fault events, then clears it
+            return self.update(arm, self._before_offline.get(arm, default or STATE_READY))
+        if old is None and default is not None:
+            return self.update(arm, default)
+        return []
+
     def robot_state(self) -> str:
-        """Aggregate state for the Heartbeat: fault > homing > teleop > ready > idle."""
+        """Aggregate state for the Heartbeat: fault > homing > teleop > ready > idle;
+        ``offline`` only when every arm that has reported has gone silent."""
         values = set(self.states.values())
         for s in (STATE_FAULT, STATE_HOMING, STATE_TELEOP, STATE_READY):
             if s in values:
                 return s
+        if values == {STATE_OFFLINE}:
+            return STATE_OFFLINE
         return STATE_IDLE
 
     def active_arms(self) -> list[str]:

@@ -93,12 +93,10 @@ API. ~15 fixes, all in the thin layers. Then a clean `make demo` (empty volumes 
 it surfaced the batch/stream MERGE conflict below, fixed and A/B-verified.
 
 Open (highest-value next work):
-1. `tool_pose_adapter` republishes the last pose at 50 Hz forever after its inputs stop, so a dead dVRK reads
-   as an idle robot (speed 0) rather than an offline one. Probably wants a staleness cutoff.
-2. The bridge against the real dVRK kinematic simulation (needs the dVRK workspace); the bounded-sequence
+1. The bridge against the real dVRK kinematic simulation (needs the dVRK workspace); the bounded-sequence
    branch of the introspection walk is still unexercised (no contract message uses one).
-3. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs; Snowflake publish (needs credentials).
-4. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
+2. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs; Snowflake publish (needs credentials).
+3. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
 
 ## CI mechanics worth knowing
 
@@ -163,6 +161,14 @@ From the first `make demo` (each is fixed; the notes are so the fix is not undon
   the target to the source's days (`merge_on_clause`); pass it for every table both sides write (raw tables,
   `kpi_1m`). A/B on the live catalog: unbounded 6/6 conflicted, bounded 0/6. Multiple writer *threads* in one
   driver additionally need separate Spark sessions (Iceberg "runtime file filtering" error).
+- **Liveness is message arrival.** CRTK `operating_state` publishes on change, so without a timeout a dead
+  dVRK kept reporting `ready` and the pose adapter kept republishing its last pose *and last speed* (phantom
+  motion; the stream appended the copies). `fleet_monitor` now marks a silent arm `offline` and restores its
+  previous state on recovery; going silent is not `FAULT_CLEARED` and coming back in fault is not a new `ESTOP`
+  (`StateTracker`, tested without ROS). Heartbeat.state gained `"offline"` (doc-only contract change).
+- **rclpy raises "Logger severity cannot be changed between calls"** when one logging call site is used with
+  different severities: one call per severity. `fleet_monitor._emit` had this and would have died on the first
+  WARN/ERROR event (e.g. `JOINT_LIMIT_WARN`) on a real dVRK.
 - **Robot ids are ROS names**: `dv_001`, not `dv-001` (renamed fleet-wide 2026-10-30). The id is the ROS
   namespace and the bag pipeline reads `robot_id` back from the topic path, so one form must serve both;
   ROS 2 names allow no `-`.

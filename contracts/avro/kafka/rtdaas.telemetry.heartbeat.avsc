@@ -78,7 +78,7 @@
           {
             "name": "state",
             "type": "string",
-            "doc": "Coarse operating state: \"idle\", \"homing\", \"ready\", \"teleop\", \"fault\"."
+            "doc": "Coarse operating state: \"idle\", \"homing\", \"ready\", \"teleop\", \"fault\", or \"offline\" (every arm that had reported has gone silent; see rtdaas_adapters fleet_monitor)."
           },
           {
             "name": "active_arms",

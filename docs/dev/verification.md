@@ -62,6 +62,7 @@ replaced the MinIO Helm chart with a plain manifest and a frozen MinIO build.
 | `dq_daily` DAG | mapped gates over all three suites (telemetry correctly blocks on an empty partition), `iceberg_maintenance` (compaction 15 → 3 files, snapshot expiry, orphan scan) | pass |
 | DuckDB API backend | every GET route against the live Iceberg catalog (incl. trajectory, kinematics, video with Range); catalog re-attached while running so new commits show up without a restart | pass |
 | Elasticsearch client | events / gestures search through the API; KPI and session indices | pass |
+| Adapter liveness (ROS 2 Jazzy, bridge image with the adapters mounted) | dVRK-shaped topics for 5 s, silent, back: heartbeat `ready` → `offline` (`active_arms: []`, WARN `STATE_OFFLINE`) → `ready`; `tool_pose` 0 msgs while silent; events through to Elasticsearch | pass |
 | C++ bridge at runtime | CI-built `rtdaas-bridge` image, `fleet_sim.launch.py launch_dvrk:=false` with its default ids (`dv_001`), dVRK-shaped `measured_cp` / `measured_js` / `jaw/measured_js` published by hand: adapters → bridge → Kafka (records decode with fastavro against the registry) → streaming → API | pass |
 
 A second, unattended `make demo` from empty volumes and an empty `./data` then ran clean except

@@ -6,7 +6,9 @@ For every arm in ``arms`` the node subscribes to
 - ``/<source_namespace>/<arm>/jaw/measured_js``  (sensor_msgs/JointState; PSMs only)
 
 keeps the latest values, estimates the tip speed by finite differences, and publishes
-``rtdaas_msgs/ToolPose`` on ``/<robot_id>/<arm>/rtdaas/tool_pose`` at ``rate_hz``.
+``rtdaas_msgs/ToolPose`` on ``/<robot_id>/<arm>/rtdaas/tool_pose`` at ``rate_hz``. An arm
+whose ``measured_cp`` has not arrived for ``input_timeout_s`` is not published until it
+resumes: republishing the last pose would make a dead dVRK look alive (and still moving).
 
 Parameters
 ----------
@@ -18,11 +20,13 @@ source_namespace : str    where the dVRK topics live. In the dVRK kinematic simu
                           so the default is "". The fleet launch file sets it to the
                           per-robot namespace it pushes the dVRK nodes into.
 speed_filter_alpha : float  low-pass weight for the speed estimate, default 0.3
+input_timeout_s : float   stop publishing an arm after this long without measured_cp, default 0.5
 """
 
 from __future__ import annotations
 
 import math
+import time
 
 import rclpy
 from geometry_msgs.msg import PoseStamped
@@ -32,7 +36,14 @@ from sensor_msgs.msg import JointState
 
 from rtdaas_msgs.msg import ToolPose
 
-from rtdaas_adapters.kinematics import NAN, SpeedEstimator, arm_has_jaw, jaw_angle_from_joint_state
+from rtdaas_adapters.kinematics import (
+    INPUT_TIMEOUT_S,
+    NAN,
+    SpeedEstimator,
+    arm_has_jaw,
+    is_stale,
+    jaw_angle_from_joint_state,
+)
 
 
 def _topic(namespace: str, *parts: str) -> str:
@@ -47,6 +58,8 @@ class _ArmState:
         self.jaw_angle: float = NAN
         self.estimator = SpeedEstimator(alpha=alpha)
         self.speed: float = 0.0
+        self.last_rx: float | None = None  # time.monotonic() of the last measured_cp
+        self.publishing = False
 
 
 class ToolPoseAdapter(Node):
@@ -57,6 +70,7 @@ class ToolPoseAdapter(Node):
         self.declare_parameter("rate_hz", 50.0)
         self.declare_parameter("source_namespace", "")
         self.declare_parameter("speed_filter_alpha", 0.3)
+        self.declare_parameter("input_timeout_s", INPUT_TIMEOUT_S)
 
         self.robot_id: str = self.get_parameter("robot_id").value
         if not self.robot_id:
@@ -65,6 +79,7 @@ class ToolPoseAdapter(Node):
         rate_hz: float = float(self.get_parameter("rate_hz").value)
         source_ns: str = self.get_parameter("source_namespace").value
         alpha: float = float(self.get_parameter("speed_filter_alpha").value)
+        self.input_timeout_s: float = float(self.get_parameter("input_timeout_s").value)
 
         sensor_qos = QoSProfile(
             depth=10, reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST
@@ -93,6 +108,7 @@ class ToolPoseAdapter(Node):
     def _on_pose(self, arm: str, msg: PoseStamped) -> None:
         st = self._state[arm]
         st.pose = msg
+        st.last_rx = time.monotonic()
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         if t <= 0.0:  # unstamped publisher: fall back to node time
             t = self.get_clock().now().nanoseconds * 1e-9
@@ -103,9 +119,19 @@ class ToolPoseAdapter(Node):
         self._state[arm].jaw_angle = jaw_angle_from_joint_state(list(msg.name), list(msg.position))
 
     def _publish_all(self) -> None:
+        now = time.monotonic()
         for arm, st in self._state.items():
             if st.pose is None:
                 continue
+            if is_stale(st.last_rx, now, self.input_timeout_s):
+                if st.publishing:
+                    st.publishing = False
+                    self.get_logger().warning(
+                        f"{arm}: no measured_cp for {self.input_timeout_s} s; tool_pose paused")
+                continue
+            if not st.publishing:
+                st.publishing = True
+                self.get_logger().info(f"{arm}: publishing tool_pose")
             out = ToolPose()
             out.header = st.pose.header
             if out.header.stamp.sec == 0 and out.header.stamp.nanosec == 0:

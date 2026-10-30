@@ -80,7 +80,10 @@ with an older `rtdaas_msgs` version still load.
 - A robot id is also its ROS namespace (`/dv_001/PSM1/measured_js`) and the `robot_id` of every
   record (the bag pipeline reads it from the topic path), so ids must be valid ROS 2 names:
   letters, digits and `_`, starting with a letter. `dv-001` (the original form) is rejected.
-- `tool_pose_adapter` keeps republishing the last pose at its rate after the dVRK topics stop.
+- Liveness is inferred from message arrival (`input_timeout_s`, default 0.5 s): an arm whose
+  dVRK topics stop is reported `offline` by `fleet_monitor` (WARN `STATE_OFFLINE`, dropped from
+  `active_arms`) and `tool_pose_adapter` stops publishing it, rather than repeating its last pose.
+  An arm that never reports at all stays absent, not offline.
 - The C++ package is compiled by the `bridge.Dockerfile` build in CI, and the image has run
   against the compose stack (adapters + bridge, `launch_dvrk:=false`, dVRK-shaped topics
   published by hand): `rosbag2_cpp::get_typesupport_handle` and the introspection walk work for

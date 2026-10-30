@@ -82,7 +82,7 @@ tables:
       - {name: ts, type: timestamp, description: Header stamp, UTC.}
       - {name: recv_ts, type: timestamp, description: Receive / log time.}
       - {name: uptime_s, type: double, description: Seconds since the robot software started.}
-      - {name: state, type: string, description: "idle, homing, ready, teleop or fault."}
+      - {name: state, type: string, description: "idle, homing, ready, teleop, fault or offline (all arms silent)."}
       - {name: active_arms, type: "array<string>", description: Arms currently enabled.}
       - {name: software_version, type: string, description: Publishing stack version.}
       - {name: source, type: string, description: stream or bag.}

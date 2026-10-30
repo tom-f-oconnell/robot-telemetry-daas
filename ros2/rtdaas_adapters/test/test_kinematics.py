@@ -19,8 +19,10 @@ from rtdaas_adapters.kinematics import (  # noqa: E402
     STATE_READY,
     STATE_TELEOP,
     SpeedEstimator,
+    STATE_OFFLINE,
     StateTracker,
     arm_has_jaw,
+    is_stale,
     jaw_angle_from_joint_state,
     joint_limit_violations,
     operating_state_to_heartbeat_state,
@@ -105,3 +107,45 @@ def test_state_tracker_emits_transition_and_estop_events():
     tr.update("ECM", STATE_IDLE)
     assert tr.robot_state() == STATE_TELEOP
     assert tr.active_arms() == ["PSM1", "PSM2"]
+
+
+def test_is_stale():
+    assert not is_stale(None, 100.0)  # never heard from: absent, not offline
+    assert not is_stale(99.6, 100.0, timeout=0.5)
+    assert is_stale(99.4, 100.0, timeout=0.5)
+
+
+def test_state_tracker_offline_and_recovery_restores_previous_state():
+    tr = StateTracker()
+    assert tr.mark_offline("PSM1") == []  # unknown arm: nothing to take offline
+    tr.update("PSM1", STATE_TELEOP)
+    tr.update("PSM2", STATE_READY)
+    lost = tr.mark_offline("PSM1")
+    assert [(sev, c) for sev, c, _ in lost] == [(2, "STATE_OFFLINE")]  # WARN
+    assert tr.mark_offline("PSM1") == []  # already offline: no repeat event
+    assert tr.robot_state() == STATE_READY  # PSM2 still up
+    assert tr.active_arms() == ["PSM2"]
+    tr.mark_offline("PSM2")
+    assert tr.robot_state() == STATE_OFFLINE and tr.active_arms() == []
+    back = tr.mark_alive("PSM1")
+    assert [c for _, c, _ in back] == ["STATE_TELEOP"]  # the state it had, not a guess
+    assert tr.mark_alive("PSM1") == []  # already alive
+    assert tr.robot_state() == STATE_TELEOP
+
+
+def test_state_tracker_mark_alive_defaults():
+    tr = StateTracker()
+    assert tr.mark_alive("PSM1") == []  # no default: state comes from operating_state
+    assert [c for _, c, _ in tr.mark_alive("PSM1", default=STATE_READY)] == ["STATE_READY"]
+    tr.mark_offline("PSM1")
+    # an explicit state while offline supersedes the remembered one (ready -> fault is an ESTOP)
+    assert [c for _, c, _ in tr.update("PSM1", STATE_FAULT)] == ["STATE_FAULT", "ESTOP"]
+
+
+def test_state_tracker_offline_does_not_fake_fault_events():
+    tr = StateTracker()
+    tr.update("PSM1", STATE_FAULT)
+    assert [c for _, c, _ in tr.mark_offline("PSM1")] == ["STATE_OFFLINE"]  # not FAULT_CLEARED
+    assert [c for _, c, _ in tr.mark_alive("PSM1")] == ["STATE_FAULT"]  # same fault, no new ESTOP
+    tr.mark_offline("PSM1")
+    assert [c for _, c, _ in tr.update("PSM1", STATE_READY)] == ["STATE_READY", "FAULT_CLEARED"]
