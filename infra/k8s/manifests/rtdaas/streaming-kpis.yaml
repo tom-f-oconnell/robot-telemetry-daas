@@ -74,5 +74,3 @@ spec:
     securityContext:
       runAsUser: 185
       runAsNonRoot: true
-  dynamicAllocation:
-    enabled: false

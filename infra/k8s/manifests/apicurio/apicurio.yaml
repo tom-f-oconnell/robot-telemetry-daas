@@ -25,6 +25,25 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
       containers:
+        # The in-memory registry forgets everything on restart, and the simulator and streaming job
+        # fail without the schemas. Registering is idempotent, so keep doing it.
+        - name: register-contracts
+          image: ghcr.io/tom-f-oconnell/rtdaas-sim:latest
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                rtdaas-contracts register --registry http://localhost:8080/apis/ccompat/v7 \
+                  --avro /opt/rtdaas/contracts/avro || true
+                sleep 30
+              done
+          env:
+            - name: HOME
+              value: /tmp
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
         - name: registry
           image: apicurio/apicurio-registry-mem:2.6.5.Final
           ports:

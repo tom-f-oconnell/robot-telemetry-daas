@@ -5,4 +5,5 @@ memory_mb      = 8192
 vcpu           = 4
 disk_gb        = 60
 # libvirt_uri  = "qemu:///system"
+# pool_path    = "/var/lib/libvirt/images/rtdaas"
 # network_cidr = "10.42.100.0/24"

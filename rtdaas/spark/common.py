@@ -414,7 +414,12 @@ def es_ensure_index(
     """Create ``index`` with mappings if it does not exist."""
     es = es_client(settings)
     if not es.indices.exists(index=index):
-        es.indices.create(index=index, mappings=mappings or ES_MAPPINGS.get(index, {}))
+        es.indices.create(
+            index=index,
+            mappings=mappings or ES_MAPPINGS.get(index, {}),
+            # no replica on a single node, which would otherwise leave the cluster yellow
+            settings={"index": {"auto_expand_replicas": "0-1"}},
+        )
         log.info("created ES index %s", index)
 
 

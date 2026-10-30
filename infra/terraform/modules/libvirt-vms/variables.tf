@@ -50,8 +50,6 @@ variable "network_cidr" {
 }
 
 variable "pool_path" {
-  # Under images/ for Ubuntu's AppArmor: virt-aa-helper may only read backing files there, and
-  # qemu gets "Permission denied" on the base image anywhere else.
   description = "Host directory backing the libvirt storage pool."
   type        = string
   default     = "/var/lib/libvirt/images/rtdaas"

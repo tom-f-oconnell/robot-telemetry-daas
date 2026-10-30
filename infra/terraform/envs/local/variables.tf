@@ -24,6 +24,12 @@ variable "disk_gb" {
   default = 60
 }
 
+variable "pool_path" {
+  description = "Host directory for the VM disks (grows to tens of GB; a snapshotted ZFS pool keeps deleted data)."
+  type        = string
+  default     = "/var/lib/libvirt/images/rtdaas"
+}
+
 variable "ssh_public_key" {
   description = "Contents of ~/.ssh/id_ed25519.pub (or similar)."
   type        = string

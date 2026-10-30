@@ -16,5 +16,6 @@ module "vms" {
   base_image_url = var.base_image_url
   ssh_public_key = var.ssh_public_key
   network_cidr   = var.network_cidr
+  pool_path      = var.pool_path
   inventory_path = "${path.module}/../../../ansible/inventory/hosts.ini"
 }

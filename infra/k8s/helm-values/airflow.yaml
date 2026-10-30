@@ -11,6 +11,12 @@ images:
 
 executor: KubernetesExecutor
 
+# Demo values (replace in real deployments). Fixed because the chart otherwise generates new ones
+# in hook Secrets on every Argo CD sync, leaving pods with different keys and the metadata DB's
+# encrypted values unreadable.
+fernetKey: MRItWQBIynSjbRPDLkdy90r4kJBcRVKpxxEqcdTO3dc=
+webserverSecretKey: 2115722b11849a0791a0f2c37627fce2
+
 createUserJob:
   useHelmHooks: false
   applyCustomEnv: false
