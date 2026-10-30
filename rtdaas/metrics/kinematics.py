@@ -328,7 +328,7 @@ def split_sessions(
 
 
 def session_id(robot_id: str, start_ts: pd.Timestamp) -> str:
-    """``dv-001-20261029T134500`` (UTC)."""
+    """``dv_001-20261029T134500`` (UTC)."""
     t = pd.Timestamp(start_ts)
     t = t.tz_convert("UTC") if t.tzinfo is not None else t.tz_localize("UTC")
     return f"{robot_id}-{t.strftime('%Y%m%dT%H%M%S')}"

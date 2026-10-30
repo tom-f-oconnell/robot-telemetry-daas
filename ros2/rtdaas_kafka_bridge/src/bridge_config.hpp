@@ -4,7 +4,7 @@
 //   1. a plain YAML file given by the `config_file` parameter:
 //        topics:
 //          - name: psm1_joint_states          # optional
-//            ros_topic: /dv-001/PSM1/measured_js
+//            ros_topic: /dv_001/PSM1/measured_js
 //            kafka_topic: rtdaas.telemetry.joint_states
 //            type: sensor_msgs/msg/JointState
 //            qos: best_effort                 # best_effort | reliable (default best_effort)
@@ -27,7 +27,7 @@ namespace rtdaas_kafka_bridge
 struct TopicMapping
 {
   std::string name;          // human-readable identifier (defaults to ros_topic)
-  std::string ros_topic;     // absolute ROS topic, e.g. /dv-001/PSM1/measured_js
+  std::string ros_topic;     // absolute ROS topic, e.g. /dv_001/PSM1/measured_js
   std::string kafka_topic;   // e.g. rtdaas.telemetry.joint_states
   std::string type;          // normalized to pkg/msg/Type
   std::string qos{"best_effort"};

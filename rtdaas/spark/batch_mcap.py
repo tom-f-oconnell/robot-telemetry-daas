@@ -18,7 +18,7 @@ the fallback.
 
 Run::
 
-    spark-submit rtdaas/spark/batch_mcap.py --date 2026-10-29 [--robot dv-001] [--input s3a://rtdaas-raw/bags]
+    spark-submit rtdaas/spark/batch_mcap.py --date 2026-10-29 [--robot dv_001] [--input s3a://rtdaas-raw/bags]
 """
 
 from __future__ import annotations

@@ -42,16 +42,16 @@ def test_kpi_aggregate_on_static_frame(spark):
     t0 = dt.datetime(2026, 10, 28, 10, 0, tzinfo=dt.UTC)
     pose = spark.createDataFrame(
         [
-            ("dv-001", "PSM1", t0 + dt.timedelta(seconds=i), 0.01 if i % 2 else 0.0)
+            ("dv_001", "PSM1", t0 + dt.timedelta(seconds=i), 0.01 if i % 2 else 0.0)
             for i in range(120)
         ],
         ["robot_id", "arm", "ts", "speed"],
     )
     events = spark.createDataFrame(
-        [("dv-001", "", t0 + dt.timedelta(seconds=5), 2)], ["robot_id", "arm", "ts", "severity"]
+        [("dv_001", "", t0 + dt.timedelta(seconds=5), 2)], ["robot_id", "arm", "ts", "severity"]
     )
     heartbeat = spark.createDataFrame(
-        [("dv-001", t0 + dt.timedelta(seconds=i)) for i in range(120)], ["robot_id", "ts"]
+        [("dv_001", t0 + dt.timedelta(seconds=i)) for i in range(120)], ["robot_id", "ts"]
     )
     kpi = fold_robot_wide(kpi_aggregate(unify(pose, events, heartbeat)))
     out = kpi.where(F.col("arm") == "PSM1").orderBy("window_start").collect()

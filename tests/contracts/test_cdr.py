@@ -65,7 +65,7 @@ def test_alignment_padding_after_odd_string(msg_registry: MsgRegistry):
         (
             "rtdaas_msgs/ToolPose",
             {
-                "header": {"stamp": {"sec": 123, "nanosec": 456}, "frame_id": "dv-001/PSM1"},
+                "header": {"stamp": {"sec": 123, "nanosec": 456}, "frame_id": "dv_001/PSM1"},
                 "arm": "PSM1",
                 "position": {"x": 0.01, "y": -0.02, "z": -0.12},
                 "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
@@ -87,7 +87,7 @@ def test_alignment_padding_after_odd_string(msg_registry: MsgRegistry):
             "rtdaas_msgs/Heartbeat",
             {
                 "header": {"stamp": {"sec": 9, "nanosec": 1}, "frame_id": ""},
-                "robot_id": "dv-002",
+                "robot_id": "dv_002",
                 "uptime_s": 12.5,
                 "state": "teleop",
                 "active_arms": ["PSM1", "PSM2", "ECM"],
@@ -97,7 +97,7 @@ def test_alignment_padding_after_odd_string(msg_registry: MsgRegistry):
         (
             "sensor_msgs/JointState",
             {
-                "header": {"stamp": {"sec": 5, "nanosec": 5}, "frame_id": "dv-001/ECM"},
+                "header": {"stamp": {"sec": 5, "nanosec": 5}, "frame_id": "dv_001/ECM"},
                 "name": ["a", "bb", "ccc"],
                 "position": [0.1, 0.2, 0.3],
                 "velocity": [1.0, 2.0, 3.0],

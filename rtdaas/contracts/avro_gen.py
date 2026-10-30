@@ -110,7 +110,7 @@ def kafka_record_schema(msg_schema: dict[str, Any], topic: str) -> dict[str, Any
             {
                 "name": "robot_id",
                 "type": "string",
-                "doc": "Fleet-wide robot identifier, e.g. dv-001.",
+                "doc": "Fleet-wide robot identifier, e.g. dv_001.",
             },
             {
                 "name": "ros_topic",

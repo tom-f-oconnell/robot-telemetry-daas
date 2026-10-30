@@ -79,7 +79,7 @@ def test_sqlite_conventions(pipeline_out):
         )
         sessions = pd.read_sql('SELECT * FROM "telemetry__sessions"', c)
         assert set(sessions["arm"]) == {"PSM1", "PSM2", "ECM"}
-        assert (sessions["session_id"].str.startswith("dv-00")).all()
+        assert (sessions["session_id"].str.startswith("dv_00")).all()
         assert sessions.loc[sessions["arm"] == "ECM", "jaw_cycles"].eq(0).all()
         assert (sessions["pipeline_version"] == "0.1.0").all()
         dq = pd.read_sql('SELECT * FROM "dq__check_results"', c)

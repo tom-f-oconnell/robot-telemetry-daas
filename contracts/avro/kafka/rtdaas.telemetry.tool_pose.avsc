@@ -7,7 +7,7 @@
     {
       "name": "robot_id",
       "type": "string",
-      "doc": "Fleet-wide robot identifier, e.g. dv-001."
+      "doc": "Fleet-wide robot identifier, e.g. dv_001."
     },
     {
       "name": "ros_topic",

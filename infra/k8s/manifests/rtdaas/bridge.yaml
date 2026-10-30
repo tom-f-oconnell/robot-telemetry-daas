@@ -17,7 +17,7 @@ data:
   bridge.yaml: |
     kafka_bridge:
       ros__parameters:
-        robot_id: dv-001
+        robot_id: dv_001
         kafka_bootstrap: rtdaas-kafka-bootstrap.kafka.svc.cluster.local:9092
         schema_registry_url: http://apicurio.rtdaas.svc.cluster.local:8080/apis/ccompat/v7
         config_file: /config/topics.yaml
@@ -25,14 +25,14 @@ data:
         queue_max_messages: 100000
   topics.yaml: |
     topics:
-      - { ros_topic: /dv-001/PSM1/measured_js,        kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
-      - { ros_topic: /dv-001/PSM2/measured_js,        kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
-      - { ros_topic: /dv-001/ECM/measured_js,         kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
-      - { ros_topic: /dv-001/PSM1/rtdaas/tool_pose,   kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
-      - { ros_topic: /dv-001/PSM2/rtdaas/tool_pose,   kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
-      - { ros_topic: /dv-001/ECM/rtdaas/tool_pose,    kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
-      - { ros_topic: /dv-001/rtdaas/events,           kafka_topic: rtdaas.telemetry.events,       type: rtdaas_msgs/msg/SystemEvent, qos: reliable }
-      - { ros_topic: /dv-001/rtdaas/heartbeat,        kafka_topic: rtdaas.telemetry.heartbeat,    type: rtdaas_msgs/msg/Heartbeat,   qos: reliable }
+      - { ros_topic: /dv_001/PSM1/measured_js,        kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
+      - { ros_topic: /dv_001/PSM2/measured_js,        kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
+      - { ros_topic: /dv_001/ECM/measured_js,         kafka_topic: rtdaas.telemetry.joint_states, type: sensor_msgs/msg/JointState, qos: best_effort }
+      - { ros_topic: /dv_001/PSM1/rtdaas/tool_pose,   kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
+      - { ros_topic: /dv_001/PSM2/rtdaas/tool_pose,   kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
+      - { ros_topic: /dv_001/ECM/rtdaas/tool_pose,    kafka_topic: rtdaas.telemetry.tool_pose,    type: rtdaas_msgs/msg/ToolPose,    qos: best_effort }
+      - { ros_topic: /dv_001/rtdaas/events,           kafka_topic: rtdaas.telemetry.events,       type: rtdaas_msgs/msg/SystemEvent, qos: reliable }
+      - { ros_topic: /dv_001/rtdaas/heartbeat,        kafka_topic: rtdaas.telemetry.heartbeat,    type: rtdaas_msgs/msg/Heartbeat,   qos: reliable }
   # CycloneDDS: no multicast on most CNIs, so discovery uses an explicit peer list.
   cyclonedds.xml: |
     <?xml version="1.0" encoding="UTF-8" ?>

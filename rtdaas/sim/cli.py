@@ -77,7 +77,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     sims: list[RobotSim] = []
     recorders: dict[str, McapRecorder] = {}
     for i in range(args.robots):
-        rid = f"dv-{i + 1:03d}"
+        rid = f"dv_{i + 1:03d}"
         sims.append(
             RobotSim(SimConfig(robot_id=rid, arms=arms, rate_hz=args.rate, seed=args.seed + i))
         )

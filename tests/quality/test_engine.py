@@ -19,7 +19,7 @@ from rtdaas.quality.schemas import SPEC_SCHEMAS
 NOW = dt.datetime(2026, 10, 29, 12, 0, tzinfo=dt.UTC)
 
 
-def _pose(n=600, hz=50.0, start="2026-10-29T10:00:00Z", robot="dv-001"):
+def _pose(n=600, hz=50.0, start="2026-10-29T10:00:00Z", robot="dv_001"):
     ts = pd.Timestamp(start) + pd.to_timedelta(np.arange(n) / hz, unit="s")
     return pd.DataFrame(
         {

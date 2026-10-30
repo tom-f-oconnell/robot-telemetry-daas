@@ -22,7 +22,7 @@ into raw tables, sessions and exact KPIs.
 builds a message registry from the `ros2msg` schema **embedded in the bag** (falling back to the
 repo's `contracts/msgs` only if a schema is missing) and decodes CDR payloads with
 `rtdaas.contracts.cdr`. Rows are emitted per table with `robot_id` and `arm` taken from the ROS
-topic path (`/dv-001/PSM1/…`), `ts` from the message header and `recv_ts` from the MCAP log time.
+topic path (`/dv_001/PSM1/…`), `ts` from the message header and `recv_ts` from the MCAP log time.
 
 Because the function is plain Python it is unit-tested against bags written by the simulator,
 and runs identically inside Spark and in `rtdaas-local pipeline`.
@@ -45,7 +45,7 @@ publish deletes the date partition before `COPY INTO`.
 
 ```bash
 # Airflow UI → telemetry_backfill → Trigger w/ config
-{"start_date": "2026-10-01", "end_date": "2026-10-07", "robot_id": "dv-002"}
+{"start_date": "2026-10-01", "end_date": "2026-10-07", "robot_id": "dv_002"}
 ```
 
 The DAG expands one `batch_mcap` + `quality_gate` pair per date (dynamic task mapping, max 4

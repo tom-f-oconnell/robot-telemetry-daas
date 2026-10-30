@@ -131,7 +131,7 @@ def test_nan_survives_round_trip():
 
 
 def test_every_simulator_message_validates_against_its_schema(msg_registry: MsgRegistry):
-    sim = RobotSim(SimConfig(robot_id="dv-001", rate_hz=20.0, seed=3))
+    sim = RobotSim(SimConfig(robot_id="dv_001", rate_hz=20.0, seed=3))
     schemas = {
         topic: msg_to_avro(msg_registry.get(t), msg_registry) for topic, t in TOPIC_TYPES.items()
     }
@@ -142,7 +142,7 @@ def test_every_simulator_message_validates_against_its_schema(msg_registry: MsgR
         for kafka_topic, ros_topic, msg in sim.tick(t0 + k * 50_000_000):
             seen.add(kafka_topic)
             ab.validate(schemas[kafka_topic], msg)
-            env = {"robot_id": "dv-001", "ros_topic": ros_topic, "recv_time_ns": t0, "msg": msg}
+            env = {"robot_id": "dv_001", "ros_topic": ros_topic, "recv_time_ns": t0, "msg": msg}
             assert (
                 ab.decode_pure(envelopes[kafka_topic], ab.encode_pure(envelopes[kafka_topic], env))[
                     "msg"

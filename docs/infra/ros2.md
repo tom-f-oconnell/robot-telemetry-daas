@@ -31,7 +31,7 @@ ros2 launch rtdaas_launch fleet_sim.launch.py robot_count:=2 \
     schema_registry_url:=http://localhost:8081/apis/ccompat/v7
 ```
 
-Each robot `dv-00N` runs PSM1, PSM2 and ECM in kinematic simulation (the documented
+Each robot `dv_00N` runs PSM1, PSM2 and ECM in kinematic simulation (the documented
 `ros2 launch dvrk_model arm.launch.py arm:=PSM1 generation:=Classic` per arm), the two adapter
 nodes, and a bridge configured for that namespace. Verify with
 `kcat -b localhost:29092 -t rtdaas.telemetry.tool_pose -C -c 5 -f '%k: %h\n'`.
@@ -39,12 +39,12 @@ nodes, and a bridge configured for that namespace. Verify with
 Recording bags for the batch path:
 
 ```bash
-ros2 bag record -s mcap -o bags/dv-001 /dv-001/PSM1/measured_js /dv-001/PSM1/rtdaas/tool_pose \
-    /dv-001/PSM2/measured_js /dv-001/PSM2/rtdaas/tool_pose /dv-001/ECM/measured_js \
-    /dv-001/rtdaas/events /dv-001/rtdaas/heartbeat
+ros2 bag record -s mcap -o bags/dv_001 /dv_001/PSM1/measured_js /dv_001/PSM1/rtdaas/tool_pose \
+    /dv_001/PSM2/measured_js /dv_001/PSM2/rtdaas/tool_pose /dv_001/ECM/measured_js \
+    /dv_001/rtdaas/events /dv_001/rtdaas/heartbeat
 ```
 
-then copy the `.mcap` to `s3://rtdaas-raw/bags/dv-001/<yyyy>/<mm>/<dd>/`.
+then copy the `.mcap` to `s3://rtdaas-raw/bags/dv_001/<yyyy>/<mm>/<dd>/`.
 
 ## Without ROS: the simulator
 

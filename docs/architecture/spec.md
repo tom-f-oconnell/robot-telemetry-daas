@@ -82,7 +82,7 @@ the local pipeline and on Spark.
 - Kafka record headers (informational; the same fields are also inside the value envelope):
   `robot_id`, `ros_topic`, `msg_type`, `schema_id`.
 
-Robot IDs: `dv-001`, `dv-002`, … (string). Arm names: `PSM1`, `PSM2`, `PSM3`, `ECM`, `MTML`, `MTMR`.
+Robot IDs: `dv_001`, `dv_002`, … (string). Arm names: `PSM1`, `PSM2`, `PSM3`, `ECM`, `MTML`, `MTMR`.
 
 ### 2.2 Value serialization
 

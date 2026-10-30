@@ -115,7 +115,7 @@ def stamp_to_datetime(stamp: dict | None) -> datetime | None:
 
 
 def topic_parts(ros_topic: str) -> tuple[str | None, str | None]:
-    """``/dv-001/PSM1/measured_js`` -> ``("dv-001", "PSM1")``; ``/dv-001/rtdaas/events`` -> ``("dv-001", None)``."""
+    """``/dv_001/PSM1/measured_js`` -> ``("dv_001", "PSM1")``; ``/dv_001/rtdaas/events`` -> ``("dv_001", None)``."""
     parts = [p for p in ros_topic.split("/") if p]
     robot = parts[0] if parts else None
     arm = parts[1] if len(parts) > 2 and parts[1] != "rtdaas" else None

@@ -34,35 +34,35 @@ ros2 launch rtdaas_launch fleet_sim.launch.py robot_count:=2 arms:=PSM1,PSM2,ECM
     kafka_bootstrap:=localhost:29092 schema_registry_url:=http://localhost:8081/apis/ccompat/v7
 ```
 
-Per robot `dv-00i` this starts, under that namespace: the documented dVRK simulation per arm
+Per robot `dv_00i` this starts, under that namespace: the documented dVRK simulation per arm
 (`ros2 launch dvrk_model arm.launch.py arm:=PSM1 generation:=Classic` — pass `launch_dvrk:=false`
 if you already run the dVRK console yourself), `tool_pose_adapter`, `fleet_monitor`, and a
 `kafka_bridge` with a generated params file mapping:
 
 | ROS topic | Kafka topic |
 |---|---|
-| `/dv-00i/<arm>/measured_js` | `rtdaas.telemetry.joint_states` |
-| `/dv-00i/<arm>/rtdaas/tool_pose` | `rtdaas.telemetry.tool_pose` |
-| `/dv-00i/rtdaas/events` | `rtdaas.telemetry.events` |
-| `/dv-00i/rtdaas/heartbeat` | `rtdaas.telemetry.heartbeat` |
+| `/dv_00i/<arm>/measured_js` | `rtdaas.telemetry.joint_states` |
+| `/dv_00i/<arm>/rtdaas/tool_pose` | `rtdaas.telemetry.tool_pose` |
+| `/dv_00i/rtdaas/events` | `rtdaas.telemetry.events` |
+| `/dv_00i/rtdaas/heartbeat` | `rtdaas.telemetry.heartbeat` |
 
 Verify:
 
 ```bash
-ros2 topic hz /dv-001/PSM1/rtdaas/tool_pose
+ros2 topic hz /dv_001/PSM1/rtdaas/tool_pose
 kcat -b localhost:29092 -t rtdaas.telemetry.tool_pose -C -o -5 -e -f 'key=%k headers=%h\n'
-ros2 topic echo /dv-001/kafka_bridge/stats       # produced / delivered / failed counters as JSON
+ros2 topic echo /dv_001/kafka_bridge/stats       # produced / delivered / failed counters as JSON
 ```
 
 ## Record bags for the batch path
 
 ```bash
-ros2 bag record -s mcap -o bags/dv-001 \
-  /dv-001/PSM1/measured_js /dv-001/PSM1/rtdaas/tool_pose \
-  /dv-001/PSM2/measured_js /dv-001/PSM2/rtdaas/tool_pose \
-  /dv-001/ECM/measured_js  /dv-001/ECM/rtdaas/tool_pose \
-  /dv-001/rtdaas/events    /dv-001/rtdaas/heartbeat
-# then land the .mcap under s3://rtdaas-raw/bags/dv-001/<yyyy>/<mm>/<dd>/
+ros2 bag record -s mcap -o bags/dv_001 \
+  /dv_001/PSM1/measured_js /dv_001/PSM1/rtdaas/tool_pose \
+  /dv_001/PSM2/measured_js /dv_001/PSM2/rtdaas/tool_pose \
+  /dv_001/ECM/measured_js  /dv_001/ECM/rtdaas/tool_pose \
+  /dv_001/rtdaas/events    /dv_001/rtdaas/heartbeat
+# then land the .mcap under s3://rtdaas-raw/bags/dv_001/<yyyy>/<mm>/<dd>/
 ```
 
 The batch job decodes bags with the message definitions embedded in the file, so bags recorded
@@ -77,11 +77,9 @@ with an older `rtdaas_msgs` version still load.
 - Integer fields wider than Avro `long` (`uint64` above 2^63) are rejected by the mapper.
 - DDS discovery across container/pod boundaries needs the CycloneDDS configuration shipped in the
   image (`/config/cyclonedds.xml`) or host networking.
-- Robot ids such as `dv-001` are not valid ROS 2 names (no `-` in namespaces or topic
-  segments), so `fleet_sim.launch.py` needs `robot_ids:=` with ROS-safe ids (e.g. `dv_001`)
-  until ids and namespaces are reconciled; the static `config/bridge.yaml` has the same problem.
-  The bag pipeline derives `robot_id` from the topic path, so ids recorded from ROS carry the
-  ROS-safe form.
+- A robot id is also its ROS namespace (`/dv_001/PSM1/measured_js`) and the `robot_id` of every
+  record (the bag pipeline reads it from the topic path), so ids must be valid ROS 2 names:
+  letters, digits and `_`, starting with a letter. `dv-001` (the original form) is rejected.
 - `tool_pose_adapter` keeps republishing the last pose at its rate after the dVRK topics stop.
 - The C++ package is compiled by the `bridge.Dockerfile` build in CI, and the image has run
   against the compose stack (adapters + bridge, `launch_dvrk:=false`, dVRK-shaped topics

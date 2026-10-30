@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+import re
 
 from rtdaas.contracts.avro_binary import encode
 from rtdaas.contracts.cdr import CdrCodec
 from rtdaas.mcap_lite import read_messages
 from rtdaas.sim.cli import main as sim_main
 from rtdaas.sim.robot import RobotSim, SimConfig
+
+# fully qualified ROS 2 topic name: /token[/token...], tokens alphanumeric or _, not starting
+# with a digit (robot ids are namespaces, so `dv-001` would be rejected by rcl)
+ROS2_TOPIC = re.compile(r"^(/[A-Za-z_][A-Za-z0-9_]*)+$")
 
 TOPIC_TYPES = {
     "rtdaas.telemetry.joint_states": "sensor_msgs/JointState",
@@ -17,7 +22,7 @@ TOPIC_TYPES = {
 
 
 def _run(seconds=3.0, rate=20.0, seed=0):
-    sim = RobotSim(SimConfig(robot_id="dv-009", rate_hz=rate, seed=seed))
+    sim = RobotSim(SimConfig(robot_id="dv_009", rate_hz=rate, seed=seed))
     t0 = 1_700_000_000 * 10**9
     out = list(sim.begin(t0))
     n = int(seconds * rate)
@@ -38,7 +43,7 @@ def test_messages_validate_against_avro_schemas(repo_root):
     seen = set()
     for kafka_topic, ros_topic, msg in msgs:
         assert kafka_topic in schemas, kafka_topic
-        assert ros_topic.startswith("/dv-009/")
+        assert ros_topic.startswith("/dv_009/")
         encode(schemas[kafka_topic], msg)  # raises on any schema violation
         seen.add(kafka_topic)
     assert seen == set(TOPIC_TYPES)
@@ -51,7 +56,7 @@ def test_event_and_heartbeat_structure():
     assert codes[0] == "SESSION_START" and codes[-1] == "SESSION_END"
     heartbeats = [m for t, _, m in msgs if t == "rtdaas.telemetry.heartbeat"]
     assert 3 <= len(heartbeats) <= 6  # 1 Hz over 4 s
-    assert all(h["robot_id"] == "dv-009" for h in heartbeats)
+    assert all(h["robot_id"] == "dv_009" for h in heartbeats)
     poses = [m for t, _, m in msgs if t == "rtdaas.telemetry.tool_pose"]
     assert {p["arm"] for p in poses} == {"PSM1", "PSM2", "ECM"}
     assert all(p["speed"] >= 0 for p in poses)
@@ -89,8 +94,8 @@ def test_cli_writes_decodable_bags(tmp_path, msg_registry):
     assert rc == 0
     bags = sorted(tmp_path.rglob("*.mcap"))
     assert [b.relative_to(tmp_path).as_posix() for b in bags] == [
-        "dv-001/2026/10/28/dv-001-20261028T100000.mcap",
-        "dv-002/2026/10/28/dv-002-20261028T100000.mcap",
+        "dv_001/2026/10/28/dv_001-20261028T100000.mcap",
+        "dv_002/2026/10/28/dv_002-20261028T100000.mcap",
     ]
     codec = CdrCodec(msg_registry)
     stamps = []
@@ -109,6 +114,8 @@ def test_cli_writes_decodable_bags(tmp_path, msg_registry):
     assert counts["sensor_msgs/JointState"] == 3 * 60
     assert counts["rtdaas_msgs/SystemEvent"] >= 2
     assert stamps == sorted(stamps) and len(set(stamps)) == len(stamps)
+    topics = {channel.topic for bag in bags for _, channel, _ in read_messages(bag)}
+    assert topics and all(ROS2_TOPIC.match(t) for t in topics), sorted(topics)
 
 
 def test_cli_rejects_missing_sink():

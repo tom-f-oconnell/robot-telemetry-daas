@@ -108,4 +108,4 @@ def test_split_sessions_prefers_events_then_heartbeat_gaps():
 
 
 def test_session_id_format():
-    assert session_id("dv-001", pd.Timestamp("2026-10-28T10:00:00Z")) == "dv-001-20261028T100000"
+    assert session_id("dv_001", pd.Timestamp("2026-10-28T10:00:00Z")) == "dv_001-20261028T100000"

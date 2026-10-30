@@ -319,7 +319,7 @@ paths:
                 target: {type: string, description: "session_id, trial_id or YYYY-MM-DD"}
             examples:
               date: {value: {kind: date, target: "2026-10-28"}}
-              session: {value: {kind: session, target: dv-001-20261028T100000}}
+              session: {value: {kind: session, target: dv_001-20261028T100000}}
       responses:
         "202":
           description: accepted (triggered, or queued locally when Airflow is unreachable)
@@ -352,7 +352,7 @@ paths:
         "200": {description: HTML}
 components:
   parameters:
-    SessionId: {name: session_id, in: path, required: true, schema: {type: string}, example: dv-001-20261028T100000}
+    SessionId: {name: session_id, in: path, required: true, schema: {type: string}, example: dv_001-20261028T100000}
     TrialId: {name: trial_id, in: path, required: true, schema: {type: string}, example: Suturing_B001}
   responses:
     BadRequest:

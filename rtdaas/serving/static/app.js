@@ -156,7 +156,7 @@ async function viewEvents(params) {
   setActive("events");
   main.innerHTML = `<h1>Log explorer</h1><div class="subtitle">System events from every robot — session boundaries, instrument swaps, clutch, joint-limit warnings, e-stops.</div>
     <form id="f" class="row"><label>Search<input name="q" placeholder="code or message" value="${esc(params.q || "")}"></label>
-      <label>Robot<input name="robot_id" value="${esc(params.robot_id || "")}" placeholder="dv-001"></label>
+      <label>Robot<input name="robot_id" value="${esc(params.robot_id || "")}" placeholder="dv_001"></label>
       <label>Min severity<select name="severity_min">${["", 0, 1, 2, 3, 4].map((v) => `<option value="${v}" ${String(params.severity_min ?? "") === String(v) ? "selected" : ""}>${v === "" ? "any" : ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"][v]}</option>`).join("")}</select></label>
       <label>From<input type="date" name="start" value="${esc(params.start || "")}"></label><label>To<input type="date" name="end" value="${esc(params.end || "")}"></label>
       <button class="primary">Search</button></form><div id="list"></div>`;

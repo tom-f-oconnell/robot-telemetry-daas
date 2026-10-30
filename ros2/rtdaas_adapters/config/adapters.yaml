@@ -5,7 +5,7 @@
 /**:
   tool_pose_adapter:
     ros__parameters:
-      robot_id: dv-001
+      robot_id: dv_001
       arms: [PSM1, PSM2, ECM]
       rate_hz: 50.0
       # "" = dVRK nodes in the root namespace (plain `ros2 launch dvrk_model arm.launch.py`)
@@ -13,7 +13,7 @@
       speed_filter_alpha: 0.3
   fleet_monitor:
     ros__parameters:
-      robot_id: dv-001
+      robot_id: dv_001
       arms: [PSM1, PSM2, ECM]
       source_namespace: ""
       software_version: dvrk-sim-2.3

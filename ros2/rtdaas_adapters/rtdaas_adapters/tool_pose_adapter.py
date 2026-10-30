@@ -10,7 +10,7 @@ keeps the latest values, estimates the tip speed by finite differences, and publ
 
 Parameters
 ----------
-robot_id : str            fleet-wide robot identifier, e.g. "dv-001" (required)
+robot_id : str            fleet-wide robot identifier, e.g. "dv_001" (required)
 arms : list[str]          default ["PSM1", "PSM2", "ECM"]
 rate_hz : float           publish rate, default 50.0
 source_namespace : str    where the dVRK topics live. In the dVRK kinematic simulation

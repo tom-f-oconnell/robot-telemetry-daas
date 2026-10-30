@@ -4,7 +4,7 @@
         kafka_bootstrap:=kafka:9092 \
         schema_registry_url:=http://apicurio:8080/apis/ccompat/v7
 
-Per robot ``i`` (namespace ``dv-00i``):
+Per robot ``i`` (namespace ``dv_00i``):
 
 * for every arm in ``arms``: the dVRK kinematic simulation, included from ``dvrk_model`` and
   pushed into the robot namespace. The documented single-arm command is
@@ -57,7 +57,7 @@ ROBOT_TOPICS = {
 
 
 def robot_id_for(index: int) -> str:
-    return f"dv-{index:03d}"
+    return f"dv_{index:03d}"
 
 
 def render_topics_block(robot_id: str, arms: list[str], indent: int = 8) -> str:
@@ -172,7 +172,7 @@ def launch_setup(context, *args, **kwargs):
     registry_url = LaunchConfiguration("schema_registry_url").perform(context)
     software_version = LaunchConfiguration("software_version").perform(context)
 
-    # Optional explicit ids (comma-separated) override the dv-00i numbering; used by single_robot_sim.
+    # Optional explicit ids (comma-separated) override the dv_00i numbering; used by single_robot_sim.
     explicit = [r.strip() for r in LaunchConfiguration("robot_ids").perform(context).split(",") if r.strip()]
     robot_ids = explicit[:robot_count] if explicit else [robot_id_for(i) for i in range(1, robot_count + 1)]
 
@@ -188,7 +188,7 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         DeclareLaunchArgument("robot_count", default_value="2"),
-        DeclareLaunchArgument("robot_ids", default_value="", description="optional comma-separated ids overriding dv-00i"),
+        DeclareLaunchArgument("robot_ids", default_value="", description="optional comma-separated ids overriding dv_00i"),
         DeclareLaunchArgument("arms", default_value="PSM1,PSM2,ECM"),
         DeclareLaunchArgument("generation", default_value="Classic", description="Classic | Si"),
         DeclareLaunchArgument("launch_dvrk", default_value="true"),

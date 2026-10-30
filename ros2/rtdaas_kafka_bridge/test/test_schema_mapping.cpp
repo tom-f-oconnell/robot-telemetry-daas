@@ -118,11 +118,11 @@ TEST(Config, ParsesSequenceForm)
   const std::string yaml = R"(
 topics:
   - name: psm1_js
-    ros_topic: /dv-001/PSM1/measured_js
+    ros_topic: /dv_001/PSM1/measured_js
     kafka_topic: rtdaas.telemetry.joint_states
     type: sensor_msgs/JointState
     qos: best_effort
-  - ros_topic: /dv-001/rtdaas/events
+  - ros_topic: /dv_001/rtdaas/events
     kafka_topic: rtdaas.telemetry.events
     type: rtdaas_msgs/msg/SystemEvent
     qos: reliable
@@ -132,7 +132,7 @@ topics:
   EXPECT_EQ(cfg.topics[0].name, "psm1_js");
   EXPECT_EQ(cfg.topics[0].type, "sensor_msgs/msg/JointState");
   EXPECT_EQ(cfg.topics[0].qos, "best_effort");
-  EXPECT_EQ(cfg.topics[1].name, "/dv-001/rtdaas/events");  // defaults to ros_topic
+  EXPECT_EQ(cfg.topics[1].name, "/dv_001/rtdaas/events");  // defaults to ros_topic
   EXPECT_EQ(cfg.topics[1].qos, "reliable");
 }
 
@@ -141,7 +141,7 @@ TEST(Config, ParsesMapFormAndDefaultsQos)
   const std::string yaml = R"(
 topics:
   heartbeat:
-    ros_topic: /dv-001/rtdaas/heartbeat
+    ros_topic: /dv_001/rtdaas/heartbeat
     kafka_topic: rtdaas.telemetry.heartbeat
     type: rtdaas_msgs/Heartbeat
 )";
@@ -173,15 +173,15 @@ topics:
 TEST(Config, BuildsMappingsFromParameterTree)
 {
   const std::map<std::string, std::string> flat = {
-    {"topics.psm1_js.ros_topic", "/dv-001/PSM1/measured_js"},
+    {"topics.psm1_js.ros_topic", "/dv_001/PSM1/measured_js"},
     {"topics.psm1_js.kafka_topic", "rtdaas.telemetry.joint_states"},
     {"topics.psm1_js.type", "sensor_msgs/JointState"},
     {"topics.psm1_js.qos", "best_effort"},
-    {"topics.events.ros_topic", "/dv-001/rtdaas/events"},
+    {"topics.events.ros_topic", "/dv_001/rtdaas/events"},
     {"topics.events.kafka_topic", "rtdaas.telemetry.events"},
     {"topics.events.type", "rtdaas_msgs/msg/SystemEvent"},
     {"topics.events.qos", "reliable"},
-    {"robot_id", "dv-001"},   // ignored: not under topics.
+    {"robot_id", "dv_001"},   // ignored: not under topics.
   };
   const auto mappings = mappings_from_parameters(flat);
   ASSERT_EQ(mappings.size(), 2u);

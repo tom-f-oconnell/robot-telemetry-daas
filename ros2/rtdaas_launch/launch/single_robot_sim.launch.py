@@ -1,6 +1,6 @@
 """One simulated robot: a thin wrapper around ``fleet_sim.launch.py`` with ``robot_count:=1``.
 
-    ros2 launch rtdaas_launch single_robot_sim.launch.py robot_id:=dv-001 arms:=PSM1,ECM \
+    ros2 launch rtdaas_launch single_robot_sim.launch.py robot_id:=dv_001 arms:=PSM1,ECM \
         kafka_bootstrap:=localhost:29092 schema_registry_url:=http://localhost:8081/apis/ccompat/v7
 
 Everything (dVRK kinematic simulation per arm, tool_pose_adapter, fleet_monitor, kafka_bridge)
@@ -26,7 +26,7 @@ def generate_launch_description() -> LaunchDescription:
     ]
     return LaunchDescription(
         [
-            DeclareLaunchArgument("robot_id", default_value="dv-001", description="namespace of the single robot"),
+            DeclareLaunchArgument("robot_id", default_value="dv_001", description="namespace of the single robot"),
             DeclareLaunchArgument("arms", default_value="PSM1,PSM2,ECM"),
             DeclareLaunchArgument("generation", default_value="Classic"),
             DeclareLaunchArgument("launch_dvrk", default_value="true"),

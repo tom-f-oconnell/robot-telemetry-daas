@@ -46,7 +46,7 @@ def test_decode_bag_tables(bag, msg_registry):
     assert 3 <= len(tables["heartbeat"]) <= 6
     tp = tables["tool_pose"][0]
     assert (
-        tp["robot_id"] == "dv-001"
+        tp["robot_id"] == "dv_001"
         and tp["arm"] in {"PSM1", "PSM2", "ECM"}
         and tp["source"] == "bag"
     )
@@ -62,7 +62,7 @@ def test_decode_bag_tables(bag, msg_registry):
     ev = tables["events"][0]
     assert ev["code"] == "SESSION_START" and ev["severity_name"] == "INFO" and ev["severity"] == 1
     hb = tables["heartbeat"][0]
-    assert hb["robot_id"] == "dv-001" and isinstance(hb["active_arms"], list) and hb["state"]
+    assert hb["robot_id"] == "dv_001" and isinstance(hb["active_arms"], list) and hb["state"]
 
 
 def test_decode_from_bytes_and_iter_rows(bag, msg_registry):

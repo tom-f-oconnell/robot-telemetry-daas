@@ -12,7 +12,7 @@ tables:
     freshness_column: ts
     pii: false
     columns:
-      - {name: robot_id, type: string, description: Robot identifier (dv-001...).}
+      - {name: robot_id, type: string, description: Robot identifier (dv_001...).}
       - {name: arm, type: string, description: dVRK arm name (PSM1, PSM2, PSM3, ECM, MTML, MTMR).}
       - {name: ts, type: timestamp, description: Message header stamp, UTC.}
       - {name: recv_ts, type: timestamp, description: Bridge receive time (stream) or bag log time.}
