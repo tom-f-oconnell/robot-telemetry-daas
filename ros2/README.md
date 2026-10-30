@@ -54,6 +54,30 @@ kcat -b localhost:29092 -t rtdaas.telemetry.tool_pose -C -o -5 -e -f 'key=%k hea
 ros2 topic echo /dv_001/kafka_bridge/stats       # produced / delivered / failed counters as JSON
 ```
 
+## Run against the dVRK simulation in a container
+
+`infra/docker/dvrk-sim.Dockerfile` layers the dVRK 2.5.0 ROS 2 stack (cisst, saw*, `dvrk_robot`,
+`dvrk_model`, `dvrk_python`, `crtk_msgs`) on the CI-built bridge image. It is not built by CI
+(about 8 minutes). It runs the dVRK's Qt GUI on a virtual X server (Xvfb + Mesa), because
+`dvrk_system` always builds its OpenGL widgets and segfaults on Qt's `offscreen` platform.
+
+```bash
+docker build -f infra/docker/dvrk-sim.Dockerfile \
+  --build-arg BRIDGE_IMAGE=ghcr.io/tom-f-oconnell/rtdaas-bridge:<sha> -t rtdaas-dvrk-sim .
+docker run -d --name dvrk --network rtdaas_default rtdaas-dvrk-sim \
+  ros2 launch rtdaas_launch fleet_sim.launch.py robot_count:=1 arms:=PSM1 \
+    kafka_bootstrap:=kafka:9092 schema_registry_url:=http://apicurio:8080/apis/ccompat/v7
+# enable, home and move the arm (the dVRK's own test script; run it twice if the first
+# attempt aborts while the arm is still starting)
+docker exec dvrk bash -c 'source /opt/ros/jazzy/setup.bash; \
+  source /dvrk_ws/install/setup.bash; source /ws/install/setup.bash; \
+  ros2 run dvrk_python dvrk_arm_test.py -a PSM1 --ros-args -r __ns:=/dv_001'
+```
+
+The simulated PSM's configuration fixes the instrument (large needle driver), so it publishes a
+Cartesian pose without the GUI. `measured_cp` / `measured_js` arrive at about 100 Hz,
+`operating_state` is latched (TRANSIENT_LOCAL) and only published on change.
+
 ## Record bags for the batch path
 
 ```bash
@@ -72,8 +96,8 @@ with an older `rtdaas_msgs` version still load.
 
 ## Known limitations
 
-- In kinematic simulation the dVRK cannot detect the mounted instrument; select one in the arm
-  configuration or GUI or the PSM has no Cartesian pose (then `tool_pose` is empty).
+- In kinematic simulation the dVRK cannot detect the mounted instrument; the arm configuration
+  has to fix one (the `*_KIN_SIMULATED` system files do) or the PSM has no Cartesian pose.
 - `rtdaas_kafka_bridge` fetches the subject's latest schema at startup; after registering a new
   schema version, restart the bridge.
 - Integer fields wider than Avro `long` (`uint64` above 2^63) are rejected by the mapper.
@@ -86,8 +110,13 @@ with an older `rtdaas_msgs` version still load.
   dVRK topics stop is reported `offline` by `fleet_monitor` (WARN `STATE_OFFLINE`, dropped from
   `active_arms`) and `tool_pose_adapter` stops publishing it, rather than repeating its last pose.
   An arm that never reports at all stays absent, not offline.
+- `tool_pose_adapter` publishes each pose at most once (≤ `rate_hz`), skipping a pose whose stamp
+  equals the last one at microsecond precision: the dVRK's ~100 Hz is jittery and occasionally
+  repeats a stamp, and the stream would store every copy as a duplicate `(robot_id, arm, ts)` key.
 - The C++ package is compiled by the `bridge.Dockerfile` build in CI, and the image has run
   against the compose stack (adapters + bridge, `launch_dvrk:=false`, dVRK-shaped topics
   published by hand): `rosbag2_cpp::get_typesupport_handle` and the introspection walk work for
-  every message in the contract. The walk's bounded-sequence branch is still unexercised (no
-  contract message uses one), and nothing has yet run against the dVRK simulation itself.
+  every message in the contract. It has also run against the dVRK kinematic simulation
+  (see above): real `measured_cp` / `measured_js` / `operating_state` through the adapters and the
+  bridge to Kafka, streaming, Iceberg and Elasticsearch, with arm motion from `dvrk_arm_test.py`.
+  The walk's bounded-sequence branch is still unexercised (no contract message uses one).

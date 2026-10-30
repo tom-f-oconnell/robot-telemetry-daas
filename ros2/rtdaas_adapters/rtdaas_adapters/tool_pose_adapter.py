@@ -6,7 +6,12 @@ For every arm in ``arms`` the node subscribes to
 - ``/<source_namespace>/<arm>/jaw/measured_js``  (sensor_msgs/JointState; PSMs only)
 
 keeps the latest values, estimates the tip speed by finite differences, and publishes
-``rtdaas_msgs/ToolPose`` on ``/<robot_id>/<arm>/rtdaas/tool_pose`` at ``rate_hz``. An arm
+``rtdaas_msgs/ToolPose`` on ``/<robot_id>/<arm>/rtdaas/tool_pose`` at up to ``rate_hz`` — each
+pose at most once: the dVRK's ~100 Hz is not evenly spaced (a fixed-rate republish emitted the
+same sample whenever two ticks fell between messages), and it sometimes re-sends a sample with an
+unchanged stamp, so a pose is skipped unless it is new *and* its stamp differs from the last one
+published at microsecond precision — the precision of the stored ``ts`` key (the stream would
+store each copy as a duplicate). An arm
 whose ``measured_cp`` has not arrived for ``input_timeout_s`` is not published until it
 resumes: republishing the last pose would make a dead dVRK look alive (and still moving).
 
@@ -59,6 +64,8 @@ class _ArmState:
         self.estimator = SpeedEstimator(alpha=alpha)
         self.speed: float = 0.0
         self.last_rx: float | None = None  # time.monotonic() of the last measured_cp
+        self.unpublished = False  # a measured_cp arrived since the last ToolPose
+        self.last_stamp_us: int | None = None  # header stamp of the last ToolPose, in µs
         self.publishing = False
 
 
@@ -109,6 +116,7 @@ class ToolPoseAdapter(Node):
         st = self._state[arm]
         st.pose = msg
         st.last_rx = time.monotonic()
+        st.unpublished = True
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         if t <= 0.0:  # unstamped publisher: fall back to node time
             t = self.get_clock().now().nanoseconds * 1e-9
@@ -132,6 +140,14 @@ class ToolPoseAdapter(Node):
             if not st.publishing:
                 st.publishing = True
                 self.get_logger().info(f"{arm}: publishing tool_pose")
+            if not st.unpublished:
+                continue
+            st.unpublished = False
+            stamp = st.pose.header.stamp
+            stamp_us = stamp.sec * 1_000_000 + stamp.nanosec // 1000
+            if stamp_us and stamp_us == st.last_stamp_us:
+                continue
+            st.last_stamp_us = stamp_us
             out = ToolPose()
             out.header = st.pose.header
             if out.header.stamp.sec == 0 and out.header.stamp.nanosec == 0:

@@ -105,6 +105,11 @@ class FleetMonitor(Node):
             history=HistoryPolicy.KEEP_LAST, durability=DurabilityPolicy.VOLATILE)
         sensor_qos = QoSProfile(
             depth=10, reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST)
+        # The dVRK publishes operating_state latched (TRANSIENT_LOCAL) and only on change: a
+        # VOLATILE subscription that joins after startup never learns the current state.
+        state_qos = QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
         self._hb_pub = self.create_publisher(
             Heartbeat, _topic(self.robot_id, "rtdaas", "heartbeat"), reliable_latched)
@@ -123,7 +128,7 @@ class FleetMonitor(Node):
             if _OperatingState is not None:
                 self.create_subscription(
                     _OperatingState, _topic(source_ns, arm, "operating_state"),
-                    lambda msg, a=arm: self._on_operating_state(a, msg), reliable_latched)
+                    lambda msg, a=arm: self._on_operating_state(a, msg), state_qos)
             else:
                 # Presence-only fallback: treat any measured_js as "ready".
                 self.get_logger().warning(
