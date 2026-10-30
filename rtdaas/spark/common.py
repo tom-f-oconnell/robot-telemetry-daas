@@ -231,27 +231,59 @@ def write_iceberg(df: DataFrame, table: str, mode: str = "append") -> None:
         raise ValueError(f"unknown write mode {mode!r}")
 
 
+def merge_on_clause(src: DataFrame, keys: list[str], time_column: str | None = None) -> str | None:
+    """``ON`` condition for merging ``src`` on ``keys``, bounded to ``src``'s days if asked.
+
+    With ``time_column`` (which must be one of ``keys``) the target side is restricted to the
+    whole days spanned by the source's ``time_column``. That cannot drop a match, since a match
+    needs ``t.<col> = s.<col>``, but it turns Iceberg's conflict check (serializable MERGE) from
+    "any file committed since the merge started" into "files in these days": the stream appending
+    today no longer fails a batch merge of yesterday. Bounds are formatted inside Spark so they are
+    parsed back in the same session time zone. Returns ``None`` for an empty source.
+    """
+    on = " AND ".join(f"t.{k} <=> s.{k}" for k in keys)
+    if not time_column:
+        return on
+    if time_column not in keys:
+        raise ValueError(f"time_column {time_column!r} must be a merge key ({keys})")
+    from pyspark.sql import functions as F
+
+    fmt = "yyyy-MM-dd HH:mm:ss"
+    lo, hi = src.agg(
+        F.date_format(F.date_trunc("DAY", F.min(time_column)), fmt),
+        F.date_format(F.date_add(F.to_date(F.max(time_column)), 1).cast("timestamp"), fmt),
+    ).first()
+    if lo is None:
+        return None
+    return f"{on} AND t.{time_column} >= TIMESTAMP '{lo}' AND t.{time_column} < TIMESTAMP '{hi}'"
+
+
 def merge_iceberg(
     spark: SparkSession,
     df: DataFrame,
     table: str,
     keys: list[str],
     matched_condition: str | None = None,
+    time_column: str | None = None,
 ) -> None:
     """Upsert ``df`` into ``lake.<table>`` with ``MERGE INTO`` on ``keys``.
 
     The source is de-duplicated on ``keys`` first (Iceberg rejects a merge where one
     target row matches several source rows). ``matched_condition`` (SQL over aliases
     ``t`` / ``s``) restricts which matched rows are updated, e.g. ``"t.computed_by <> 'batch'"``.
+    Pass ``time_column`` for tables that another job writes concurrently (see
+    :func:`merge_on_clause`).
     """
     src = conform(df, table).dropDuplicates(keys)
+    on = merge_on_clause(src, keys, time_column)
+    if on is None:
+        return
     # Temp views are per-session, and inside foreachBatch the micro-batch DataFrame belongs to a
     # cloned session, so register, merge and drop through the source's own session, not ``spark``.
     session = src.sparkSession
     view = f"rtdaas_src_{uuid.uuid4().hex}"
     src.createOrReplaceTempView(view)
     try:
-        on = " AND ".join(f"t.{k} <=> s.{k}" for k in keys)
         matched = "WHEN MATCHED"
         if matched_condition:
             matched += f" AND ({matched_condition})"

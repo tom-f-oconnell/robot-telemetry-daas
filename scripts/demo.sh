@@ -67,6 +67,7 @@ up() {
   local bag_day
   bag_day="$(date -u -d yesterday +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)"  # GNU || BSD
   log "simulating ${SIM_BATCH_ROBOTS:-2} robots x ${SIM_BATCH_SECONDS:-120} s of bags for $bag_day and uploading them to s3://rtdaas-raw/bags"
+  rm -rf "$COMPOSE_DIR/data/bags-batch"  # this run's batch only; earlier ones would be re-synced
   "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps sim run --robots "${SIM_BATCH_ROBOTS:-2}" \
     --duration "${SIM_BATCH_SECONDS:-120}" --rate 50 --no-realtime \
     --start-time "${bag_day}T12:00:00Z" --mcap-out /data/bags-batch

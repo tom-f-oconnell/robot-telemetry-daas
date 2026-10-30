@@ -352,6 +352,7 @@ def make_kpi_sink(spark, settings: Settings):
                 "telemetry.kpi_1m",
                 ["robot_id", "arm", "window_start"],
                 matched_condition="t.computed_by <> 'batch'",
+                time_column="window_start",  # batch merges the same table
             )
             dicts = rows_as_dicts(rows)
             es_bulk(

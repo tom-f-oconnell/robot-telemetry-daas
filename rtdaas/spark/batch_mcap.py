@@ -368,7 +368,10 @@ def run(
     for short, df in frames.items():
         n = df.count()
         counts[short] = n
-        merge_iceberg(spark, df, RAW_TABLE_NAMES[short], ddl.RAW_MERGE_KEYS[short])
+        # the stream appends to the same tables: bound the merge to the bags' days
+        merge_iceberg(
+            spark, df, RAW_TABLE_NAMES[short], ddl.RAW_MERGE_KEYS[short], time_column="ts"
+        )
     log.info("raw rows merged: %s", counts)
 
     pose, events, hb = frames["tool_pose"], frames["events"], frames["heartbeat"]
@@ -392,7 +395,13 @@ def run(
     merge_iceberg(spark, sessions, "telemetry.sessions", ["session_id", "arm"])
 
     kpis = build_kpis(pose_in_session, events, hb)
-    merge_iceberg(spark, kpis, "telemetry.kpi_1m", ["robot_id", "arm", "window_start"])
+    merge_iceberg(
+        spark,
+        kpis,
+        "telemetry.kpi_1m",
+        ["robot_id", "arm", "window_start"],
+        time_column="window_start",
+    )
     n_kpi = kpis.count()
     log.info("sessions=%d kpi windows=%d", n_sessions, n_kpi)
 

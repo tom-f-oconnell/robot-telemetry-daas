@@ -95,3 +95,33 @@ def test_decode_bag_through_spark(spark, tmp_path, msg_registry):
     ).collect()
     df = spark.createDataFrame(rows, schema=ddl.struct_type("telemetry.tool_pose_raw"))
     assert df.count() == 3 * 20 and df.select(F.countDistinct("arm")).first()[0] == 3
+
+
+def test_merge_on_clause_bounds_to_source_days(spark):
+    import datetime as dt
+
+    from rtdaas.spark.common import merge_on_clause
+
+    utc = dt.UTC
+    src = spark.createDataFrame(
+        [
+            ("dv_001", "PSM1", dt.datetime(2026, 10, 29, 23, 59, 59, 999999, tzinfo=utc)),
+            (
+                "dv_001",
+                "PSM1",
+                dt.datetime(2026, 10, 30, 0, 0, 1, tzinfo=utc),
+            ),  # bag spills past midnight
+        ],
+        "robot_id string, arm string, ts timestamp",
+    )
+    keys = ["robot_id", "arm", "ts"]
+    assert (
+        merge_on_clause(src, keys)
+        == "t.robot_id <=> s.robot_id AND t.arm <=> s.arm AND t.ts <=> s.ts"
+    )
+    assert merge_on_clause(src, keys, "ts").endswith(
+        "AND t.ts >= TIMESTAMP '2026-10-29 00:00:00' AND t.ts < TIMESTAMP '2026-10-31 00:00:00'"
+    )
+    assert merge_on_clause(src.limit(0), keys, "ts") is None
+    with pytest.raises(ValueError):
+        merge_on_clause(src, ["robot_id", "arm"], "ts")
