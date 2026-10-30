@@ -37,11 +37,15 @@ import pandas as pd
 from rtdaas.config import DEFAULT_MSGS_DIR, Settings, configure_logging, get_settings
 from rtdaas.spark import ddl
 from rtdaas.spark.common import (
+    ES_INDEX_EVENTS,
+    ES_INDEX_KPI,
     ES_INDEX_SESSIONS,
     build_spark,
     ensure_tables,
     es_bulk,
     es_ensure_index,
+    es_event_id,
+    es_kpi_id,
     merge_iceberg,
     rows_as_dicts,
 )
@@ -375,6 +379,18 @@ def run(
     log.info("raw rows merged: %s", counts)
 
     pose, events, hb = frames["tool_pose"], frames["events"], frames["heartbeat"]
+    # The API's event search and the dashboards read Elasticsearch, where until now only the
+    # stream wrote events: bag-only events were invisible there. Same ids as the stream (see
+    # es_event_id), so an event both paths saw ends up as one document.
+    if not skip_es and counts["events"]:
+        es_ensure_index(ES_INDEX_EVENTS, settings=settings)
+        es_bulk(
+            rows_as_dicts(events),
+            ES_INDEX_EVENTS,
+            id_fn=es_event_id,
+            settings=settings,
+            ts_field="ts",
+        )
     if counts["tool_pose"] == 0:
         log.warning("no tool_pose rows for %s; skipping sessions/KPIs", date)
         return {**counts, "sessions": 0, "kpi_1m": 0}
@@ -405,6 +421,18 @@ def run(
     n_kpi = kpis.count()
     log.info("sessions=%d kpi windows=%d", n_sessions, n_kpi)
 
+    if not skip_es and n_kpi:
+        # exact windows replace the stream's approximations in the dashboards too, as in Iceberg
+        # (there the MERGE also keeps a later stream write from undoing them; ES has no such
+        # guard, which only matters for data that arrives on the stream after its day's batch)
+        es_ensure_index(ES_INDEX_KPI, settings=settings)
+        es_bulk(
+            rows_as_dicts(kpis),
+            ES_INDEX_KPI,
+            id_fn=es_kpi_id,
+            settings=settings,
+            ts_field="window_start",
+        )
     if not skip_es and n_sessions:
         es_ensure_index(ES_INDEX_SESSIONS, settings=settings)
         es_bulk(

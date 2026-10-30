@@ -41,6 +41,8 @@ from rtdaas.spark.common import (
     envelope_schema_json,
     es_bulk,
     es_ensure_index,
+    es_event_id,
+    es_kpi_id,
     merge_iceberg,
     ns_to_ts,
     ros_time_to_ts,
@@ -322,7 +324,7 @@ def make_raw_sink(spark, settings: Settings, schemas: dict[str, str]):
                 es_bulk(
                     ev_rows,
                     ES_INDEX_EVENTS,
-                    id_fn=lambda r: f"{r['robot_id']}|{r['ts'].isoformat()}|{r['code']}",
+                    id_fn=es_event_id,
                     settings=settings,
                     ts_field="ts",
                 )
@@ -358,7 +360,7 @@ def make_kpi_sink(spark, settings: Settings):
             es_bulk(
                 dicts,
                 ES_INDEX_KPI,
-                id_fn=lambda r: f"{r['robot_id']}|{r['arm']}|{r['window_start'].isoformat()}",
+                id_fn=es_kpi_id,
                 settings=settings,
                 ts_field="window_start",
             )

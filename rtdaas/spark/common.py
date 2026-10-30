@@ -424,6 +424,21 @@ def es_bulk(
     return ok
 
 
+def es_event_id(row: dict) -> str:
+    """Elasticsearch ``_id`` of an ``events_raw`` row.
+
+    The stream and the batch job both index events, so the id must not depend on who wrote it:
+    the same event from a bag replaces the stream's document instead of duplicating it. (Rows come
+    from ``collect()``, i.e. naive datetimes in the driver's time zone; the drivers run in UTC.)
+    """
+    return f"{row['robot_id']}|{row['ts'].isoformat()}|{row['code']}"
+
+
+def es_kpi_id(row: dict) -> str:
+    """Elasticsearch ``_id`` of a ``kpi_1m`` window; batch's exact window replaces the stream's."""
+    return f"{row['robot_id']}|{row['arm']}|{row['window_start'].isoformat()}"
+
+
 def rows_as_dicts(df: DataFrame) -> list[dict]:
     """Collect a (small) DataFrame to a list of plain dicts."""
     return [r.asDict(recursive=True) for r in df.collect()]
