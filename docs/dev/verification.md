@@ -56,7 +56,7 @@ replaced the MinIO Helm chart with a plain manifest and a frozen MinIO build.
 | Kafka producer | `rtdaas-sim --kafka`, 3 robots × 600 s at 50 Hz, Confluent-wire Avro against Apicurio | pass |
 | Streaming (`streaming_kpis`) | Kafka → Iceberg `MERGE` (raw tables, `kpi_1m`) + ES bulk (`rtdaas-events`, `rtdaas-kpi-1m`), 30 s trigger | pass |
 | `contracts_sync` DAG | check committed contracts → set compatibility + register → verify registry | pass |
-| `jigsaws_ingest` DAG | discover (S3) → `batch_jigsaws` (6 trials, video features) → `quality_gate` (procedures) → `publish_snowflake --target duckdb` → ES gesture check | pass |
+| `jigsaws_ingest` DAG | discover (S3) → `batch_jigsaws` (6 trials, video features) → `quality_gate` (procedures) → the mart publish (then a DuckDB file; now `publish_marts` → Iceberg) → ES gesture check | pass |
 | `telemetry_bag_ingest` DAG | `S3KeySensor` → `batch_mcap` (2 bags, 884k pose rows) → `quality_gate` (telemetry) → publish → ES session check | pass |
 | `telemetry_backfill` DAG | one-day range: mapped `batch_mcap` + gate, then publish | pass |
 | `dq_daily` DAG | mapped gates over all three suites (telemetry correctly blocks on an empty partition), `iceberg_maintenance` (compaction 15 → 3 files, snapshot expiry, orphan scan) | pass |
@@ -66,6 +66,9 @@ replaced the MinIO Helm chart with a plain manifest and a frozen MinIO build.
 | Bag landing (`rtdaas-land`) | one-shot over the seeded batch (already present → skipped), `bag-lander --watch` landing the live sim's bags once closed, `docker stop` of the sim closing its bags (exit 0, sessions ended), stale-open-bag warning | pass |
 | Web UI on the DuckDB backend | headless Chrome over all 10 pages: data on every page, Plotly charts on the session and trial pages, no console errors; bag events on the session page | pass |
 | `dq_daily` all green | scheduled run for 2026-10-29: all three suites pass, `dq_summary` and `iceberg_maintenance` succeed | pass |
+| `integration` workflow on the 2026-10-30 images | kind + Strimzi + Apicurio + MinIO + API + simulator (run 41019398406) | pass |
+| Bridge against the dVRK kinematic simulation | `infra/docker/dvrk-sim.Dockerfile` (dVRK 2.5.0 + Xvfb): `dvrk_system` → `measured_cp`/`measured_js` ~100 Hz → adapters (CRTK `operating_state`: idle → homing → ready) → bridge → Kafka → streaming → Iceberg/ES; `dvrk_arm_test.py` motion visible in `kpi_1m` (path, speed); 11,821 poses, no duplicate keys | pass |
+| Marts in Iceberg | `publish_marts` from `telemetry_bag_ingest`, `jigsaws_ingest` and a two-day `telemetry_backfill`: `lake.marts.*` written per day, `marts.session_daily` rows per day = `telemetry.sessions`, re-publish leaves counts unchanged, marts on the Catalog page and in `/api/health` | pass |
 | Adapter liveness (ROS 2 Jazzy, bridge image with the adapters mounted) | dVRK-shaped topics for 5 s, silent, back: heartbeat `ready` → `offline` (`active_arms: []`, WARN `STATE_OFFLINE`) → `ready`; `tool_pose` 0 msgs while silent; events through to Elasticsearch | pass |
 | C++ bridge at runtime | CI-built `rtdaas-bridge` image, `fleet_sim.launch.py launch_dvrk:=false` with its default ids (`dv_001`), dVRK-shaped `measured_cp` / `measured_js` / `jaw/measured_js` published by hand: adapters → bridge → Kafka (records decode with fastavro against the registry) → streaming → API | pass |
 
@@ -88,8 +91,6 @@ between batch and stream, and robot ids that are valid ROS 2 names (`dv_001`, wa
 
 | Area | Why not yet | Where it runs |
 |---|---|---|
-| The C++ bridge against *live* dVRK topics (only hand-published messages of the same types so far) | needs the dVRK ROS 2 workspace | `ros2 launch rtdaas_launch fleet_sim.launch.py` against the compose stack |
-| Snowflake publish (the DuckDB fallback is exercised) | needs Snowflake credentials | `publish_snowflake.py --target snowflake` |
 | Terraform, Ansible, the Argo CD applications and Helm values for Airflow / spark-operator / ECK / kube-prometheus-stack | no VMs in CI | `make tf-local` + `make ansible` |
 
 ## What to run first after cloning

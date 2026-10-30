@@ -14,4 +14,12 @@ site/
 .terraform/
 *.tfstate*
 .terraform.lock.hcl
-ros2/build/ ros2/install/ ros2/log/
+ros2/build/
+ros2/install/
+ros2/log/
+# Terraform / Ansible outputs: tfvars hold your key / IP, hosts.ini the VM addresses,
+# artifacts/ the cluster-admin kubeconfig
+*.tfvars
+!*.tfvars.example
+infra/ansible/inventory/hosts.ini
+infra/ansible/artifacts/

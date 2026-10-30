@@ -8,7 +8,7 @@ Last updated 2026-10-30 (after the first `make demo` session; initial build 2026
 
 `robot-telemetry-daas` is a portfolio-grade Data-as-a-Service platform for robot telemetry,
 built to showcase the stack in an Intuitive "Software Engineer (DaaS)" posting: ROS 2 →
-Kafka → Spark (streaming + batch) → Iceberg / Elasticsearch / Snowflake, orchestrated by
+Kafka → Spark (streaming + batch) → Iceberg / Elasticsearch, orchestrated by
 Airflow, with generated-and-enforced data contracts, YAML quality gates, a Starlette API +
 UI, and Terraform/Ansible/k3s/Argo CD infra. Data sources: a simulated dVRK (da Vinci
 Research Kit) fleet, recorded MCAP bags, and the JIGSAWS surgical kinematics+video dataset.
@@ -29,7 +29,7 @@ rtdaas/
   metrics/         session "economy of motion" metrics, 1-min KPI windows, gesture metrics (pure pandas/numpy)
   quality/         YAML check suites + one engine; adapters for pandas / SQLite / Spark
   local/           serial pure-Python pipeline → SQLite mirror of every Iceberg table (dev/test/demo)
-  spark/           thin PySpark jobs: streaming_kpis, batch_mcap, batch_jigsaws, quality_gate, publish_snowflake, maintenance
+  spark/           thin PySpark jobs: streaming_kpis, batch_mcap, batch_jigsaws, quality_gate, publish_marts, maintenance
   airflow/dags/    5 DAGs (telemetry_bag_ingest, telemetry_backfill, jigsaws_ingest, dq_daily, contracts_sync)
   serving/         Starlette API (hand-maintained openapi.yaml + parity test), sqlite/duckdb backends, vanilla-JS UI
 ros2/              rtdaas_msgs, rtdaas_kafka_bridge (C++, rosidl introspection → Avro → librdkafka), rtdaas_adapters, rtdaas_launch
@@ -93,19 +93,18 @@ image at runtime (`launch_dvrk:=false`, default ids, dVRK-shaped topics publishe
 API. ~15 fixes, all in the thin layers. Then a clean `make demo` (empty volumes and `./data`) ran unattended;
 it surfaced the batch/stream MERGE conflict below, fixed and A/B-verified.
 
+Also verified 2026-10-30: the `integration` workflow on the new images; the bridge against the real dVRK
+kinematic simulation (`infra/docker/dvrk-sim.Dockerfile`, see ros2/README.md) through to Iceberg/ES with arm
+motion and fleet_monitor's CRTK mode; marts published to Iceberg (ADR 0012), multi-date and idempotent.
+
 Open (highest-value next work):
-1. Dispatch the `integration` workflow: it has not run since the 2026-10-30 changes (its nightly 04:17 run did
-   not fire that day). It deploys the API with the *sqlite* backend, so the DuckDB/Iceberg serving path and
-   the iceberg-rest manifest (PVC + `fsGroup`, both changed) are still only verified on compose.
-2. The bridge against the real dVRK kinematic simulation (needs the dVRK ROS 2 workspace: Ubuntu 24.04 build
-   per dvrk.readthedocs.io; `dvrk_model`'s `ros2/launch/arm.launch.py` runs `dvrk_system` with
-   `system-<ARM>_<gen>_KIN_SIMULATED.json`, whose PSM config fixes the instrument, and starts rviz2
-   unconditionally; `QT_QPA_PLATFORM=offscreen` for headless). Also exercises fleet_monitor's CRTK
-   `operating_state` mode, which has never run. The bounded-sequence branch of the introspection walk is
-   still unexercised (no contract message uses one).
-3. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs, incl. Spark/Airflow in `k8s` mode;
-   Snowflake publish (needs credentials).
-4. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
+1. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs, incl. Spark/Airflow in `k8s` mode and
+   the iceberg-rest manifest (PVC + `fsGroup`, SQLite busy timeout) — only compose-verified so far. The
+   `integration` workflow deploys the API with the *sqlite* backend, so it does not cover them.
+2. Real JIGSAWS data (request from JHU CIRL; `--root` at it). Its videos are AVI, which browsers cannot play:
+   the trial page's player needs H.264 copies (an import step that transcodes is the obvious addition).
+3. A batch merge and the stream writing the *same robot on the same day* can still conflict (merges are scoped
+   by day and robot); Airflow retries cover it. The introspection walk's bounded-sequence branch is unexercised.
 
 ## CI mechanics worth knowing
 
@@ -152,7 +151,6 @@ From the first `make demo` (each is fixed; the notes are so the fix is not undon
 - `foreachBatch` hands a *cloned* session: temp views must be created and queried through `df.sparkSession`.
 - DuckDB's Iceberg `ATTACH` is a snapshot of the catalog: the API re-attaches after 30 s
   (`ICEBERG_REFRESH_S`). DuckDB returns `TIMESTAMPTZ` via `pytz`, which pandas 3 no longer installs.
-- One writer per DuckDB file: the API holds `/data/rtdaas.duckdb`, so publish goes to `PUBLISH_DUCKDB_PATH`.
 - The REST catalog reports `s3://` locations; Hadoop needs `fs.s3.impl` = S3A for `remove_orphan_files`.
 - `./data` is a host bind mount: api/sim run as `RTDAAS_UID:RTDAAS_GID`, Airflow as `RTDAAS_UID:0`
   (`demo.sh` exports `id -u`/`id -g`; `airflow-init` runs as root to hand over the logs volume).
@@ -192,6 +190,20 @@ From the first `make demo` (each is fixed; the notes are so the fix is not undon
 - **Elasticsearch gets events and KPI windows from both the stream and `batch_mcap`**, under shared ids
   (`es_event_id`, `es_kpi_id`); before, bag events never reached ES, and the DuckDB backend serves events from
   ES whenever it is reachable, so they were invisible in the API/UI.
+- **The Iceberg REST catalog is SQLite: one writer at a time.** Without a busy timeout, a commit that meets the
+  lock fails at once (500 "database is locked"), which concurrent jobs (stream + backfill + publish) hit and
+  which killed the streaming query. `CATALOG_URI=...db?journal_mode=WAL&busy_timeout=30000` (compose and k8s).
+- **Merges are scoped by day *and* robot** (`merge_on_clause(time_column, scope_column)`): the raw tables are
+  partitioned by `(days(ts), robot_id)`, so a backfill of today's bags no longer conflicts with the stream
+  writing other robots.
+- **Marts live in Iceberg (`lake.marts.*`), not Snowflake** (ADR 0012): Snowflake could not read the
+  compose/k3s MinIO stage, its connector was missing from the client-mode driver, and password logins for
+  service users are gone. The DuckDB-file target and the API's stage fallback (whose paths never matched) went
+  with it. Marts' `day` is a DATE: `to_iso` and the catalog handle dates.
+- **Against the real dVRK**: `dvrk_system` needs a GL-capable X server (Xvfb + Mesa; `offscreen` segfaults);
+  `operating_state` is latched (TRANSIENT_LOCAL) and on-change only, so fleet_monitor subscribes TRANSIENT_LOCAL;
+  `measured_cp` (~100 Hz) is jittery and sometimes repeats a stamp, so the pose adapter publishes each pose once
+  and skips stamps equal at µs precision (the stored key) — a fixed-rate republish made ~1.7 % duplicate keys.
 - **Robot ids are ROS names**: `dv_001`, not `dv-001` (renamed fleet-wide 2026-10-30). The id is the ROS
   namespace and the bag pipeline reads `robot_id` back from the topic path, so one form must serve both;
   ROS 2 names allow no `-`.
