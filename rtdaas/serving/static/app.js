@@ -14,10 +14,10 @@ function plot(id, data, layout, cfg) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!hasPlotly()) { el.innerHTML = '<div class="empty">Chart library (Plotly CDN) not reachable — data loaded, chart skipped.</div>'; return; }
-  window.plot(id, data, layout, cfg);
+  window.Plotly.newPlot(id, data, layout, cfg);
 }
-const restyle = (id, u, i) => hasPlotly() && document.getElementById(id)?.data && window.restyle(id, u, i);
-const relayout = (id, u) => hasPlotly() && document.getElementById(id)?.layout && window.relayout(id, u);
+const restyle = (id, u, i) => hasPlotly() && document.getElementById(id)?.data && window.Plotly.restyle(id, u, i);
+const relayout = (id, u) => hasPlotly() && document.getElementById(id)?.layout && window.Plotly.relayout(id, u);
 async function api(path, params = {}) {
   const qs = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
@@ -61,6 +61,8 @@ function bindRows(container, rows, onRow) {
 function stat(k, v, u = "") { return `<div class="stat"><div class="k">${esc(k)}</div><div class="v">${v}<span class="u">${esc(u)}</span></div></div>`; }
 const PLOT_LAYOUT = { margin: { l: 50, r: 16, t: 28, b: 40 }, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", font: { size: 12 }, legend: { orientation: "h", y: -0.2 } };
 const PLOT_CFG = { displaylogo: false, responsive: true };
+// Stacked time-series panels use grid pattern "coupled" (one shared x axis, a y axis per row);
+// traces pick their row with yaxis "y" / "y2" / "y3" ("y1" is not a Plotly axis id).
 
 // ------------------------------------------------------------------ views
 async function viewSessions(params) {
@@ -136,9 +138,9 @@ async function viewSessionDetail(sessionId) {
       { type: "scatter3d", mode: "markers", x: [x[0]], y: [y[0]], z: [z[0]], marker: { size: 6, color: "#d85a30" }, name: "cursor" }],
       { ...PLOT_LAYOUT, scene: { xaxis: { title: "x (m)" }, yaxis: { title: "y (m)" }, zaxis: { title: "z (m)" } } }, PLOT_CFG);
     plot("trajts", [
-      { x: t, y: x, name: "x", yaxis: "y1" }, { x: t, y, name: "y", yaxis: "y1" }, { x: t, y: z, name: "z", yaxis: "y1" },
+      { x: t, y: x, name: "x", yaxis: "y" }, { x: t, y, name: "y", yaxis: "y" }, { x: t, y: z, name: "z", yaxis: "y" },
       { x: t, y: points.map((p) => p.speed), name: "speed (m/s)", yaxis: "y2" }, { x: t, y: points.map((p) => p.jaw_angle), name: "jaw (rad)", yaxis: "y3" }],
-      { ...PLOT_LAYOUT, grid: { rows: 3, columns: 1, pattern: "independent", roworder: "top to bottom" }, yaxis: { title: "m" }, yaxis2: { title: "m/s" }, yaxis3: { title: "rad" },
+      { ...PLOT_LAYOUT, grid: { rows: 3, columns: 1, pattern: "coupled", roworder: "top to bottom" }, yaxis: { title: "m" }, yaxis2: { title: "m/s" }, yaxis3: { title: "rad" },
         shapes: [{ type: "line", xref: "x", x0: t[0], x1: t[0], yref: "paper", y0: 0, y1: 1, line: { color: "#d85a30", width: 1.5 } }] }, PLOT_CFG);
     const slider = document.getElementById("replay"); slider.max = points.length - 1; slider.value = 0;
     slider.oninput = () => {
@@ -228,11 +230,11 @@ async function viewTrialDetail(trialId, params) {
   const cursorShape = (x) => [{ type: "line", xref: "x", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color: "#d85a30", width: 1.5 } }];
   if (samples.length) {
     plot("kin", [
-      { x: ts, y: samples.map((s) => s.psml_x), name: "PSML x", yaxis: "y1" }, { x: ts, y: samples.map((s) => s.psml_y), name: "PSML y", yaxis: "y1" }, { x: ts, y: samples.map((s) => s.psml_z), name: "PSML z", yaxis: "y1" },
-      { x: ts, y: samples.map((s) => s.psmr_x), name: "PSMR x", yaxis: "y1", line: { dash: "dot" } }, { x: ts, y: samples.map((s) => s.psmr_y), name: "PSMR y", yaxis: "y1", line: { dash: "dot" } }, { x: ts, y: samples.map((s) => s.psmr_z), name: "PSMR z", yaxis: "y1", line: { dash: "dot" } },
+      { x: ts, y: samples.map((s) => s.psml_x), name: "PSML x", yaxis: "y" }, { x: ts, y: samples.map((s) => s.psml_y), name: "PSML y", yaxis: "y" }, { x: ts, y: samples.map((s) => s.psml_z), name: "PSML z", yaxis: "y" },
+      { x: ts, y: samples.map((s) => s.psmr_x), name: "PSMR x", yaxis: "y", line: { dash: "dot" } }, { x: ts, y: samples.map((s) => s.psmr_y), name: "PSMR y", yaxis: "y", line: { dash: "dot" } }, { x: ts, y: samples.map((s) => s.psmr_z), name: "PSMR z", yaxis: "y", line: { dash: "dot" } },
       { x: ts, y: sp("psml"), name: "speed L", yaxis: "y2" }, { x: ts, y: sp("psmr"), name: "speed R", yaxis: "y2" },
       { x: ts, y: samples.map((s) => s.psml_gripper), name: "gripper L", yaxis: "y3" }, { x: ts, y: samples.map((s) => s.psmr_gripper), name: "gripper R", yaxis: "y3" }],
-      { ...PLOT_LAYOUT, grid: { rows: 3, columns: 1, pattern: "independent" }, yaxis: { title: "position (m)" }, yaxis2: { title: "speed (m/s)" }, yaxis3: { title: "gripper" }, xaxis3: { title: "t (s)" }, shapes: cursorShape(0) }, PLOT_CFG);
+      { ...PLOT_LAYOUT, grid: { rows: 3, columns: 1, pattern: "coupled", roworder: "top to bottom" }, yaxis: { title: "position (m)" }, yaxis2: { title: "speed (m/s)" }, yaxis3: { title: "gripper" }, xaxis: { title: "t (s)" }, shapes: cursorShape(0) }, PLOT_CFG);
   } else document.getElementById("kin").innerHTML = '<div class="empty">No kinematics.</div>';
   if (frames.length) {
     plot("frames", [{ x: frames.map((f) => f.t_s), y: frames.map((f) => f.motion_energy), name: "motion energy" }, { x: frames.map((f) => f.t_s), y: frames.map((f) => f.sharpness), name: "sharpness", yaxis: "y2" }],
