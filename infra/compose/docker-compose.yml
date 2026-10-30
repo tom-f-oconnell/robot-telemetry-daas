@@ -218,7 +218,9 @@ services:
       # container (make demo-down) dropped every table definition while the data stayed in
       # MinIO. Keep it on a volume, as the k8s manifest does with a PVC. /home/iceberg is owned
       # by the image's user, so the fresh volume inherits that ownership.
-      CATALOG_URI: jdbc:sqlite:file:/home/iceberg/iceberg_rest.db
+      # SQLite takes one writer at a time; without a busy timeout a commit that meets the lock
+      # fails at once (500 "database is locked"), which concurrent jobs hit. WAL lets reads proceed.
+      CATALOG_URI: jdbc:sqlite:file:/home/iceberg/iceberg_rest.db?journal_mode=WAL&busy_timeout=30000
     volumes:
       - iceberg-catalog:/home/iceberg
     depends_on:

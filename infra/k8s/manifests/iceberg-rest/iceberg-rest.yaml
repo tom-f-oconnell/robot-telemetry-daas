@@ -56,7 +56,8 @@ spec:
             - name: CATALOG_S3_PATH__STYLE__ACCESS
               value: "true"
             - name: CATALOG_URI
-              value: jdbc:sqlite:file:/data/iceberg_rest.db
+              # busy timeout + WAL: see infra/compose/docker-compose.yml (concurrent commits)
+              value: jdbc:sqlite:file:/data/iceberg_rest.db?journal_mode=WAL&busy_timeout=30000
             - name: CATALOG_JDBC_USER
               value: user
             - name: CATALOG_JDBC_PASSWORD
