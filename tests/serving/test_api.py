@@ -101,6 +101,21 @@ def test_video_range(client):
     assert bad.status_code == 416
 
 
+def test_live_does_not_touch_the_backend(client, monkeypatch):
+    backend = client.app.state.backend
+    monkeypatch.setattr(backend, "health", lambda: pytest.fail("/api/live called the backend"))
+    assert client.get("/api/live").json() == {"status": "ok"}
+
+
+def test_backend_routes_do_not_run_on_the_event_loop(client):
+    """A blocking call in an ``async def`` handler would stall every request, probes included."""
+    import inspect
+
+    endpoints = {r.path: r.endpoint for r in client.app.routes if hasattr(r, "endpoint")}
+    for path in ("/api/health", "/api/catalog", "/api/sessions", "/api/events", "/api/trials"):
+        assert not inspect.iscoroutinefunction(endpoints[path]), path
+
+
 def test_resolve_media_object_store_uri(tmp_path):
     from rtdaas.serving.app import resolve_media
 

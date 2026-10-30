@@ -14,6 +14,13 @@ tags:
   - name: quality
   - name: jobs
 paths:
+  /api/live:
+    get:
+      tags: [meta]
+      summary: Liveness, for probes; does not touch the backend
+      responses:
+        "200":
+          description: OK
   /api/health:
     get:
       tags: [meta]

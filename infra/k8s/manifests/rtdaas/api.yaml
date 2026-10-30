@@ -59,18 +59,22 @@ spec:
             readOnlyRootFilesystem: false
             capabilities:
               drop: ["ALL"]
+          # Not /api/health: it counts every table's rows, slower as data grows, and a probe that
+          # times out restarts a healthy API.
           readinessProbe:
             httpGet:
-              path: /api/health
+              path: /api/live
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
-              path: /api/health
+              path: /api/live
               port: http
             initialDelaySeconds: 20
             periodSeconds: 20
+            timeoutSeconds: 5
             failureThreshold: 3
           resources:
             requests: { cpu: 200m, memory: 512Mi }

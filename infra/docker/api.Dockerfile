@@ -34,6 +34,6 @@ ENV API_HOST=0.0.0.0 \
 USER rtdaas
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
-  CMD curl -fsS "http://127.0.0.1:${API_PORT}/api/health" || exit 1
+  CMD curl -fsS "http://127.0.0.1:${API_PORT}/api/live" || exit 1
 
 CMD ["rtdaas-api"]

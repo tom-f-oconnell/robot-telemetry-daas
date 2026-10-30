@@ -12,10 +12,12 @@ spark:
 
 controller:
   replicas: 1
-  workers: 10
+  # Each concurrent submission is a spark-submit JVM in this pod. At 512Mi, three gates and a streaming
+  # restart got it OOM-killed, which failed the jobs in flight and left streaming stuck.
+  workers: 5
   resources:
-    requests: { cpu: 100m, memory: 256Mi }
-    limits: { memory: 512Mi }
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { memory: 2Gi }
 
 webhook:
   enable: true

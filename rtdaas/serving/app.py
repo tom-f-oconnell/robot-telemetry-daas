@@ -128,32 +128,38 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
     media_root = Path(settings.media_root).resolve()
 
     # ---- meta --------------------------------------------------------------
-    async def health(request: Request):
+    # Plain `def` handlers run in Starlette's thread pool: the backends block (DuckDB over S3 can take
+    # seconds), and on the event loop that would stall every other request, /api/live included.
+    async def live(request: Request):
+        """For probes: answers while the process is up, without touching the backend."""
+        return JSONResponse({"status": "ok"})
+
+    def health(request: Request):
         info = backend.health()
         info.update({"version": __version__, "media_root": str(media_root)})
         return JSONResponse(info)
 
-    async def catalog(request: Request):
+    def catalog(request: Request):
         return JSONResponse({"tables": backend.catalog()})
 
-    async def contracts(request: Request):
+    def contracts(request: Request):
         return JSONResponse({"contracts": backend.contracts()})
 
-    async def openapi(request: Request):
+    def openapi(request: Request):
         return JSONResponse(openapi_doc)
 
-    async def docs(request: Request):
+    def docs(request: Request):
         return HTMLResponse(SWAGGER_HTML)
 
-    async def prometheus(request: Request):
+    def prometheus(request: Request):
         body, content_type = metrics.render()
         return Response(body, media_type=content_type)
 
     # ---- telemetry ---------------------------------------------------------
-    async def robots(request: Request):
+    def robots(request: Request):
         return JSONResponse({"robots": backend.robots()})
 
-    async def sessions(request: Request):
+    def sessions(request: Request):
         rows = backend.sessions(
             robot_id=q_str(request, "robot_id"),
             start=q_ts(request, "start"),
@@ -163,13 +169,13 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         )
         return JSONResponse({"sessions": rows, "count": len(rows)})
 
-    async def session(request: Request):
+    def session(request: Request):
         row = backend.session(request.path_params["session_id"])
         if row is None:
             raise ApiError(404, "not_found", "unknown session_id")
         return JSONResponse(row)
 
-    async def trajectory(request: Request):
+    def trajectory(request: Request):
         session_id = request.path_params["session_id"]
         arm = q_str(request, "arm", "PSM1")
         if arm not in VALID_ARMS:
@@ -183,14 +189,14 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
             {"session_id": session_id, "arm": arm, "points": points, "count": len(points)}
         )
 
-    async def session_kpis(request: Request):
+    def session_kpis(request: Request):
         session_id = request.path_params["session_id"]
         if backend.session(session_id) is None:
             raise ApiError(404, "not_found", "unknown session_id")
         rows = backend.session_kpis(session_id)
         return JSONResponse({"session_id": session_id, "kpis": rows, "count": len(rows)})
 
-    async def events(request: Request):
+    def events(request: Request):
         sev = q_str(request, "severity_min")
         severity_min = None
         if sev is not None:
@@ -209,7 +215,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         return JSONResponse({"events": rows, "count": len(rows)})
 
     # ---- procedures --------------------------------------------------------
-    async def trials(request: Request):
+    def trials(request: Request):
         rows = backend.trials(
             task=q_str(request, "task"),
             skill_level=q_str(request, "skill_level"),
@@ -217,13 +223,13 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         )
         return JSONResponse({"trials": rows, "count": len(rows)})
 
-    async def trial(request: Request):
+    def trial(request: Request):
         row = backend.trial(request.path_params["trial_id"])
         if row is None:
             raise ApiError(404, "not_found", "unknown trial_id")
         return JSONResponse(row)
 
-    async def trial_kinematics(request: Request):
+    def trial_kinematics(request: Request):
         trial_id = request.path_params["trial_id"]
         arms = [a.lower() for a in q_list(request, "arms", ["psml", "psmr"])]
         bad = [a for a in arms if a not in KINEMATIC_ARMS]
@@ -238,14 +244,14 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
             {"trial_id": trial_id, "arms": arms, "samples": rows, "count": len(rows)}
         )
 
-    async def trial_frames(request: Request):
+    def trial_frames(request: Request):
         trial_id = request.path_params["trial_id"]
         if backend.trial(trial_id) is None:
             raise ApiError(404, "not_found", "unknown trial_id")
         rows = backend.trial_frames(trial_id)
         return JSONResponse({"trial_id": trial_id, "frames": rows, "count": len(rows)})
 
-    async def trial_video(request: Request):
+    def trial_video(request: Request):
         trial_id = request.path_params["trial_id"]
         row = backend.trial(trial_id)
         if row is None:
@@ -255,7 +261,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
             raise ApiError(404, "not_found", "video file not available")
         return range_file_response(request, path)
 
-    async def gestures(request: Request):
+    def gestures(request: Request):
         rows = backend.gestures(
             task=q_str(request, "task"),
             gesture=q_str(request, "gesture"),
@@ -265,11 +271,11 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         return JSONResponse({"gestures": rows, "count": len(rows)})
 
     # ---- quality / jobs ----------------------------------------------------
-    async def quality_runs(request: Request):
+    def quality_runs(request: Request):
         rows = backend.quality_runs(limit=q_int(request, "limit", 50, 1, 1000))
         return JSONResponse({"runs": rows, "count": len(rows)})
 
-    async def quality_results(request: Request):
+    def quality_results(request: Request):
         status = q_str(request, "status")
         if status is not None and status not in {"pass", "fail", "error", "skipped"}:
             raise ApiError(400, "invalid_parameter", "status must be pass|fail|error|skipped")
@@ -281,7 +287,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         )
         return JSONResponse({"results": rows, "count": len(rows)})
 
-    async def jobs(request: Request):
+    def jobs(request: Request):
         rows = backend.jobs(limit=q_int(request, "limit", 50, 1, 1000))
         return JSONResponse({"jobs": rows, "count": len(rows)})
 
@@ -324,6 +330,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         return FileResponse(STATIC_DIR / "index.html")
 
     routes = [
+        Route("/api/live", live),
         Route("/api/health", health),
         Route("/api/catalog", catalog),
         Route("/api/contracts", contracts),
