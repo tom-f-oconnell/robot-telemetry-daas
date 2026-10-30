@@ -17,6 +17,7 @@ Runtime configuration for the jobs (spec §9 variables) comes from the Variable
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import json
 import logging
 import os
@@ -158,14 +159,24 @@ def _k8s_name(task_id: str) -> str:
     return "rtdaas-" + task_id.replace("_", "-") + "-{{ ts_nodash | lower }}"
 
 
+@functools.cache
+def _spark_k8s_operator():
+    from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import (
+        SparkKubernetesOperator,
+    )
+
+    class RtdaasSparkKubernetesOperator(SparkKubernetesOperator):
+        # Otherwise an argument ending in .yml (--suite <path>) is loaded as a Jinja template file:
+        # TemplateNotFound. The specs are dicts (template_spec), never files.
+        template_ext = ()
+
+    return RtdaasSparkKubernetesOperator
+
+
 def spark_task(task_id: str, app_file: str, args: list[str], executors: int = 2, **kwargs):
     """Operator running ``rtdaas/spark/<app_file>`` with ``args`` in the configured mode."""
     if spark_mode() == "k8s":
-        from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import (
-            SparkKubernetesOperator,
-        )
-
-        return SparkKubernetesOperator(
+        return _spark_k8s_operator()(
             task_id=task_id,
             namespace=SPARK_NAMESPACE,
             kubernetes_conn_id=K8S_CONN_ID,
@@ -195,9 +206,6 @@ def spark_task_mapped(task_id: str, app_file: str, arg_lists, executors: int = 2
     """Dynamically mapped variant: one task instance per element of ``arg_lists`` (XCom)."""
     if spark_mode() == "k8s":
         from airflow.decorators import task
-        from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import (
-            SparkKubernetesOperator,
-        )
 
         @task(task_id=f"{task_id}_specs")
         def specs(lists: list[list[str]]) -> list[dict]:
@@ -208,14 +216,18 @@ def spark_task_mapped(task_id: str, app_file: str, arg_lists, executors: int = 2
                 for i, a in enumerate(lists)
             ]
 
-        return SparkKubernetesOperator.partial(
-            task_id=task_id,
-            namespace=SPARK_NAMESPACE,
-            kubernetes_conn_id=K8S_CONN_ID,
-            get_logs=True,
-            delete_on_termination=True,
-            **kwargs,
-        ).expand(template_spec=specs(arg_lists))
+        return (
+            _spark_k8s_operator()
+            .partial(
+                task_id=task_id,
+                namespace=SPARK_NAMESPACE,
+                kubernetes_conn_id=K8S_CONN_ID,
+                get_logs=True,
+                delete_on_termination=True,
+                **kwargs,
+            )
+            .expand(template_spec=specs(arg_lists))
+        )
 
     from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 

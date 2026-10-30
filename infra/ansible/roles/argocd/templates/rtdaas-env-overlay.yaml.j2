@@ -14,6 +14,7 @@ data:
   S3_BUCKET_RAW: "{{ rtdaas_s3_bucket_raw }}"
   S3_BUCKET_LAKE: "{{ rtdaas_s3_bucket_lake }}"
   ICEBERG_WAREHOUSE: "s3a://{{ rtdaas_s3_bucket_lake }}/warehouse"
+  AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: "s3://{{ rtdaas_s3_bucket_lake }}/airflow-logs"
 {% if rtdaas_cloud == 'aws' %}
   # Real S3: no custom endpoint, regional signing.
   S3_ENDPOINT: "https://s3.{{ rtdaas_aws_region }}.amazonaws.com"

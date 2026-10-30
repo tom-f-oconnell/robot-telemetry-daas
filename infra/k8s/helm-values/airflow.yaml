@@ -92,6 +92,11 @@ config:
   core:
     load_examples: "False"
     default_timezone: utc
+  # Worker pods are deleted when a task ends, and their logs with them.
+  logging:
+    remote_logging: "True"
+    remote_base_log_folder: s3://rtdaas-lake/airflow-logs
+    remote_log_conn_id: rtdaas_s3
   api:
     auth_backends: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
   webserver:
