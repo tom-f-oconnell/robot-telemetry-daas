@@ -31,7 +31,7 @@ SPARK_JOBS_DIR = f"{RTDAAS_ROOT}/rtdaas/spark"
 SUITES_DIR = f"{RTDAAS_ROOT}/quality/checks"
 SPARK_IMAGE = os.environ.get("RTDAAS_SPARK_IMAGE", "ghcr.io/tom-f-oconnell/rtdaas-spark:latest")
 SPARK_NAMESPACE = os.environ.get("RTDAAS_SPARK_NAMESPACE", "rtdaas")
-SPARK_SERVICE_ACCOUNT = os.environ.get("RTDAAS_SPARK_SERVICE_ACCOUNT", "spark")
+SPARK_SERVICE_ACCOUNT = os.environ.get("RTDAAS_SPARK_SERVICE_ACCOUNT", "rtdaas-spark")
 S3_CONN_ID = "rtdaas_s3"
 SPARK_CONN_ID = "spark_default"
 K8S_CONN_ID = "kubernetes_default"
@@ -109,6 +109,7 @@ def spark_app_template(
     env_list = [{"name": k, "value": v} for k, v in sorted((env or rtdaas_env()).items())]
     env_from = [
         {"configMapRef": {"name": "rtdaas-config"}},
+        {"configMapRef": {"name": "rtdaas-env-overlay", "optional": True}},
         {"secretRef": {"name": "rtdaas-secrets"}},
     ]
     return {
@@ -124,7 +125,7 @@ def spark_app_template(
             "pythonVersion": "3",
             "mode": "cluster",
             "image": image or SPARK_IMAGE,
-            "imagePullPolicy": "IfNotPresent",
+            "imagePullPolicy": "Always",  # SPARK_IMAGE is a mutable tag
             "mainApplicationFile": f"local://{job_path(app_file)}",
             "arguments": list(args),
             "sparkVersion": "3.5.3",
