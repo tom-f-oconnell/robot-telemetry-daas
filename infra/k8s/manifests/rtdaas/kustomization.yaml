@@ -7,26 +7,26 @@ namespace: rtdaas
 commonLabels:
   app.kubernetes.io/part-of: rtdaas
 resources:
-  - namespace.yaml
-  - configmap.yaml
-  - secret.yaml
-  - media-pvc.yaml
-  - spark-rbac.yaml
-  - api.yaml
-  - servicemonitor.yaml
-  - streaming-kpis.yaml
-  - sim.yaml
-  - bridge.yaml
+- namespace.yaml
+- configmap.yaml
+- secret.yaml
+- media-pvc.yaml
+- spark-rbac.yaml
+- api.yaml
+- servicemonitor.yaml
+- streaming-kpis.yaml
+- sim.yaml
+- bridge.yaml
 images:
-  - name: ghcr.io/OWNER/rtdaas-api
-    newName: ghcr.io/OWNER/rtdaas-api
-    newTag: latest
-  - name: ghcr.io/OWNER/rtdaas-spark
-    newName: ghcr.io/OWNER/rtdaas-spark
-    newTag: latest
-  - name: ghcr.io/OWNER/rtdaas-sim
-    newName: ghcr.io/OWNER/rtdaas-sim
-    newTag: latest
-  - name: ghcr.io/OWNER/rtdaas-bridge
-    newName: ghcr.io/OWNER/rtdaas-bridge
-    newTag: latest
+- name: ghcr.io/OWNER/rtdaas-api
+  newName: ghcr.io/tom-f-oconnell/rtdaas-api
+  newTag: d247d1178d489f02dd955e77590d7925be308071
+- name: ghcr.io/OWNER/rtdaas-bridge
+  newName: ghcr.io/tom-f-oconnell/rtdaas-bridge
+  newTag: d247d1178d489f02dd955e77590d7925be308071
+- name: ghcr.io/OWNER/rtdaas-sim
+  newName: ghcr.io/tom-f-oconnell/rtdaas-sim
+  newTag: d247d1178d489f02dd955e77590d7925be308071
+- name: ghcr.io/OWNER/rtdaas-spark
+  newName: ghcr.io/tom-f-oconnell/rtdaas-spark
+  newTag: d247d1178d489f02dd955e77590d7925be308071
