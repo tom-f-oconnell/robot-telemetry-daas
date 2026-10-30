@@ -13,8 +13,14 @@ Both write `infra/ansible/inventory/hosts.ini`.
 
 ## Local (libvirt)
 
-Host prerequisites: `qemu-kvm libvirt-daemon-system virtinst`, your user in the
-`libvirt` group, ~32 GB RAM free for the default 4 × 8 GB.
+Host prerequisites: `qemu-system-x86 libvirt-daemon-system virtinst genisoimage xsltproc`
+(`qemu-kvm` is only a virtual package on Ubuntu 26.04), your user in the `libvirt` group,
+~48 GB RAM free for the default 4 × 12 GB.
+
+Disk: the full stack writes about 75 GB across the VM disks, more as telemetry accumulates. Set
+`pool_path` in `terraform.tfvars` to a filesystem with room. Avoid a ZFS pool with automatic
+snapshots (e.g. zfs-auto-snapshot): they pin everything the VMs write and delete, so the pool fills
+much faster than the disks grow, and space only returns once the snapshots expire.
 
 ```bash
 cd infra/terraform/envs/local

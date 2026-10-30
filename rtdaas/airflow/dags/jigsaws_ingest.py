@@ -15,8 +15,9 @@ from airflow import DAG
 from airflow.models.param import Param
 from airflow.operators.python import PythonOperator
 
+# the copy next to this file first: git-sync updates it together with the DAGs
 try:
-    from rtdaas.airflow.dags._common import (
+    from _common import (
         DEFAULT_ARGS,
         S3_CONN_ID,
         TAGS,
@@ -26,8 +27,8 @@ try:
         spark_task,
         suite_path,
     )
-except ImportError:
-    from _common import (
+except ImportError:  # DAG files outside their folder (the installed package)
+    from rtdaas.airflow.dags._common import (
         DEFAULT_ARGS,
         S3_CONN_ID,
         TAGS,
@@ -104,7 +105,7 @@ with DAG(
             "--task",
             "{{ params.task or '' }}",
         ],
-        executors=4,
+        executors=2,
         execution_timeout=dt.timedelta(hours=6),
     )
 

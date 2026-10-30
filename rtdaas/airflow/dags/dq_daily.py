@@ -16,8 +16,9 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.utils.trigger_rule import TriggerRule
 
+# the copy next to this file first: git-sync updates it together with the DAGs
 try:
-    from rtdaas.airflow.dags._common import (
+    from _common import (
         DEFAULT_ARGS,
         TAGS,
         notify_failure,
@@ -25,8 +26,8 @@ try:
         spark_task_mapped,
         suite_path,
     )
-except ImportError:
-    from _common import (
+except ImportError:  # DAG files outside their folder (the installed package)
+    from rtdaas.airflow.dags._common import (
         DEFAULT_ARGS,
         TAGS,
         notify_failure,

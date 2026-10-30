@@ -16,7 +16,9 @@ k3s and Argo CD; Argo CD reconciles everything else from git ([ADR 0008](../adr/
     terraform init && terraform apply              # 4 × Ubuntu 24.04 cloud-image VMs, NAT network
     ```
 
-    Needs KVM and ~32 GB RAM for the default 4 × 8 GB. MinIO runs in-cluster as the S3 endpoint.
+    Needs KVM and ~48 GB RAM for the default 4 × 12 GB. MinIO runs in-cluster as the S3 endpoint.
+    Host packages, and where to put the ~75 GB of VM disks (`pool_path`): see
+    `infra/terraform/README.md`.
 
 === "AWS"
 
@@ -85,5 +87,6 @@ that commit.
 | vm-0 | k3s server | control plane, Argo CD, ingress |
 | vm-1..3 | agents | Kafka brokers (1 each, anti-affinity), Spark executors, Airflow workers, ES, MinIO |
 
-The full stack needs ~24 GB across the agents; shrink `executor.instances` and the Kafka replica
-count in `helm-values/` and `manifests/kafka` for smaller hosts.
+The stack reserves about 28 GB before any batch job, and a batch job about 7 GB more (a driver and
+two executors), so 4 × 8 GB cannot run batch beside streaming. On smaller hosts, shrink the streaming
+job (`manifests/rtdaas/streaming-kpis.yaml`) and the Kafka replica count (`manifests/kafka`).

@@ -18,7 +18,16 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.operators.bash import BashOperator
 
+# the copy next to this file first: git-sync updates it together with the DAGs
 try:
+    from _common import (
+        DEFAULT_ARGS,
+        RTDAAS_ROOT,
+        TAGS,
+        notify_failure,
+        rtdaas_env,
+    )
+except ImportError:  # DAG files outside their folder (the installed package)
     from rtdaas.airflow.dags._common import (
         DEFAULT_ARGS,
         RTDAAS_ROOT,
@@ -26,8 +35,6 @@ try:
         notify_failure,
         rtdaas_env,
     )
-except ImportError:  # plain dags folder (no rtdaas package on the path)
-    from _common import DEFAULT_ARGS, RTDAAS_ROOT, TAGS, notify_failure, rtdaas_env
 log = logging.getLogger(__name__)
 
 AVRO_DIR = f"{RTDAAS_ROOT}/contracts/avro"

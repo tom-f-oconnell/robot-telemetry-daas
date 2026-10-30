@@ -13,8 +13,9 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
 
+# the copy next to this file first: git-sync updates it together with the DAGs
 try:
-    from rtdaas.airflow.dags._common import (
+    from _common import (
         DEFAULT_ARGS,
         S3_CONN_ID,
         TAGS,
@@ -24,8 +25,8 @@ try:
         spark_task,
         suite_path,
     )
-except ImportError:  # plain dags folder (no rtdaas package on the path)
-    from _common import (
+except ImportError:  # DAG files outside their folder (the installed package)
+    from rtdaas.airflow.dags._common import (
         DEFAULT_ARGS,
         S3_CONN_ID,
         TAGS,
@@ -75,7 +76,7 @@ with DAG(
     )
 
     spark_batch_mcap = spark_task(
-        "spark_batch_mcap", "batch_mcap.py", ["--date", "{{ ds }}"], executors=4
+        "spark_batch_mcap", "batch_mcap.py", ["--date", "{{ ds }}"], executors=2
     )
 
     quality_gate = spark_task(
