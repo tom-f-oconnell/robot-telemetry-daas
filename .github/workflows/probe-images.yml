@@ -1,0 +1,26 @@
+name: probe-images
+
+# Manually dispatched helper: checks which container image references resolve (manifest inspect)
+# and reports the result as annotations. Handy when upstream registries retire tags.
+on:
+  workflow_dispatch:
+    inputs:
+      images:
+        description: whitespace-separated image references to probe
+        required: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        env:
+          IMAGES: ${{ github.event.inputs.images }}
+        run: |
+          ok=""; bad=""
+          for img in $IMAGES; do
+            if docker manifest inspect "$img" >/dev/null 2>&1; then ok="$ok $img"; else bad="$bad $img"; fi
+          done
+          echo "::notice title=resolvable::${ok:-none}"
+          echo "::warning title=unresolvable::${bad:-none}"
+          echo "OK:$ok"; echo "BAD:$bad"
