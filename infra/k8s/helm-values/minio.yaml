@@ -3,14 +3,16 @@
 mode: standalone
 replicas: 1
 
-# Pin the same releases as infra/compose/docker-compose.yml. The chart's default quay.io tag
-# has been retired upstream (pulls return 401), so always set these explicitly.
+# MinIO retired its dated RELEASE.* tags on quay.io and Docker Hub in 2025 (pulls fail with
+# 401 / "repository does not exist"), and the chart's default tag is one of them. Track
+# `latest` on quay.io (same as infra/compose) and pin by digest once resolved in your registry:
+#   image.tag: "latest@sha256:<digest>"
 image:
-  repository: minio/minio
-  tag: RELEASE.2024-10-13T13-34-11Z
+  repository: quay.io/minio/minio
+  tag: latest
 mcImage:
-  repository: minio/mc
-  tag: RELEASE.2024-10-08T09-37-26Z
+  repository: quay.io/minio/mc
+  tag: latest
 
 rootUser: minioadmin
 rootPassword: minioadmin   # dev only; override via existingSecret in real deployments
