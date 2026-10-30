@@ -62,20 +62,27 @@ replaced the MinIO Helm chart with a plain manifest and a frozen MinIO build.
 | `dq_daily` DAG | mapped gates over all three suites (telemetry correctly blocks on an empty partition), `iceberg_maintenance` (compaction 15 → 3 files, snapshot expiry, orphan scan) | pass |
 | DuckDB API backend | every GET route against the live Iceberg catalog (incl. trajectory, kinematics, video with Range); catalog re-attached while running so new commits show up without a restart | pass |
 | Elasticsearch client | events / gestures search through the API; KPI and session indices | pass |
-| C++ bridge at runtime | CI-built `rtdaas-bridge` image, `fleet_sim.launch.py launch_dvrk:=false robot_ids:=dv_001`, dVRK-shaped `measured_cp` / `measured_js` / `jaw/measured_js` published by hand: adapters → bridge → Kafka (records decode with fastavro against the registry) → streaming → API | pass |
+| C++ bridge at runtime | CI-built `rtdaas-bridge` image, `fleet_sim.launch.py launch_dvrk:=false` with its default ids (`dv_001`), dVRK-shaped `measured_cp` / `measured_js` / `jaw/measured_js` published by hand: adapters → bridge → Kafka (records decode with fastavro against the registry) → streaming → API | pass |
+
+A second, unattended `make demo` from empty volumes and an empty `./data` then ran clean except
+for one real bug: `batch_mcap`'s `MERGE` into the raw tables conflicted with the stream's
+concurrent appends (Iceberg serializable isolation, unbounded `ON`). Merges into tables both
+sides write are now bounded to the source's days; on the live catalog with a second writer
+committing during every merge, unbounded merges conflicted 6/6 and bounded ones 0/6, with no
+duplicate keys.
 
 Reaching that took fixes across the thin layers: compose
 healthchecks and bind-mount ownership, the Spark image's Python (3.10 → 3.11, matching the
 Airflow driver) and an empty `UNKNOWN` package install, connector jars for the client-mode driver
 in the Airflow image, the `spark_default` connection, temp views inside `foreachBatch`, the
 `marts.sql` header regex, the DuckDB publish target and `pytz`, the Iceberg catalog going stale in
-the API, `s3://` for Hadoop, `s3a://` video paths, and the bridge params template.
+the API, `s3://` for Hadoop, `s3a://` video paths, the bridge params template, merge scoping
+between batch and stream, and robot ids that are valid ROS 2 names (`dv_001`, was `dv-001`).
 
 ## Written, compiles, not yet executed
 
 | Area | Why not yet | Where it runs |
 |---|---|---|
-| The fleet launch with its default robot ids | `dv-001` is not a valid ROS 2 namespace / topic segment (hyphen), and the bag pipeline derives `robot_id` from the topic path, so the fix is a naming decision, not a patch | ROS 2 side + `rtdaas/local/bags.py`, `rtdaas/spark/decode.py` |
 | The C++ bridge against *live* dVRK topics (only hand-published messages of the same types so far) | needs the dVRK ROS 2 workspace | `ros2 launch rtdaas_launch fleet_sim.launch.py` against the compose stack |
 | Snowflake publish (the DuckDB fallback is exercised) | needs Snowflake credentials | `publish_snowflake.py --target snowflake` |
 | Terraform, Ansible, the Argo CD applications and Helm values for Airflow / spark-operator / ECK / kube-prometheus-stack | no VMs in CI | `make tf-local` + `make ansible` |

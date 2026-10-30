@@ -88,23 +88,17 @@ Verified in GitHub Actions (all green on `main`):
 Verified on the compose stack (`make demo`, 2026-10-30; details in `docs/dev/verification.md`): sim → Kafka →
 streaming → Iceberg + ES; all 5 DAGs run green (dq_daily's telemetry gate correctly blocks an empty day);
 publish → DuckDB; every API route on the DuckDB backend against live Iceberg; the CI-built `rtdaas-bridge`
-image at runtime (`launch_dvrk:=false robot_ids:=dv_001`, dVRK-shaped topics published by hand) through to
-the API. ~15 fixes, all in the thin layers.
+image at runtime (`launch_dvrk:=false`, default ids, dVRK-shaped topics published by hand) through to the
+API. ~15 fixes, all in the thin layers. Then a clean `make demo` (empty volumes and `./data`) ran unattended;
+it surfaced the batch/stream MERGE conflict below, fixed and A/B-verified.
 
 Open (highest-value next work):
-1. **Robot ids vs ROS names (needs a decision).** `dv-001` is not a valid ROS 2 namespace/topic segment, so
-   `fleet_sim.launch.py` fails with its default ids, and `ros2/rtdaas_kafka_bridge/config/bridge.yaml` +
-   `infra/k8s/manifests/rtdaas/bridge.yaml` use invalid topic names. The bag pipeline derives `robot_id` from
-   the topic path (`rtdaas/local/bags.py`, `rtdaas/spark/decode.py`), so either rename ids fleet-wide to a
-   ROS-safe form or add an invertible namespace↔id mapping on both sides.
-2. `tool_pose_adapter` republishes the last pose at 50 Hz forever after its inputs stop, so a dead dVRK reads
+1. `tool_pose_adapter` republishes the last pose at 50 Hz forever after its inputs stop, so a dead dVRK reads
    as an idle robot (speed 0) rather than an offline one. Probably wants a staleness cutoff.
-3. Re-run `make demo` from empty volumes: the committed `demo.sh` flow was validated step by step on a live
-   stack, not in one clean pass.
-4. The bridge against the real dVRK kinematic simulation (needs the dVRK workspace); the bounded-sequence
+2. The bridge against the real dVRK kinematic simulation (needs the dVRK workspace); the bounded-sequence
    branch of the introspection walk is still unexercised (no contract message uses one).
-5. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs; Snowflake publish (needs credentials).
-6. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
+3. Terraform (libvirt/AWS) + Ansible + Argo CD app-of-apps on real VMs; Snowflake publish (needs credentials).
+4. Real JIGSAWS data (request from JHU CIRL; `--root` at it, nothing else changes).
 
 ## CI mechanics worth knowing
 
@@ -163,6 +157,15 @@ From the first `make demo` (each is fixed; the notes are so the fix is not undon
 - `str.format` templates substitute inside comments too (`bridge.yaml.template`: double the braces).
 - Airflow DAG args: a Jinja arg that renders to `""` becomes a stray positional — always pass flag/value pairs.
 - Clearing a task that is already `up_for_retry` after a restart kills its retry mid-run; let it retry.
+- **Batch and stream write the same Iceberg tables.** A serializable `MERGE` whose `ON` has no partition
+  predicate conflicts with *any* concurrent commit ("Found conflicting files that can contain records matching
+  true"), so batch_mcap failed whenever the stream appended mid-merge. `merge_iceberg(..., time_column=)` bounds
+  the target to the source's days (`merge_on_clause`); pass it for every table both sides write (raw tables,
+  `kpi_1m`). A/B on the live catalog: unbounded 6/6 conflicted, bounded 0/6. Multiple writer *threads* in one
+  driver additionally need separate Spark sessions (Iceberg "runtime file filtering" error).
+- **Robot ids are ROS names**: `dv_001`, not `dv-001` (renamed fleet-wide 2026-10-30). The id is the ROS
+  namespace and the bag pipeline reads `robot_id` back from the topic path, so one form must serve both;
+  ROS 2 names allow no `-`.
 
 ## Useful commands
 
