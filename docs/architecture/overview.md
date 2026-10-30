@@ -12,8 +12,8 @@ quality gates, and serves the results to engineers through a documented API and 
 | Path | Source | Processing | Lands in |
 |---|---|---|---|
 | **Real-time** | dVRK arms in ROS 2 (`measured_js`, `measured_cp`, jaw) → adapter nodes → `rtdaas_kafka_bridge` | Spark Structured Streaming, 30 s triggers, 1-minute windows per robot × arm | Iceberg `telemetry.*_raw`, `telemetry.kpi_1m`; Elasticsearch `rtdaas-kpi-1m`, `rtdaas-events` |
-| **Micro-batch: bags** | `ros2 bag record` MCAP files landed in `s3://rtdaas-raw/bags/<robot>/<yyyy>/<mm>/<dd>/` | Airflow `telemetry_bag_ingest` → `batch_mcap.py` → `quality_gate.py` → `publish_snowflake.py` | Iceberg raw + `telemetry.sessions` + exact `kpi_1m`; ES `rtdaas-sessions`; Snowflake `TELEMETRY.*` |
-| **Micro-batch: JIGSAWS** | JIGSAWS (or synthetic) dataset: 76-variable kinematics at 30 Hz, gesture transcripts, stereo video | Airflow `jigsaws_ingest` → `batch_jigsaws.py` (OpenCV frame features on executors) | Iceberg `procedures.*`; ES `rtdaas-gestures`; Snowflake `PROCEDURES.GESTURE_SKILL_SUMMARY` |
+| **Micro-batch: bags** | `ros2 bag record` MCAP files landed in `s3://rtdaas-raw/bags/<robot>/<yyyy>/<mm>/<dd>/` | Airflow `telemetry_bag_ingest` → `batch_mcap.py` → `quality_gate.py` → `publish_marts.py` | Iceberg raw + `telemetry.sessions` + exact `kpi_1m`; ES `rtdaas-sessions`; Iceberg `marts.robot_daily`, `marts.session_daily` |
+| **Micro-batch: JIGSAWS** | JIGSAWS (or synthetic) dataset: 76-variable kinematics at 30 Hz, gesture transcripts, stereo video | Airflow `jigsaws_ingest` → `batch_jigsaws.py` (OpenCV frame features on executors) | Iceberg `procedures.*`; ES `rtdaas-gestures`; Iceberg `marts.gesture_skill_summary` |
 
 The same tables are also produced by `rtdaas-local pipeline`, a serial pure-Python runner that
 writes a SQLite mirror — that is how the API, UI and quality suites are tested without a cluster
@@ -44,7 +44,7 @@ writes a SQLite mirror — that is how the API, UI and quality suites are tested
 | Contracts | `.msg` → Avro generator, compatibility checker, registry client, CDR codec | `rtdaas/contracts` |
 | Bag format | Minimal MCAP writer/reader | `rtdaas/mcap_lite` |
 | Streaming | `streaming_kpis.py` | `rtdaas/spark` |
-| Batch | `batch_mcap.py`, `batch_jigsaws.py`, `quality_gate.py`, `publish_snowflake.py` | `rtdaas/spark` |
+| Batch | `batch_mcap.py`, `batch_jigsaws.py`, `quality_gate.py`, `publish_marts.py` | `rtdaas/spark` |
 | Orchestration | 5 Airflow DAGs | `rtdaas/airflow/dags` |
 | Metrics | economy-of-motion session metrics, KPI windows, gesture metrics | `rtdaas/metrics` |
 | Quality | YAML suites + engine with pandas / SQLite / Spark adapters | `rtdaas/quality`, `quality/checks` |

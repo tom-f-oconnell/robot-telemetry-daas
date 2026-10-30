@@ -369,7 +369,7 @@ CATALOG_TABLE = _register(
     )
 )
 
-NAMESPACES = ("telemetry", "procedures", "dq")
+NAMESPACES = ("telemetry", "procedures", "dq", "marts")  # marts: written by publish_marts.py
 
 RAW_TABLES = {
     "tool_pose": TOOL_POSE_RAW,

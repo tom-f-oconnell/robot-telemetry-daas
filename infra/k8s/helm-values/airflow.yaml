@@ -124,8 +124,6 @@ env:
     value: /opt/rtdaas
   - name: AIRFLOW_VAR_RTDAAS_QUALITY_CHECKS_DIR
     value: /opt/rtdaas/quality/checks
-  - name: AIRFLOW_VAR_RTDAAS_PUBLISH_TARGET
-    value: duckdb
   - name: AIRFLOW_CONN_RTDAAS_S3
     value: 'aws://minioadmin:minioadmin@/?endpoint_url=http%3A%2F%2Fminio.minio.svc.cluster.local%3A9000&region_name=us-east-1'
 

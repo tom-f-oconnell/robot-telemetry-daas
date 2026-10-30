@@ -4,7 +4,8 @@ Trigger with config::
 
     {"start_date": "2026-10-01", "end_date": "2026-10-07", "robot_id": null}
 
-    plan_dates -> batch_mcap[date] (mapped, max 4 parallel) -> quality_gate[date] (mapped) -> publish_snowflake
+    plan_dates -> batch_mcap[date] (mapped, max 4 parallel) -> quality_gate[date] (mapped)
+        -> publish_marts (every date's mart partitions, then the catalog)
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ except ImportError:
     )
 with DAG(
     dag_id="telemetry_backfill",
-    description="Reprocess bags for a date range: batch_mcap + quality gate per date, then one publish.",
+    description="Reprocess bags for a date range: batch_mcap + quality gate per date, then publish them all.",
     schedule=None,
     start_date=pendulum.datetime(2026, 10, 1, tz="UTC"),
     catchup=False,
@@ -75,8 +76,8 @@ with DAG(
         return [["--suite", suite_path("telemetry.yml"), "--partition", d] for d in dates]
 
     @task
-    def last_date(dates: list[str]) -> str:
-        return dates[-1]
+    def publish_dates(dates: list[str]) -> str:
+        return ",".join(dates)
 
     dates = plan_dates()
     batch = spark_task_mapped(
@@ -87,16 +88,11 @@ with DAG(
     )
 
     publish = spark_task(
-        "publish_snowflake",
-        "publish_snowflake.py",
-        [
-            "--date",
-            "{{ ti.xcom_pull(task_ids='last_date') }}",
-            "--target",
-            "{{ var.value.get('rtdaas_publish_target', 'duckdb') }}",
-        ],
+        "publish_marts",
+        "publish_marts.py",
+        ["--date", "{{ ti.xcom_pull(task_ids='publish_dates') }}"],
         executors=1,
         trigger_rule=TriggerRule.NONE_FAILED,
     )
 
-    batch >> gate >> last_date(dates) >> publish
+    batch >> gate >> publish_dates(dates) >> publish

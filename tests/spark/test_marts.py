@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rtdaas.spark.publish_snowflake import load_marts
+from rtdaas.spark.publish_marts import load_marts
 
 
 def test_every_mart_is_a_select_with_its_partition_column():

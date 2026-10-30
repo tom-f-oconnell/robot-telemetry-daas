@@ -35,7 +35,7 @@ robot-telemetry-daas/
 │   ├── quality/                  # engine.py (rule engine), adapters.py (pandas, spark), cli
 │   ├── local/                    # serial pure-Python pipeline -> sqlite (dev/test/demo without Spark)
 │   ├── spark/                    # common.py, streaming_kpis.py, batch_mcap.py, batch_jigsaws.py,
-│   │                             # quality_gate.py, publish_snowflake.py
+│   │                             # quality_gate.py, publish_marts.py
 │   ├── airflow/dags/             # telemetry_bag_ingest.py, telemetry_backfill.py, jigsaws_ingest.py,
 │   │                             # dq_daily.py, contracts_sync.py
 │   └── serving/                  # app.py (Starlette), backends/, es.py, airflow_client.py,
@@ -166,7 +166,6 @@ each separated by `=============================================================
 | `rtdaas-raw`  | `bags/<robot_id>/<yyyy>/<mm>/<dd>/<session>.mcap` | recorded bags (landing zone)          |
 | `rtdaas-raw`  | `jigsaws/<Task>/{kinematics,transcriptions,video}/` | JIGSAWS (or synthetic) dataset      |
 | `rtdaas-lake` | `warehouse/`                                      | Iceberg warehouse                     |
-| `rtdaas-lake` | `stage/snowflake/<table>/<run_id>/*.parquet`      | export stage for Snowflake COPY INTO  |
 | `rtdaas-lake` | `checkpoints/<job>/`                              | Spark streaming checkpoints           |
 
 ### 3.2 Iceberg tables (catalog `lake`, REST catalog)
@@ -241,14 +240,16 @@ timestamps as ISO-8601 UTC strings.
 Document id for idempotent upserts: events `sha1(robot_id|ts|code)`, kpi `robot_id|arm|window_start`,
 sessions `session_id|arm`, gestures `trial_id|start_frame`.
 
-### 3.5 Snowflake (or DuckDB fallback)
+### 3.5 Curated marts (Iceberg `marts.*`)
 
-Database `RTDAAS`; schemas `TELEMETRY`, `PROCEDURES`, `DQ`. Marts (built by `publish_snowflake.py`):
-- `TELEMETRY.ROBOT_DAILY(robot_id, day, sessions, active_s, path_length_m, warn_events, error_events)`
-- `TELEMETRY.SESSION_DAILY` = sessions table as-is
-- `PROCEDURES.GESTURE_SKILL_SUMMARY(task, gesture, skill_level, n, mean_duration_s, mean_path_length_psml, mean_path_length_psmr, mean_speed_psml, mean_speed_psmr)`
-- `DQ.CHECK_RESULTS` = dq.check_results as-is
-`--target duckdb` writes the same marts to a DuckDB file instead.
+Defined in `rtdaas/spark/marts.sql` as `SCHEMA.TABLE`, written by `publish_marts.py` to
+`lake.marts.<table>` (ADR 0012; originally copied to Snowflake):
+- `marts.robot_daily(robot_id, day, sessions, active_s, path_length_m, warn_events, error_events, instrument_swaps, mean_idle_fraction, processed_at)` ← `TELEMETRY.ROBOT_DAILY`
+- `marts.session_daily` = sessions table + `day` ← `TELEMETRY.SESSION_DAILY`
+- `marts.gesture_skill_summary(task, gesture, skill_level, n, mean_duration_s, mean_path_length_psml, mean_path_length_psmr, mean_speed_psml, mean_speed_psmr, mean_gripper_cycles, mean_motion_energy, day)` ← `PROCEDURES.GESTURE_SKILL_SUMMARY`
+- `marts.check_results` = dq.check_results + `day` ← `DQ.CHECK_RESULTS`
+
+Day-partitioned (`day`) except the gesture summary, which is replaced whole.
 
 ---
 
@@ -529,21 +530,21 @@ def strip_wire_header(col)                   # F.expr("substring(value, 6, lengt
 # batch_mcap.py       spark-submit rtdaas/spark/batch_mcap.py --date YYYY-MM-DD [--robot ID] [--input s3a://rtdaas-raw/bags]
 # batch_jigsaws.py    spark-submit rtdaas/spark/batch_jigsaws.py --root s3a://rtdaas-raw/jigsaws [--task Suturing]
 # quality_gate.py     spark-submit rtdaas/spark/quality_gate.py --suite quality/checks/telemetry.yml --partition YYYY-MM-DD   exit 2 on blocking failures
-# publish_snowflake.py spark-submit rtdaas/spark/publish_snowflake.py --date YYYY-MM-DD --target snowflake|duckdb
+# publish_marts.py    spark-submit rtdaas/spark/publish_marts.py --date YYYY-MM-DD[,YYYY-MM-DD...] [--marts SCHEMA.TABLE,...]
 ```
 
 ### 4.9 `rtdaas.airflow.dags`
 
 | DAG id                 | Schedule       | Tasks                                                                                   |
 |------------------------|----------------|-----------------------------------------------------------------------------------------|
-| `telemetry_bag_ingest` | `@daily`       | wait_for_bags (S3 prefix sensor) → spark_batch_mcap → quality_gate → publish_snowflake → index_es_sessions |
-| `telemetry_backfill`   | manual, params `start_date`, `end_date`, `robot_id` | expand over dates: batch_mcap → quality_gate; then publish        |
-| `jigsaws_ingest`       | manual / on dataset drop | discover → spark_batch_jigsaws → quality_gate(procedures) → publish → index_es_gestures |
+| `telemetry_bag_ingest` | `@daily`       | wait_for_bags (S3 prefix sensor) → spark_batch_mcap → quality_gate → publish_marts → index_es_sessions |
+| `telemetry_backfill`   | manual, params `start_date`, `end_date`, `robot_id` | expand over dates: batch_mcap → quality_gate; then publish_marts for every date |
+| `jigsaws_ingest`       | manual / on dataset drop | discover → spark_batch_jigsaws → quality_gate(procedures) → publish_marts → index_es_gestures |
 | `dq_daily`             | `0 6 * * *`    | run all suites against yesterday's partitions → write dq.check_results → notify on failure |
 | `contracts_sync`       | on deploy      | rtdaas-contracts check (vs registry) → register                                          |
 
 Spark tasks use `SparkKubernetesOperator` (k8s) or `SparkSubmitOperator` (compose), selected
-by Airflow Variable `rtdaas_spark_mode` ∈ {`k8s`, `submit`}. Connection ids: `rtdaas_s3`, `rtdaas_snowflake`.
+by Airflow Variable `rtdaas_spark_mode` ∈ {`k8s`, `submit`}. Connection ids: `rtdaas_s3`, `spark_default`.
 The API triggers runs via Airflow REST `POST /api/v1/dags/{dag_id}/dagRuns`.
 
 ### 4.10 `rtdaas.serving`
@@ -621,10 +622,9 @@ transcription, `label_frames`, `frame_features` (OpenCV on executors), `gesture_
 `run_suite(load_suite(f), SparkAdapter(spark), partition_value)` → append `dq.check_results` →
 exit code 2 if any blocking check failed, so the Airflow task fails and downstream publish is skipped.
 
-### 5.5 Publish (`publish_snowflake.py`)
-Spark SQL builds the marts (§3.5) → Parquet to `stage/snowflake/<table>/<run_id>/` → Snowflake
-`COPY INTO` via `snowflake-connector-python` (external stage on the bucket), or DuckDB file when
-`--target duckdb`.
+### 5.5 Publish (`publish_marts.py`)
+Spark SQL builds the marts (§3.5) → `lake.marts.<table>` (dynamic partition overwrite of the
+published day, or a full replace for unpartitioned marts) → catalog refresh (§6).
 
 ---
 
@@ -632,7 +632,7 @@ Spark SQL builds the marts (§3.5) → Parquet to `stage/snowflake/<table>/<run_
 
 `rtdaas/serving/catalog.yml` describes every published table: `name, owner, description, sla_hours,
 contract (subject or "derived"), pii: false, columns: [{name, type, description}]`. The local pipeline
-and `publish_snowflake.py` write the `catalog` table (`name, owner, description, sla_hours, row_count,
+and `publish_marts.py` write the `catalog` table (`name, owner, description, sla_hours, row_count,
 last_updated, freshness_ok`) that `GET /api/catalog` serves. The Catalog UI page renders it.
 
 ---
@@ -677,13 +677,11 @@ last_updated, freshness_ok`) that `GET /api/catalog` serves. The Catalog UI page
 | `S3_BUCKET_RAW` / `S3_BUCKET_LAKE` | `rtdaas-raw` / `rtdaas-lake`    |                         |
 | `ICEBERG_REST_URI`       | `http://localhost:8181`                   | spark, api (duckdb)     |
 | `ICEBERG_WAREHOUSE`      | `s3a://rtdaas-lake/warehouse`             | spark                   |
-| `SNOWFLAKE_ACCOUNT/USER/PASSWORD/WAREHOUSE/DATABASE/ROLE` | unset        | publish                 |
 | `AIRFLOW_API_URL`        | `http://localhost:8080/api/v1`            | api                     |
 | `AIRFLOW_USER` / `AIRFLOW_PASSWORD` | `airflow` / `airflow`          | api                     |
 | `SERVING_BACKEND`        | `sqlite`                                  | api                     |
 | `SERVING_SQLITE_PATH`    | `./data/rtdaas.sqlite`                    | api, local pipeline     |
 | `SERVING_DUCKDB_PATH`    | `./data/rtdaas.duckdb`                    | api                     |
-| `PUBLISH_DUCKDB_PATH`    | unset (= `SERVING_DUCKDB_PATH`)           | publish (`--target duckdb`) |
 | `MEDIA_ROOT`             | `./data`                                  | api (trial video files) |
 | `API_HOST` / `API_PORT`  | `0.0.0.0` / `8080`                        | api                     |
 | `PIPELINE_VERSION`       | `rtdaas.__version__`                      | jobs                    |

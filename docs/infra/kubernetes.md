@@ -66,7 +66,7 @@ Sync policy is automated with prune + self-heal; `CreateNamespace=true`.
 
 - `manifests/rtdaas/configmap.yaml` holds every non-secret setting from spec §9 with in-cluster
   hostnames (`kafka-cluster-kafka-bootstrap.kafka:9092`, `apicurio.registry:8080/apis/ccompat/v7`, …).
-- `manifests/rtdaas/secret.yaml` is a template with `stringData` placeholders for S3 and Snowflake
+- `manifests/rtdaas/secret.yaml` is a template with `stringData` placeholders for the S3
   credentials. Replace it with a SealedSecret or External Secrets resource before committing real values.
 - The Ansible `argocd` role writes an `rtdaas-env-overlay` ConfigMap with the environment's bucket
   names and region so the same manifests work on libvirt (MinIO) and AWS (S3).

@@ -1,6 +1,6 @@
 """DAG ``telemetry_bag_ingest`` — daily: bags for the day -> raw tables -> sessions/KPIs -> gate -> publish.
 
-wait_for_bags (S3KeySensor) -> spark_batch_mcap -> quality_gate -> publish_snowflake -> index_es_sessions
+wait_for_bags (S3KeySensor) -> spark_batch_mcap -> quality_gate -> publish_marts -> index_es_sessions
 """
 
 from __future__ import annotations
@@ -86,16 +86,8 @@ with DAG(
         retries=0,
     )
 
-    publish_snowflake = spark_task(
-        "publish_snowflake",
-        "publish_snowflake.py",
-        [
-            "--date",
-            "{{ ds }}",
-            "--target",
-            "{{ var.value.get('rtdaas_publish_target', 'duckdb') }}",
-        ],
-        executors=1,
+    publish_marts = spark_task(
+        "publish_marts", "publish_marts.py", ["--date", "{{ ds }}"], executors=1
     )
 
     index_es_sessions = PythonOperator(
@@ -104,4 +96,4 @@ with DAG(
         execution_timeout=dt.timedelta(minutes=5),
     )
 
-    wait_for_bags >> spark_batch_mcap >> quality_gate >> publish_snowflake >> index_es_sessions
+    wait_for_bags >> spark_batch_mcap >> quality_gate >> publish_marts >> index_es_sessions

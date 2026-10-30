@@ -10,7 +10,7 @@ consumer sees, before any SQL.
 - **Source:** `rtdaas/serving/catalog.yml` — one entry per table, reviewed with the code that
   produces the table.
 - **Materialized:** the `catalog` table (`name, owner, description, sla_hours, row_count,
-  last_updated, freshness_ok`) is written by `publish_snowflake.py` (Iceberg `dq.catalog`) and by
+  last_updated, freshness_ok`) is written by `publish_marts.py` (Iceberg `dq.catalog`) and by
   the local pipeline (SQLite), so the numbers reflect the current state of the lake.
 - **Served:** `GET /api/catalog` and the **Catalog** page of the UI, which shows every table with
   its columns, freshness, and a link to the quality results for that table.
@@ -24,7 +24,7 @@ consumer sees, before any SQL.
 | `telemetry.events_raw` | one row per SystemEvent | streaming, batch | log explorer (via ES), session metrics |
 | `telemetry.heartbeat_raw` | 1 Hz per robot | streaming, batch | liveness, session splitting |
 | `telemetry.kpi_1m` | robot × arm × minute | streaming (approx.) then batch (exact) | live dashboards, session KPI timeline |
-| `telemetry.sessions` | robot × arm × session | batch | economy-of-motion reporting, Snowflake `SESSION_DAILY` |
+| `telemetry.sessions` | robot × arm × session | batch | economy-of-motion reporting, `marts.session_daily` |
 | `procedures.trials` | one row per JIGSAWS trial | batch_jigsaws | trial browser |
 | `procedures.kinematics` | trial × 30 Hz sample | batch_jigsaws | synced video + kinematics scrubber |
 | `procedures.gestures` | trial × gesture segment | batch_jigsaws | gesture search (ES), skill summaries |
@@ -67,7 +67,7 @@ kinematics-derived speed to catch desynchronized recordings.
 | `kpi_1m` (stream) | 2 min | `streaming.yml` → `freshness` ≤ 5 min (warning) |
 | `*_raw`, `sessions` | daily partition by 06:00 UTC | `telemetry.yml` → `freshness` ≤ 26 h |
 | `procedures.*` | on dataset drop | n/a |
-| Snowflake marts | after daily DAG | DAG SLA miss callback |
+| `marts.*` | after the daily ingest DAGs | `freshness` via `dq.catalog`, DAG SLA miss callback |
 
 Freshness and row counts are recomputed into `dq.catalog` whenever the publish step runs, so the
 Catalog page is never more stale than the last pipeline run.

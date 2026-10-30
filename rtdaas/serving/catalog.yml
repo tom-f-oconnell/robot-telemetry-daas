@@ -248,3 +248,77 @@ tables:
       - {name: partition_value, type: string, description: Partition filter used.}
       - {name: run_ts, type: timestamp, description: Run time.}
       - {name: message, type: string, description: Detail.}
+
+  # ---- curated marts (rtdaas/spark/marts.sql → lake.marts.*, written by publish_marts.py) ----
+  - name: marts.robot_daily
+    owner: data-platform@rtdaas
+    description: Per-robot daily rollup of sessions (active time, path length, warnings, errors, instrument swaps).
+    sla_hours: 26
+    contract: derived
+    partitioning: [day]
+    freshness_column: processed_at
+    pii: false
+    columns:
+      - {name: robot_id, type: string, description: Robot identifier.}
+      - {name: day, type: date, description: Session start day (UTC); the partition a publish replaces.}
+      - {name: sessions, type: bigint, description: Distinct sessions that day.}
+      - {name: active_s, type: double, description: Summed session duration in seconds.}
+      - {name: path_length_m, type: double, description: Summed tool-tip path length in metres.}
+      - {name: warn_events, type: bigint, description: WARN events in those sessions.}
+      - {name: error_events, type: bigint, description: ERROR events in those sessions.}
+      - {name: instrument_swaps, type: bigint, description: Instrument changes.}
+      - {name: mean_idle_fraction, type: double, description: Mean idle fraction across sessions.}
+      - {name: processed_at, type: timestamp, description: Latest processing time of the source sessions.}
+  - name: marts.session_daily
+    owner: data-platform@rtdaas
+    description: telemetry.sessions as a day-partitioned mart (one row per session x arm).
+    sla_hours: 26
+    contract: derived
+    partitioning: [day]
+    freshness_column: processed_at
+    pii: false
+    columns:
+      - {name: session_id, type: string, description: Session identifier.}
+      - {name: robot_id, type: string, description: Robot identifier.}
+      - {name: arm, type: string, description: dVRK arm.}
+      - {name: start_ts, type: timestamp, description: Session start (UTC).}
+      - {name: end_ts, type: timestamp, description: Session end (UTC).}
+      - {name: day, type: date, description: Session start day; the partition a publish replaces.}
+      - {name: duration_s, type: double, description: Session duration in seconds.}
+      - {name: path_length_m, type: double, description: Tool-tip path length in metres.}
+      - {name: mean_speed_mps, type: double, description: Mean tip speed in m/s.}
+      - {name: idle_fraction, type: double, description: Fraction of samples below the idle speed.}
+      - {name: processed_at, type: timestamp, description: When the session row was computed.}
+  - name: marts.gesture_skill_summary
+    owner: data-platform@rtdaas
+    description: JIGSAWS gesture statistics by task, gesture and skill level (replaced on every publish).
+    sla_hours: 0
+    contract: derived
+    partitioning: []
+    freshness_column: day
+    pii: false
+    columns:
+      - {name: task, type: string, description: JIGSAWS task.}
+      - {name: gesture, type: string, description: Gesture label (G1...G15).}
+      - {name: skill_level, type: string, description: novice, intermediate or expert.}
+      - {name: n, type: bigint, description: Gesture segments.}
+      - {name: mean_duration_s, type: double, description: Mean segment duration in seconds.}
+      - {name: mean_speed_psml, type: double, description: Mean left PSM speed.}
+      - {name: mean_speed_psmr, type: double, description: Mean right PSM speed.}
+      - {name: mean_motion_energy, type: double, description: Mean video motion energy.}
+      - {name: day, type: date, description: Date of the publish run.}
+  - name: marts.check_results
+    owner: data-platform@rtdaas
+    description: dq.check_results as a day-partitioned mart.
+    sla_hours: 26
+    contract: derived
+    partitioning: [day]
+    freshness_column: run_ts
+    pii: false
+    columns:
+      - {name: suite, type: string, description: Suite name.}
+      - {name: table_name, type: string, description: Checked table.}
+      - {name: check_name, type: string, description: Check name.}
+      - {name: status, type: string, description: "pass, fail, error or skipped."}
+      - {name: run_ts, type: timestamp, description: Run time.}
+      - {name: day, type: date, description: Run day; the partition a publish replaces.}

@@ -23,7 +23,6 @@ airflow variables set rtdaas_spark_mode submit
 airflow variables set rtdaas_spark_master spark://spark-master:7077
 airflow variables set rtdaas_home /opt/rtdaas
 airflow variables set rtdaas_quality_checks_dir /opt/rtdaas/quality/checks
-airflow variables set rtdaas_publish_target duckdb
 
 echo "Setting rtdaas connections ..."
 airflow connections delete rtdaas_s3 >/dev/null 2>&1 || true
@@ -40,16 +39,6 @@ airflow connections add spark_default \
   --conn-host spark://spark-master \
   --conn-port 7077 \
   --conn-extra '{"deploy-mode": "client"}'
-
-# Snowflake connection is optional; only created when credentials are supplied.
-if [[ -n "${SNOWFLAKE_ACCOUNT:-}" && -n "${SNOWFLAKE_USER:-}" ]]; then
-  airflow connections delete rtdaas_snowflake >/dev/null 2>&1 || true
-  airflow connections add rtdaas_snowflake \
-    --conn-type snowflake \
-    --conn-login "${SNOWFLAKE_USER}" \
-    --conn-password "${SNOWFLAKE_PASSWORD:-}" \
-    --conn-extra "{\"account\": \"${SNOWFLAKE_ACCOUNT}\", \"warehouse\": \"${SNOWFLAKE_WAREHOUSE:-}\", \"database\": \"${SNOWFLAKE_DATABASE:-RTDAAS}\", \"role\": \"${SNOWFLAKE_ROLE:-}\"}"
-fi
 
 # Runs as root (compose `user: "0:0"`): hand the logs volume to the uid the other Airflow
 # containers run as, last so it also covers anything created above.

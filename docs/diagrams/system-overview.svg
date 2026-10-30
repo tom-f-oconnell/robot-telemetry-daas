@@ -74,7 +74,7 @@
     <text class="t" x="450" y="445" text-anchor="middle">Iceberg lakehouse</text>
     <text class="s" x="450" y="464" text-anchor="middle">MinIO / S3 · REST catalog · MERGE</text>
     <rect x="600" y="420" width="260" height="60"/>
-    <text class="t" x="730" y="445" text-anchor="middle">Snowflake marts</text>
+    <text class="t" x="730" y="445" text-anchor="middle">Iceberg marts</text>
     <text class="s" x="730" y="464" text-anchor="middle">COPY INTO from Parquet · DuckDB fallback</text>
   </g>
 

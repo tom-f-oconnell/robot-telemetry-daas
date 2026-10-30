@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rtdaas"
 version = "0.1.0"
-description = "Robot Telemetry Data-as-a-Service: ROS 2 -> Kafka/Spark/Airflow -> Iceberg/Elasticsearch/Snowflake platform"
+description = "Robot Telemetry Data-as-a-Service: ROS 2 -> Kafka/Spark/Airflow -> Iceberg/Elasticsearch platform"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -38,9 +38,6 @@ spark = [
   "elasticsearch>=8.12,<9",
   "opencv-python-headless>=4.9",
   "imageio-ffmpeg>=0.5",
-  "snowflake-connector-python>=3.10",
-  "duckdb>=1.1",
-  "pytz>=2024.1",  # see api
   "fastavro>=1.9",
   "zstandard>=0.22",
   "lz4>=4.3",

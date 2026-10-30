@@ -14,11 +14,9 @@ Two modes, chosen at construction:
    Tables resolve to ``lake.telemetry.sessions`` etc.  Timestamps are native, arrays are native
    lists and ``procedures.kinematics`` struct columns are read as ``psml.x``.
 
-2. **Parquet stage fallback**: when the catalog cannot be attached (older DuckDB, no REST
-   endpoint reachable), views are created over the Parquet files that ``publish_snowflake.py``
-   exports to ``s3://<lake>/stage/snowflake/<TABLE>/<run_id>/`` plus the local DuckDB file written
-   by ``publish_snowflake.py --target duckdb`` (``SERVING_DUCKDB_PATH``).  Tables that are not
-   staged (raw tables) are simply reported as absent.
+2. **No catalog**: when it cannot be attached (DuckDB without the ``iceberg`` extension, REST
+   endpoint unreachable), the lake tables are reported as absent and only the ``jobs`` table and
+   the Elasticsearch-backed endpoints answer.
 
 When ``ES_URL`` responds, ``events`` and ``gestures`` are served from Elasticsearch, which gives
 free-text search; otherwise they fall back to SQL ``LIKE``.
@@ -54,7 +52,7 @@ class DuckDBBackend(SqlBackendBase):
 
         self._lock = threading.Lock()
         self._conn = duckdb.connect(self.settings.serving_duckdb_path)
-        self.mode = "parquet"
+        self.mode = "unattached"  # until the Iceberg catalog is attached
         self._attach_iceberg()
         self._conn.execute(
             """CREATE TABLE IF NOT EXISTS jobs (
@@ -85,10 +83,7 @@ class DuckDBBackend(SqlBackendBase):
             self.mode = "iceberg"
             log.info("attached Iceberg REST catalog %s as 'lake'", s.iceberg_rest_uri)
         except Exception as exc:
-            log.warning(
-                "Iceberg catalog unavailable (%s); falling back to Parquet stage/DuckDB file", exc
-            )
-            self._create_stage_views()
+            log.warning("Iceberg catalog unavailable (%s); lake tables will be absent", exc)
 
     def _attach_sql(self) -> str:
         s = self.settings
@@ -105,24 +100,6 @@ class DuckDBBackend(SqlBackendBase):
             self._attached_at = time.monotonic()
         except Exception as exc:  # keep the old timestamp so the next query retries
             log.warning("re-attaching Iceberg catalog failed: %s", exc)
-
-    def _create_stage_views(self) -> None:
-        """Views over the Snowflake Parquet stage for the published marts."""
-        s = self.settings
-        stage = s.snowflake_stage_uri.replace("s3a://", "s3://")
-        for table, mart in (
-            ("telemetry.sessions", "SESSION_DAILY"),
-            ("dq.check_results", "CHECK_RESULTS"),
-        ):
-            schema, name = table.split(".")
-            try:
-                self._conn.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-                self._conn.execute(
-                    f"""CREATE OR REPLACE VIEW {schema}.{name} AS
-                        SELECT * FROM read_parquet('{stage}/{mart}/*/*.parquet', union_by_name=true)"""
-                )
-            except Exception as exc:  # stage may not exist yet
-                log.debug("no stage view for %s: %s", table, exc)
 
     # ------------------------------------------------------------------ hooks
     def table(self, name: str) -> str:

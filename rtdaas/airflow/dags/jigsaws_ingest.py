@@ -1,6 +1,6 @@
 """DAG ``jigsaws_ingest`` — manual / on dataset drop: JIGSAWS -> procedures.* -> gate -> publish -> ES check.
 
-    discover -> spark_batch_jigsaws -> quality_gate -> publish_snowflake -> index_es_gestures
+    discover -> spark_batch_jigsaws -> quality_gate -> publish_marts -> index_es_gestures
 
 Trigger with config ``{"task": "Suturing"}`` to restrict to one task (default: all).
 """
@@ -116,17 +116,10 @@ with DAG(
         retries=0,
     )
 
-    publish_snowflake = spark_task(
-        "publish_snowflake",
-        "publish_snowflake.py",
-        [
-            "--date",
-            "{{ ds }}",
-            "--marts",
-            "PROCEDURES.GESTURE_SKILL_SUMMARY",
-            "--target",
-            "{{ var.value.get('rtdaas_publish_target', 'duckdb') }}",
-        ],
+    publish_marts = spark_task(
+        "publish_marts",
+        "publish_marts.py",
+        ["--date", "{{ ds }}", "--marts", "PROCEDURES.GESTURE_SKILL_SUMMARY"],
         executors=1,
     )
 
@@ -134,4 +127,4 @@ with DAG(
         task_id="index_es_gestures", python_callable=_verify_gestures_indexed
     )
 
-    discover >> spark_batch_jigsaws >> quality_gate >> publish_snowflake >> index_es_gestures
+    discover >> spark_batch_jigsaws >> quality_gate >> publish_marts >> index_es_gestures

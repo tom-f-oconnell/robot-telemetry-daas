@@ -1,7 +1,7 @@
 # robot-telemetry-daas
 
 **A Data-as-a-Service platform for robot telemetry** — ROS 2 → Kafka → Spark (streaming +
-batch) → Iceberg / Elasticsearch / Snowflake, orchestrated by Airflow, with enforced data
+batch) → Iceberg / Elasticsearch, orchestrated by Airflow, with enforced data
 contracts, quality gates, a documented API and a web UI. Deployed with Terraform + Ansible + k3s
 + Argo CD, or on one machine with docker compose.
 

@@ -7,7 +7,7 @@ flowchart TB
     sess["applyInPandas(session_metrics)<br/>→ telemetry.sessions"]
     kpi["applyInPandas(kpi_windows)<br/>→ telemetry.kpi_1m (computed_by=batch)"]
     gate{"quality_gate<br/>telemetry.yml"}
-    pub["publish_snowflake<br/>ROBOT_DAILY, SESSION_DAILY"]
+    pub["publish_marts<br/>lake.marts.*"]
     esx["ES rtdaas-sessions"]
     fail["task fails →<br/>publish skipped, alert"]
 

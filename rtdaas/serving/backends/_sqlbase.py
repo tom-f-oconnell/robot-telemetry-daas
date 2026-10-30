@@ -11,7 +11,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +67,8 @@ def to_iso(value: Any) -> Any:
         t = pd.Timestamp(value)
         t = t.tz_convert("UTC") if t.tzinfo is not None else t.tz_localize("UTC")
         return t.strftime(TS_FORMAT)
+    if isinstance(value, date):  # DATE columns (the marts' `day`) are not JSON-serialisable
+        return value.isoformat()
     return value
 
 
@@ -183,9 +185,9 @@ class SqlBackendBase:
                 except Exception as exc:  # pragma: no cover - engine specific
                     log.warning("freshness query failed for %s: %s", name, exc)
             if info["last_updated"] and sla:
-                age_h = (
-                    now - pd.Timestamp(info["last_updated"]).to_pydatetime()
-                ).total_seconds() / 3600
+                last = pd.Timestamp(info["last_updated"])  # DATE / naive values are UTC
+                last = last.tz_localize(UTC) if last.tzinfo is None else last
+                age_h = (now - last.to_pydatetime()).total_seconds() / 3600
                 info["age_hours"] = round(age_h, 2)
                 info["fresh"] = age_h <= float(sla)
             out[name] = info

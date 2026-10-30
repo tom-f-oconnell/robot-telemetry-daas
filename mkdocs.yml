@@ -1,5 +1,5 @@
 site_name: robot-telemetry-daas
-site_description: Robot telemetry Data-as-a-Service — ROS 2 → Kafka/Spark/Airflow → Iceberg/Elasticsearch/Snowflake
+site_description: Robot telemetry Data-as-a-Service — ROS 2 → Kafka/Spark/Airflow → Iceberg/Elasticsearch
 repo_url: https://github.com/tom-f-oconnell/robot-telemetry-daas
 docs_dir: docs
 theme:
@@ -45,7 +45,7 @@ nav:
       - Batch bag ingestion: pipelines/batch-bags.md
       - JIGSAWS kinematics + video: pipelines/jigsaws.md
       - Quality gates: pipelines/quality.md
-      - Publishing to Snowflake: pipelines/publish.md
+      - Publishing the marts: pipelines/publish.md
   - Serving:
       - Data API: serving/api.md
       - Web UI: serving/ui.md
@@ -73,3 +73,4 @@ nav:
       - adr/0009-starlette-api.md
       - adr/0010-mcap-lite-and-cdr.md
       - adr/0011-quality-gates-as-yaml.md
+      - adr/0012-marts-in-iceberg.md

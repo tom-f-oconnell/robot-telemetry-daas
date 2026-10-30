@@ -13,7 +13,7 @@ into raw tables, sessions and exact KPIs.
 | 1 | `wait_for_bags` | `S3KeySensor` (reschedule mode, 6 h timeout) on the day's prefix |
 | 2 | `spark_batch_mcap` | `batch_mcap.py --date {{ ds }}`: `sc.binaryFiles` over the prefix → `mapPartitions(decode_bag)` → `MERGE INTO` raw tables → sessions → KPIs |
 | 3 | `quality_gate` | `quality_gate.py --suite quality/checks/telemetry.yml --partition {{ ds }}`; exit 2 on blocking failure |
-| 4 | `publish_snowflake` | marts for the date → Parquet stage → `COPY INTO` (or DuckDB) + catalog refresh |
+| 4 | `publish_marts` | marts for the date → `lake.marts.*` (that day's partition) + catalog refresh |
 | 5 | `index_es_sessions` | verifies the `rtdaas-sessions` document count for the date |
 
 ## Decoding bags
@@ -45,8 +45,8 @@ tool poses. `applyInPandas(session_metrics)` per `(session_id, robot_id, arm)` p
 ## Idempotency
 
 Re-running a date is safe: raw merges on `(robot_id, arm, ts)`, sessions on `(session_id, arm)`,
-KPIs on `(robot_id, arm, window_start)`, Elasticsearch ids are deterministic, and the Snowflake
-publish deletes the date partition before `COPY INTO`.
+KPIs on `(robot_id, arm, window_start)`, Elasticsearch ids are deterministic, and the mart
+publish overwrites only the date's partition.
 
 ## Backfills
 

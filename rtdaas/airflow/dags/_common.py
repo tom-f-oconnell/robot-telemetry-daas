@@ -33,7 +33,6 @@ SPARK_IMAGE = os.environ.get("RTDAAS_SPARK_IMAGE", "ghcr.io/tom-f-oconnell/rtdaa
 SPARK_NAMESPACE = os.environ.get("RTDAAS_SPARK_NAMESPACE", "rtdaas")
 SPARK_SERVICE_ACCOUNT = os.environ.get("RTDAAS_SPARK_SERVICE_ACCOUNT", "spark")
 S3_CONN_ID = "rtdaas_s3"
-SNOWFLAKE_CONN_ID = "rtdaas_snowflake"
 SPARK_CONN_ID = "spark_default"
 K8S_CONN_ID = "kubernetes_default"
 
@@ -49,18 +48,10 @@ _FORWARDED_ENV = (
     "S3_BUCKET_LAKE",
     "ICEBERG_REST_URI",
     "ICEBERG_WAREHOUSE",
-    "SNOWFLAKE_ACCOUNT",
-    "SNOWFLAKE_USER",
-    "SNOWFLAKE_PASSWORD",
-    "SNOWFLAKE_WAREHOUSE",
-    "SNOWFLAKE_DATABASE",
-    "SNOWFLAKE_ROLE",
     "SERVING_DUCKDB_PATH",
-    "PUBLISH_DUCKDB_PATH",
     "PIPELINE_VERSION",
     "LOG_LEVEL",
     "RTDAAS_SPARK_PACKAGES",
-    "RTDAAS_PUBLISH_TARGET",
 )
 
 DEFAULT_ARGS: dict[str, Any] = {

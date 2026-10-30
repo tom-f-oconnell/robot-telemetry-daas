@@ -1,10 +1,10 @@
--- Curated marts published to Snowflake (or DuckDB). Executed by publish_snowflake.py with
--- Spark SQL over the `lake` catalog. Statements are separated by a line containing only
+-- Curated marts, written by publish_marts.py with Spark SQL over the `lake` catalog to
+-- `lake.marts.<table>` (lower-cased TABLE). Statements are separated by a line containing only
 -- `-- @mart <SCHEMA>.<TABLE> [partition_column]`; `{date}` is substituted with the run date
 -- (YYYY-MM-DD) and `{catalog}` with the Iceberg catalog name.
 --
--- Every mart carries a `day` (or run date) column so a re-run deletes and reloads exactly
--- one partition in the warehouse (idempotent publish, ADR 0005).
+-- Every mart carries a `day` (or run date) column; with a partition column, a re-run replaces
+-- exactly that day's partition (idempotent publish, ADR 0005), without one the table is replaced.
 
 -- @mart TELEMETRY.ROBOT_DAILY day
 SELECT

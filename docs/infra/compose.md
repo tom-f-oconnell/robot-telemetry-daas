@@ -75,11 +75,10 @@ Set `RTDAAS_IMAGE_PREFIX` / `RTDAAS_IMAGE_TAG` to run published GHCR images inst
    every 30 s. Its bags close when it exits (also on `docker stop`), and `bag-lander` then lands
    them under today's date, for the next scheduled `telemetry_bag_ingest` run.
 2. Airflow: unpausing `telemetry_bag_ingest` immediately schedules yesterday's run, which picks
-   up the seeded bags (`wait_for_bags → spark_batch_mcap → quality_gate → publish_snowflake →
+   up the seeded bags (`wait_for_bags → spark_batch_mcap → quality_gate → publish_marts →
    index_es_sessions`); `jigsaws_ingest` and `contracts_sync` are triggered directly. With two
    workers and the streaming job holding two cores, batch jobs run one at a time — allow ~10 min.
 3. `dq_daily` stays paused (unpaused, it fires at once against empty partitions); trigger it from
    the UI once the ingest runs are green.
-4. The API's Sessions, Trials, Quality and Catalog pages read the live Iceberg tables. Published
-   marts land in `./data/warehouse.duckdb` (`PUBLISH_DUCKDB_PATH`), separate from the API's own
-   DuckDB file, which the API holds open.
+4. The API's Sessions, Trials, Quality and Catalog pages read the live Iceberg tables; the curated
+   marts are Iceberg tables too (`lake.marts.*`), listed on the Catalog page.

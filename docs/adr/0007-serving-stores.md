@@ -1,6 +1,7 @@
 # ADR 0007: Elasticsearch for search and live dashboards, Snowflake for marts, DuckDB as the fallback
 
-**Status:** accepted · **Date:** 2026-10-29
+**Status:** accepted · **Date:** 2026-10-29 · the Snowflake and DuckDB-file parts are superseded by
+[ADR 0012](0012-marts-in-iceberg.md) (marts in Iceberg)
 
 ## Context
 

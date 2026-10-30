@@ -160,3 +160,13 @@ def test_openapi_parity(client):
     mounted = {(m, re.sub(r"\{[^}]+\}", "{id}", p)) for m, p in documented_routes(client.app)}
     documented = {(m, re.sub(r"\{[^}]+\}", "{id}", p)) for m, p in documented}
     assert mounted == documented
+
+
+def test_to_iso_handles_dates_and_timestamps():
+    import datetime as dt
+
+    from rtdaas.serving.backends._sqlbase import to_iso
+
+    assert to_iso(dt.date(2026, 10, 29)) == "2026-10-29"
+    assert to_iso(dt.datetime(2026, 10, 29, 12, tzinfo=dt.UTC)).startswith("2026-10-29T12:00:00")
+    assert to_iso(3) == 3

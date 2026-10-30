@@ -1,35 +1,34 @@
-# Publishing to Snowflake (or DuckDB)
+# Publishing the curated marts
 
-`rtdaas/spark/publish_snowflake.py` builds curated marts from Iceberg with Spark SQL
-(`rtdaas/spark/marts.sql`), writes them as Parquet to a stage prefix, and loads them into
-Snowflake with `COPY INTO`. With `--target duckdb` the same marts land in a DuckDB file instead,
-which is what the compose demo and CI use ([ADR 0007](../adr/0007-serving-stores.md)).
+`rtdaas/spark/publish_marts.py` builds the curated marts in `rtdaas/spark/marts.sql` from the
+lake with Spark SQL and writes them back to Iceberg, in their own namespace, then refreshes the
+data catalog. It runs as the `publish_marts` task of `telemetry_bag_ingest`, `jigsaws_ingest`
+(gesture summary only) and `telemetry_backfill` (every date of the range).
 
-## Marts
-
-| Snowflake table | Grain | Source |
-|---|---|---|
-| `TELEMETRY.ROBOT_DAILY` | robot × day | `telemetry.sessions` |
-| `TELEMETRY.SESSION_DAILY` | robot × arm × session | `telemetry.sessions` |
-| `PROCEDURES.GESTURE_SKILL_SUMMARY` | task × gesture × skill level | `procedures.gestures` |
-| `DQ.CHECK_RESULTS` | check × run | `dq.check_results` |
-
-## Load path
+| Iceberg table | Grain | Source | Re-run replaces |
+|---|---|---|---|
+| `marts.robot_daily` | robot × day | `telemetry.sessions` | that day's partition |
+| `marts.session_daily` | session × arm | `telemetry.sessions` | that day's partition |
+| `marts.gesture_skill_summary` | task × gesture × skill level | `procedures.gestures` | the whole table |
+| `marts.check_results` | check run | `dq.check_results` | that day's partition |
 
 ```
-Iceberg (lake.*) ──Spark SQL──▶ Parquet @ s3://rtdaas-lake/stage/snowflake/<TABLE>/<run_id>/
-                                  └──▶ Snowflake: CREATE SCHEMA/TABLE IF NOT EXISTS
-                                       DELETE WHERE day = :date      (idempotent)
-                                       COPY INTO <TABLE> FROM @stage/<TABLE>/<run_id>/
-                                            FILE_FORMAT = (TYPE = PARQUET)
-                                            MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+lake.telemetry.* / procedures.* / dq.* ──Spark SQL (marts.sql)──▶ lake.marts.<table>
+                                         (dynamic partition overwrite on `day`)
+catalog.yml + row counts / freshness ──▶ lake.dq.catalog          (GET /api/catalog)
 ```
 
-Credentials come from `SNOWFLAKE_*` environment variables (Kubernetes Secret
-`rtdaas-secrets`). For a real AWS deployment use a storage integration + external stage instead
-of inline keys; the compose stack uses MinIO with inline keys.
+Because the marts are ordinary Iceberg tables, anything that reads the lake reads them: the API's
+DuckDB backend (`lake.marts.robot_daily`), Spark, PyIceberg, or a query engine such as Trino. No
+warehouse account or credentials are involved; see [ADR 0012](../adr/0012-marts-in-iceberg.md) for
+why the original Snowflake copy was dropped.
+
+```bash
+spark-submit rtdaas/spark/publish_marts.py --date 2026-10-29
+spark-submit rtdaas/spark/publish_marts.py --date 2026-10-28,2026-10-29 --marts TELEMETRY.ROBOT_DAILY
+```
 
 ## Catalog refresh
 
 The same job rewrites `dq.catalog` from `rtdaas/serving/catalog.yml`, filling in row counts and
-last-updated timestamps per table, which the API's `/api/catalog` endpoint serves.
+last-updated timestamps per table (marts included), which the API's `/api/catalog` endpoint serves.

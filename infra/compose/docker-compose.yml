@@ -38,8 +38,8 @@ x-airflow-common: &airflow-common
   build:
     context: ../..
     dockerfile: infra/docker/airflow.Dockerfile
-  # the official image runs any uid with gid 0; use the host user so the DuckDB publish target
-  # in ./data is writable (airflow-init, as root, hands the logs volume to this uid)
+  # the official image runs any uid with gid 0; use the host user so anything Airflow writes to
+  # the ./data bind mount stays yours (airflow-init, as root, hands the logs volume to this uid)
   user: "${RTDAAS_UID:-50000}:0"
   environment: &airflow-env
     <<: *rtdaas-env
@@ -56,9 +56,6 @@ x-airflow-common: &airflow-common
     AIRFLOW_VAR_RTDAAS_SPARK_MODE: submit
     AIRFLOW_VAR_RTDAAS_SPARK_MASTER: spark://spark-master:7077
     AIRFLOW_VAR_RTDAAS_HOME: /opt/rtdaas
-    # publish --target duckdb runs in this container (client-mode driver); keep it off the API's
-    # /data/rtdaas.duckdb, which the API holds open
-    PUBLISH_DUCKDB_PATH: /data/warehouse.duckdb
     AIRFLOW_CONN_RTDAAS_S3: 'aws://${S3_ACCESS_KEY:-minioadmin}:${S3_SECRET_KEY:-minioadmin}@/?endpoint_url=http%3A%2F%2Fminio%3A9000&region_name=us-east-1'
     # the DAGs use spark_default; the Spark provider builds --master as "<host>:<port>", so the
     # host must carry the spark:// scheme (JSON form, since a URI would swallow it)

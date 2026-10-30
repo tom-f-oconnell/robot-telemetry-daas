@@ -25,7 +25,7 @@ done
 s3 s3api put-bucket-versioning --bucket "$RAW" --versioning-configuration Status=Enabled >/dev/null 2>&1 || true
 
 # Layout prefixes (S3 has no directories; these are markers for humans browsing the console).
-for key in "$RAW/bags/.keep" "$RAW/jigsaws/.keep" "$LAKE/warehouse/.keep" "$LAKE/checkpoints/.keep" "$LAKE/stage/snowflake/.keep"; do
+for key in "$RAW/bags/.keep" "$RAW/jigsaws/.keep" "$LAKE/warehouse/.keep" "$LAKE/checkpoints/.keep"; do
   printf '' | s3 s3 cp - "s3://$key" >/dev/null 2>&1 || true
 done
 

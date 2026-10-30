@@ -48,7 +48,6 @@ COPY --chown=airflow:root contracts /opt/rtdaas/contracts
 COPY --chown=airflow:root quality /opt/rtdaas/quality
 RUN pip install --no-cache-dir --no-deps /opt/rtdaas \
  && pip install --no-cache-dir "numpy>=1.26" "pandas>=2.1" "pydantic>=2.5" "PyYAML>=6.0" "requests>=2.31" \
-      "duckdb>=1.1" \
       --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
 
 COPY --chown=airflow:root rtdaas/airflow/dags /opt/airflow/dags

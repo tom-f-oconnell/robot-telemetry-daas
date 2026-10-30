@@ -26,13 +26,13 @@ or from the API/UI: **Session page → Reprocess** posts `{"kind": "date", "targ
 `POST /api/jobs/reprocess`, which calls Airflow's REST API and records the run under `/api/jobs`.
 
 The DAG expands one `batch_mcap` + `quality_gate` pair per date (max 4 in parallel), then runs
-`publish_snowflake` once for the range.
+`publish_marts` once for every date of the range.
 
 ## 3. Verify
 
 - `GET /api/sessions?start=…&end=…` shows the new `pipeline_version` and `processed_at`.
 - Quality page → latest run for `telemetry` has no blocking failures.
-- Snowflake `TELEMETRY.SESSION_DAILY` row counts per day match `telemetry.sessions`.
+- `marts.session_daily` row counts per day match `telemetry.sessions`.
 - If the result is wrong, Iceberg time travel lets you compare:
   `SELECT … FROM lake.telemetry.sessions VERSION AS OF <snapshot_id>` and roll back with
   `CALL lake.system.rollback_to_snapshot('telemetry.sessions', <snapshot_id>)`.
