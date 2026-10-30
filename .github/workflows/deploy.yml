@@ -24,12 +24,16 @@ jobs:
         with:
           ref: main
       - name: Install kustomize
+        env:
+          KUSTOMIZE_VERSION: 5.4.3
         run: |
-          curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- 5.4.3 /usr/local/bin
+          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kustomize
           kustomize version
       - name: Pin image tags to the built commit
         working-directory: infra/k8s/manifests/rtdaas
         run: |
+          set -euo pipefail
           for img in rtdaas-api rtdaas-spark rtdaas-sim rtdaas-bridge; do
             kustomize edit set image "ghcr.io/OWNER/${img}=ghcr.io/${OWNER}/${img}:${SHA}"
           done

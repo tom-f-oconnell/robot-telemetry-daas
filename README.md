@@ -1,5 +1,8 @@
 # robot-telemetry-daas
 
+[![ci](https://github.com/tom-f-oconnell/robot-telemetry-daas/actions/workflows/ci.yml/badge.svg)](https://github.com/tom-f-oconnell/robot-telemetry-daas/actions/workflows/ci.yml)
+[![images](https://github.com/tom-f-oconnell/robot-telemetry-daas/actions/workflows/images.yml/badge.svg)](https://github.com/tom-f-oconnell/robot-telemetry-daas/actions/workflows/images.yml)
+
 **Data-as-a-Service for robot telemetry.** ROS 2 → Kafka → Spark (streaming + batch) →
 Iceberg / Elasticsearch / Snowflake, orchestrated by Airflow, with generated-and-enforced data
 contracts, quality gates, a documented API and a web UI — deployable on one machine with

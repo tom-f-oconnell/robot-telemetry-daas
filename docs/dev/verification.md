@@ -27,16 +27,33 @@ or on the compose stack.
 
 Total: **140 tests passing** in the unit tier (`make test`).
 
+## Executed in GitHub Actions (real dependencies)
+
+After the first push, the CI matrix ran with freshly installed dependencies on `ubuntu-latest`
+(run history: github.com/tom-f-oconnell/robot-telemetry-daas/actions):
+
+| Job | What it exercised | Result |
+|---|---|---|
+| `ci / unit` (Python 3.11 and 3.12) | the full unit tier above, plus `rtdaas-contracts gen && git diff --exit-code` (committed Avro is current) | pass |
+| `ci / spark` (PySpark 3.5.3, Temurin 17) | `tests/spark/test_jobs.py`: Spark `StructType` for every Iceberg table, the streaming KPI aggregation (`unify → kpi_aggregate → fold_robot_wide`) on a static frame with warn-event and heartbeat-gap folding, `sc.binaryFiles → decode_bag → createDataFrame` on simulator bags | pass |
+| `ci / airflow` (Airflow 2.10.3, official constraints) | `DagBag` loads all 5 DAGs with no import errors; expected task ids, tags, `max_active_runs`, `catchup=False`; `S3KeySensor` key pattern | pass |
+| `ci / lint`, `ci / docs` | ruff check + format, `mkdocs build --strict` | pass |
+| `images` | all five images built with buildx and pushed to GHCR — including `rtdaas-bridge`, i.e. the C++ ROS 2 → Kafka bridge, the rclpy adapters and the launch package compiled with `colcon` against ROS 2 Jazzy, avro-cpp 1.11.3 and librdkafka | pass |
+
+Getting there took four short iterations, all in the thin layers, exactly as expected: a
+collection-time import of Starlette in the serving tests (now skipped without the `api`
+extra), ruff findings, and two `-Werror` warnings in avro-cpp's source build under GCC 13 /
+Boost 1.83 (built as C++17 with those diagnostics relaxed; only the library targets are built).
+
 ## Written, compiles, not yet executed
 
-| Area | Why not here | Where it runs |
+| Area | Why not yet | Where it runs |
 |---|---|---|
-| Spark jobs (`streaming_kpis`, `batch_mcap`, `batch_jigsaws`, `quality_gate`, `publish_snowflake`, `maintenance`) | no PySpark/Java jars available offline | CI `spark` job (`tests/spark/test_jobs.py`: struct types, KPI aggregation on a static frame, `binaryFiles → decode_bag`), then the compose stack |
-| Airflow DAGs | no Airflow | CI `airflow` job (`tests/airflow/test_dag_integrity.py`: no import errors, expected task ids, sensor pattern) |
-| Kafka producer (`rtdaas.sim.producer`), Elasticsearch client, Snowflake/DuckDB loaders, DuckDB API backend | no services, no drivers | compose stack (`make demo`), `integration.yml` |
-| C++ Kafka bridge, rclpy adapters' ROS plumbing, launch files | no ROS 2 | `infra/docker/bridge.Dockerfile` build is the compile check; `ros2/README.md` lists the two API details written from documentation |
-| Dockerfiles, docker compose, Terraform, Ansible, Argo CD applications, Helm values, Kubernetes manifests | no Docker/Terraform/cluster | `make demo`, `make tf-local` + `make ansible`, `integration.yml` (kind) |
-| GitHub Actions workflows | not pushed yet | first push |
+| Spark jobs against a real Iceberg catalog, Kafka source and Elasticsearch sink (`streaming_kpis`, `batch_mcap`, `batch_jigsaws`, `quality_gate`, `publish_snowflake`, `maintenance` end to end) | needs the service stack | compose stack (`make demo`), `integration.yml` |
+| Airflow DAG *runs* (the integrity tests only load them) | needs Spark + S3 + the stack | compose stack |
+| Kafka producer (`rtdaas.sim.producer`), Elasticsearch client, Snowflake/DuckDB loaders, DuckDB API backend | no services in CI | compose stack |
+| The C++ bridge *at runtime* (it compiles and links; the introspection walk has not yet run against live dVRK topics) | needs ROS 2 + the dVRK simulation | `ros2 launch rtdaas_launch fleet_sim.launch.py` against the compose stack |
+| Terraform, Ansible, Argo CD applications, Helm values, Kubernetes manifests | no cluster in CI | `make tf-local` + `make ansible`; `integration.yml` covers a kind cluster with Strimzi, Apicurio, MinIO, the simulator and the API |
 
 ## What to run first after cloning
 
