@@ -10,6 +10,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
+from functools import cache
 
 try:  # pragma: no cover - exercised only when the package is installed
     from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
@@ -75,18 +76,24 @@ class _FallbackMetrics:
         return "\n".join(lines) + "\n"
 
 
+@cache
+def _prom_collectors():  # pragma: no cover
+    """One set per process: the default registry refuses a second collector of the same name."""
+    return (
+        Counter("rtdaas_api_requests_total", "HTTP requests", ["method", "route", "status"]),
+        Histogram(
+            "rtdaas_api_request_duration_seconds",
+            "Request latency",
+            ["method", "route"],
+            buckets=BUCKETS,
+        ),
+    )
+
+
 class Metrics:
     def __init__(self) -> None:
         if _HAVE_PROM:  # pragma: no cover
-            self._req = Counter(
-                "rtdaas_api_requests_total", "HTTP requests", ["method", "route", "status"]
-            )
-            self._lat = Histogram(
-                "rtdaas_api_request_duration_seconds",
-                "Request latency",
-                ["method", "route"],
-                buckets=BUCKETS,
-            )
+            self._req, self._lat = _prom_collectors()
         else:
             self._fb = _FallbackMetrics()
 

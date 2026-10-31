@@ -239,6 +239,7 @@ paths:
         "206": {description: partial content, content: {video/mp4: {schema: {type: string, format: binary}}}}
         "404": {$ref: "#/components/responses/NotFound"}
         "416": {description: range not satisfiable}
+        "502": {description: the object store holding the video could not be read}
   /api/gestures:
     get:
       tags: [procedures]

@@ -41,8 +41,10 @@ Both implement the same `Backend` protocol (spec §4.10); routes never touch SQL
 
 ## Operations
 
-- Stateless; scale by replicas. The only writes are `jobs` rows (reprocess requests).
+- One replica on the DuckDB backend: its file (holding the `jobs` rows from reprocess requests)
+  takes one process.
 - `/metrics` exposes request counts and latency histograms per route for Prometheus.
-- Video streaming resolves `video_path` under `MEDIA_ROOT`; mount the JIGSAWS directory (or an
-  S3 gateway) there.
+- Video streaming looks for `video_path` under `MEDIA_ROOT`, then streams `s3a://` paths from the
+  object store through the API, with Range support. Seeking works either way; the local copy is
+  optional.
 - Put OIDC in front at the ingress; the API itself has no auth (internal platform).

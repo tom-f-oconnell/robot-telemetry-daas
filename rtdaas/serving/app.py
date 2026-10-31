@@ -7,8 +7,10 @@ mounted route is documented (and vice versa). Static UI files are served from ``
 
 from __future__ import annotations
 
+import functools
 import logging
 import mimetypes
+import os
 import re
 import time
 from pathlib import Path
@@ -126,6 +128,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
     openapi_doc = yaml.safe_load(OPENAPI_PATH.read_text())
     openapi_doc.setdefault("info", {})["version"] = __version__
     media_root = Path(settings.media_root).resolve()
+    s3_client = functools.cache(lambda: make_s3_client(settings))
 
     # ---- meta --------------------------------------------------------------
     # Plain `def` handlers run in Starlette's thread pool: the backends block (DuckDB over S3 can take
@@ -256,10 +259,14 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         row = backend.trial(trial_id)
         if row is None:
             raise ApiError(404, "not_found", "unknown trial_id")
-        path = resolve_media(row.get("video_path"), media_root)
-        if path is None:
+        video_path = row.get("video_path")
+        path = resolve_media(video_path, media_root)
+        if path is not None:
+            return range_file_response(request, path)
+        location = parse_object_uri(video_path)
+        if location is None:
             raise ApiError(404, "not_found", "video file not available")
-        return range_file_response(request, path)
+        return range_object_response(request, s3_client(), *location)
 
     def gestures(request: Request):
         rows = backend.gestures(
@@ -385,22 +392,26 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
 
 
 # --------------------------------------------------------------------------- media helpers
+def parse_object_uri(uri: str | None) -> tuple[str, str] | None:
+    """``s3a://<bucket>/<key>`` -> ``(bucket, key)``; None for anything else."""
+    scheme, sep, rest = (uri or "").partition("://")
+    bucket, _, key = rest.partition("/")
+    return (bucket, key) if sep and scheme in ("s3", "s3a", "s3n") and key else None
+
+
 def resolve_media(video_path: str | None, media_root: Path) -> Path | None:
-    """Resolve a trial's video path to a readable file.
+    """Resolve a trial's video path to a readable local file, if there is one.
 
     Absolute paths are honoured if they exist (local pipeline output); otherwise the path is
     taken relative to ``MEDIA_ROOT`` and must stay inside it (no ``..`` escapes). Object-store
     URIs (``s3a://<bucket>/<key>``, as written by the Spark jobs) resolve to ``MEDIA_ROOT/<key>``,
-    i.e. ``MEDIA_ROOT`` is treated as a local mirror of the raw bucket.
+    i.e. ``MEDIA_ROOT`` may hold a local mirror of the raw bucket; without one, the caller streams
+    the object itself.
     """
     if not video_path:
         return None
-    scheme, sep, rest = video_path.partition("://")
-    if sep and scheme in ("s3", "s3a", "s3n"):
-        video_path = rest.partition("/")[2]  # drop the bucket
-        if not video_path:
-            return None
-    p = Path(video_path)
+    location = parse_object_uri(video_path)
+    p = Path(location[1] if location else video_path)
     if p.is_absolute() and p.is_file():
         return p
     candidate = (media_root / p.name if p.is_absolute() else media_root / p).resolve()
@@ -411,20 +422,38 @@ def resolve_media(video_path: str | None, media_root: Path) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-def range_file_response(request: Request, path: Path, chunk_size: int = 1 << 20) -> Response:
-    """Serve a file with HTTP Range support so ``<video>`` can seek (RFC 7233, single range)."""
-    size = path.stat().st_size
-    media_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
-    range_header = request.headers.get("range")
-    headers = {"Accept-Ranges": "bytes", "Content-Type": media_type}
-    if not range_header:
-        return FileResponse(str(path), media_type=media_type, headers={"Accept-Ranges": "bytes"})
-    m = re.match(r"bytes=(\d*)-(\d*)$", range_header.strip())
+def make_s3_client(settings: Settings):
+    """A client for the object store.
+
+    Its own session because handlers share a thread pool and boto3's default session is not safe
+    to create concurrently. Short timeouts so an unreachable store cannot tie up that pool.
+    """
+    import boto3
+    from botocore.config import Config
+
+    return boto3.session.Session().client(
+        "s3",
+        endpoint_url=settings.s3_endpoint,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
+        region_name=os.environ.get("AWS_REGION", "us-east-1"),
+        config=Config(
+            s3={"addressing_style": "path"},  # MinIO
+            connect_timeout=5,
+            read_timeout=30,
+            retries={"max_attempts": 2},
+        ),
+    )
+
+
+def parse_range(header: str, size: int) -> tuple[int, int] | None:
+    """Inclusive offsets for a single-range ``Range`` header (RFC 7233); None if unsatisfiable."""
+    m = re.match(r"bytes=(\d*)-(\d*)$", header.strip())
     if not m:
-        return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+        return None
     start_s, end_s = m.groups()
     if start_s == "" and end_s == "":
-        return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+        return None
     if start_s == "":  # suffix range
         length = min(int(end_s), size)
         start, end = size - length, size - 1
@@ -432,11 +461,40 @@ def range_file_response(request: Request, path: Path, chunk_size: int = 1 << 20)
         start = int(start_s)
         end = min(int(end_s), size - 1) if end_s else size - 1
     if start >= size or start > end:
-        return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
-    length = end - start + 1
-    headers.update({"Content-Range": f"bytes {start}-{end}/{size}", "Content-Length": str(length)})
+        return None
+    return start, end
 
-    def iterator():
+
+def partial_response(range_header: str, size: int, media_type: str, read) -> Response:
+    """Answer a ``Range`` request with ``read(start, length)``'s chunks, or 416."""
+    span = parse_range(range_header, size)
+    if span is None:
+        return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+    start, end = span
+    length = end - start + 1
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": media_type,
+        "Content-Range": f"bytes {start}-{end}/{size}",
+        "Content-Length": str(length),
+    }
+    return StreamingResponse(
+        read(start, length), status_code=206, headers=headers, media_type=media_type
+    )
+
+
+def guess_media_type(name: str) -> str:
+    return mimetypes.guess_type(name)[0] or "application/octet-stream"
+
+
+def range_file_response(request: Request, path: Path, chunk_size: int = 1 << 20) -> Response:
+    """Serve a file with HTTP Range support so ``<video>`` can seek (RFC 7233, single range)."""
+    media_type = guess_media_type(str(path))
+    range_header = request.headers.get("range")
+    if not range_header:
+        return FileResponse(str(path), media_type=media_type, headers={"Accept-Ranges": "bytes"})
+
+    def read(start: int, length: int):
         with open(path, "rb") as fh:
             fh.seek(start)
             remaining = length
@@ -447,7 +505,46 @@ def range_file_response(request: Request, path: Path, chunk_size: int = 1 << 20)
                 remaining -= len(chunk)
                 yield chunk
 
-    return StreamingResponse(iterator(), status_code=206, headers=headers, media_type=media_type)
+    return partial_response(range_header, path.stat().st_size, media_type, read)
+
+
+def range_object_response(
+    request: Request, s3, bucket: str, key: str, chunk_size: int = 1 << 20
+) -> Response:
+    """Serve an object through the API, with the same Range behaviour as a local file.
+
+    Proxied rather than redirected to a presigned URL because the store's address (a cluster
+    service, in Kubernetes) is not one a browser can reach.
+    """
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    try:
+        size = int(s3.head_object(Bucket=bucket, Key=key)["ContentLength"])
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
+            raise ApiError(404, "not_found", "video file not available") from exc
+        raise ApiError(502, "object_store_error", str(exc)) from exc
+    except BotoCoreError as exc:
+        raise ApiError(502, "object_store_error", str(exc)) from exc
+
+    def read(start: int, length: int):
+        if length == 0:
+            return
+        byte_range = f"bytes={start}-{start + length - 1}"
+        body = s3.get_object(Bucket=bucket, Key=key, Range=byte_range)["Body"]
+        try:
+            yield from body.iter_chunks(chunk_size)
+        finally:
+            body.close()
+
+    media_type = guess_media_type(key)
+    range_header = request.headers.get("range")
+    if range_header:
+        return partial_response(range_header, size, media_type, read)
+    headers = {"Accept-Ranges": "bytes", "Content-Length": str(size)}
+    if request.method == "HEAD":
+        return Response(headers=headers, media_type=media_type)
+    return StreamingResponse(read(0, size), headers=headers, media_type=media_type)
 
 
 SWAGGER_HTML = """<!doctype html>

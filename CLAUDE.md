@@ -37,7 +37,7 @@ infra/             docker/, compose/, terraform/ (libvirt + aws), ansible/ (k3s 
 quality/checks/    telemetry.yml, procedures.yml, streaming.yml
 docs/              mkdocs-material site: architecture, pipelines, infra, runbooks, 11 ADRs, verification status
 tests/             pytest; markers: spark, airflow, integration (unmarked = pure Python)
-scripts/           demo.sh (compose orchestration), ci-annotate.sh (see CI notes), wait-for.sh
+scripts/           demo.sh (compose orchestration), ci-annotate.sh (see CI notes), wait-for.sh, check-k8s-video.sh
 ```
 
 ## The one design rule
@@ -54,7 +54,7 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (151 tests, ~10 s) — must stay green
+make test               # unit tier (161 tests, ~10 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
 make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
@@ -230,6 +230,8 @@ From the first k3s run on real VMs (each is fixed; the notes are so the fix is n
   flight failed with "driver pod already exist" although their checks had passed, and streaming stuck in PENDING_RERUN.
 - **Probes use `/api/live`**, and backend handlers are plain `def` (thread pool). `/api/health` counts every table's
   rows, so it outgrew the probe timeout, and in `async def` a blocking DuckDB call stalled the event loop for all.
+- **Trial videos stream from the bucket** when `MEDIA_ROOT` has no copy (nothing fills that volume on k8s, so the player
+  404ed). Proxied, not presigned: the store's cluster address is unreachable from a browser. The `api` extra needs boto3.
 - **One API replica**: a DuckDB file takes one process. The in-memory registry forgets schemas on restart, so a sidecar
   in the Apicurio pod keeps registering them. Airflow keys are fixed in values (the chart's hook Secrets regenerate on
   every sync). Task logs go to the lake bucket (worker pods are deleted, and their logs with them).

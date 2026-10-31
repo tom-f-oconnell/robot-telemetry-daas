@@ -251,7 +251,7 @@ async function viewTrialDetail(trialId, params) {
     if (frames.length) relayout("frames", { "shapes[0].x0": tSec, "shapes[0].x1": tSec });
   }
   video.addEventListener("timeupdate", () => setCursor(video.currentTime));
-  video.addEventListener("error", () => toast("Video could not be played (file missing under MEDIA_ROOT, or codec not supported by this browser)", true));
+  video.addEventListener("error", () => toast("Video could not be played (file missing, or codec not supported by this browser)", true));
   scrub.addEventListener("input", () => { video.currentTime = Number(scrub.value) / fps; setCursor(Number(scrub.value) / fps); });
   main.querySelectorAll("tr.clickable").forEach((tr, i) => tr.addEventListener("click", () => { video.currentTime = (gestures[i].start_frame - 1) / fps; }));
   if (params.t) { video.addEventListener("loadedmetadata", () => { video.currentTime = Number(params.t); }, { once: true }); setCursor(Number(params.t)); }

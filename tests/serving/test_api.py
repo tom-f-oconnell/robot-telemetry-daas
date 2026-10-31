@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import re
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -127,6 +129,118 @@ def test_resolve_media_object_store_uri(tmp_path):
     assert resolve_media("s3://rtdaas-raw/jigsaws/missing.mp4", tmp_path) is None
     assert resolve_media("s3a://rtdaas-raw/../../etc/passwd", tmp_path) is None
     assert resolve_media("s3a://rtdaas-raw", tmp_path) is None
+
+
+class FakeS3:
+    """The parts of a boto3 S3 client the video route uses, with its 404 and Range behaviour."""
+
+    def __init__(self, objects):
+        self.objects = objects
+        self.gets = []
+
+    def head_object(self, Bucket, Key):
+        from botocore.exceptions import ClientError
+
+        if (Bucket, Key) not in self.objects:
+            raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
+        return {"ContentLength": len(self.objects[(Bucket, Key)])}
+
+    def get_object(self, Bucket, Key, Range):
+        from botocore.response import StreamingBody
+
+        self.gets.append(Range)
+        start, end = map(int, re.fullmatch(r"bytes=(\d+)-(\d+)", Range).groups())
+        data = self.objects[(Bucket, Key)][start : end + 1]
+        return {"Body": StreamingBody(io.BytesIO(data), len(data))}
+
+
+VIDEO_BYTES = bytes(range(100))
+VIDEO_URI = "s3a://rtdaas-raw/jigsaws/Suturing/video/Suturing_B001_capture1.mp4"
+
+
+@pytest.fixture
+def object_store_app(tmp_path, monkeypatch):
+    """The API on Kubernetes: a trial whose video is in the bucket, and nothing under MEDIA_ROOT."""
+    from starlette.testclient import TestClient
+
+    from rtdaas.config import Settings
+    from rtdaas.serving import app as app_module
+
+    fake = FakeS3({("rtdaas-raw", VIDEO_URI.split("rtdaas-raw/")[1]): VIDEO_BYTES})
+    monkeypatch.setattr(app_module, "make_s3_client", lambda settings: fake)
+    paths = {"T1": VIDEO_URI, "gone": "s3a://rtdaas-raw/jigsaws/gone.mp4", "local": "gone.mp4"}
+    backend = SimpleNamespace(trial=lambda t: {"trial_id": t, "video_path": paths.get(t)})
+    settings = Settings(serving_backend="sqlite", media_root=str(tmp_path))
+    with TestClient(app_module.create_app(settings, backend=backend)) as c:
+        yield c, fake, tmp_path
+
+
+def test_video_streams_from_object_store(object_store_app):
+    client, _, _ = object_store_app
+    full = client.get("/api/trials/T1/video")
+    assert full.status_code == 200 and full.content == VIDEO_BYTES
+    assert full.headers["accept-ranges"] == "bytes"
+    assert full.headers["content-length"] == "100"
+    assert full.headers["content-type"] == "video/mp4"
+
+
+@pytest.mark.parametrize(
+    "header,content_range,expected",
+    [
+        ("bytes=10-19", "bytes 10-19/100", VIDEO_BYTES[10:20]),
+        ("bytes=95-", "bytes 95-99/100", VIDEO_BYTES[95:]),
+        ("bytes=-5", "bytes 95-99/100", VIDEO_BYTES[95:]),
+        ("bytes=90-500", "bytes 90-99/100", VIDEO_BYTES[90:]),
+    ],
+)
+def test_video_object_store_range(object_store_app, header, content_range, expected):
+    client, _, _ = object_store_app
+    part = client.get("/api/trials/T1/video", headers={"Range": header})
+    assert part.status_code == 206 and part.content == expected
+    assert part.headers["content-range"] == content_range
+    assert part.headers["content-length"] == str(len(expected))
+    assert part.headers["content-type"] == "video/mp4"
+
+
+def test_video_object_store_unsatisfiable_range(object_store_app):
+    client, _, _ = object_store_app
+    bad = client.get("/api/trials/T1/video", headers={"Range": "bytes=100-"})
+    assert bad.status_code == 416 and bad.headers["content-range"] == "bytes */100"
+
+
+def test_video_object_store_head_does_not_download(object_store_app):
+    client, fake, _ = object_store_app
+    head = client.head("/api/trials/T1/video")
+    assert head.status_code == 200 and head.headers["content-length"] == "100"
+    assert fake.gets == []
+
+
+def test_video_missing_everywhere_is_404(object_store_app):
+    client, _, _ = object_store_app
+    assert client.get("/api/trials/gone/video").status_code == 404
+    assert client.get("/api/trials/local/video").status_code == 404
+
+
+def test_video_prefers_local_mirror(object_store_app):
+    client, fake, media_root = object_store_app
+    mirrored = media_root / VIDEO_URI.split("rtdaas-raw/")[1]
+    mirrored.parent.mkdir(parents=True)
+    mirrored.write_bytes(b"local")
+    assert client.get("/api/trials/T1/video").content == b"local"
+    assert fake.gets == []
+
+
+def test_video_object_store_failure_is_502(object_store_app, monkeypatch):
+    from botocore.exceptions import ConnectTimeoutError
+
+    client, fake, _ = object_store_app
+
+    def unreachable(**kwargs):
+        raise ConnectTimeoutError(endpoint_url="http://minio:9000")
+
+    monkeypatch.setattr(fake, "head_object", unreachable)
+    response = client.get("/api/trials/T1/video")
+    assert response.status_code == 502 and response.json()["error"] == "object_store_error"
 
 
 def test_gestures_and_quality(client):

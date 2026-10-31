@@ -1,5 +1,5 @@
-# Shared /data volume for the API (SQLite mirror in sqlite mode, trial videos for
-# /api/trials/{id}/video) and the demo simulator's local bag copies.
+# Shared /data volume for the API (DuckDB file, or SQLite mirror in sqlite mode) and the demo
+# simulator's local bag copies. Trial videos are not copied here: the API streams them from the bucket.
 # k3s' local-path provisioner only offers RWO, so the API runs with RWO + Recreate strategy
 # (the old pod must release the volume and the DuckDB file before the new one starts).
 apiVersion: v1

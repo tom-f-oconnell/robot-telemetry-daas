@@ -27,6 +27,7 @@ api = [
   "pytz>=2024.1",  # DuckDB returns TIMESTAMPTZ via pytz; pandas >= 3 no longer pulls it in
   "elasticsearch>=8.12,<9",
   "prometheus-client>=0.20",
+  "boto3>=1.34",  # trial videos that are only in the object store
 ]
 kafka = [
   "confluent-kafka>=2.5",
