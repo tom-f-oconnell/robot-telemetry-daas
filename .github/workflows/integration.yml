@@ -168,6 +168,9 @@ jobs:
           echo "distinct robot keys: $robots"
           test "$robots" -ge 1
 
+      - name: Assert the API serves a trial video that exists only in the object store
+        run: bash scripts/ci-annotate.sh "video from object store" -- bash scripts/check-k8s-video.sh
+
       - name: Collect logs on failure
         if: failure()
         run: |
