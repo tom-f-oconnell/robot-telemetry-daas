@@ -105,6 +105,18 @@ That run fixed more than 25 things, none of them in the pure-Python core; see "G
 The biggest: Argo CD pruned Strimzi's PVCs, Elasticsearch never became ready under ECK with security
 off, and 4 × 8 GB could not schedule a batch job.
 
+## Trial video from the object store (2026-10-30)
+
+A trial whose video is only in the bucket, with nothing but the SQLite mirror on the API's volume. Not
+yet run on the k3s VMs or with the DuckDB backend.
+
+| Area | How verified | Result |
+|---|---|---|
+| Kubernetes | one-node kind cluster, the repo's API, config, secret, PVC and MinIO manifests, `scripts/check-k8s-video.sh`: whole file and Range | pass |
+| Docker image, before and after | the old image answers 404. The new one answers 200, 206 and 416, the bytes match, and ffmpeg's frame after a seek matches the original file's | pass |
+| Browser | headless Chrome on the real trial page: the player loads, seeks to 45 s and plays on | pass |
+| Store unreachable | 502 in about 2.4 s; `/api/live` still answers | pass |
+
 ## Written, compiles, not yet executed
 
 | Area | Why not yet | Where it runs |
