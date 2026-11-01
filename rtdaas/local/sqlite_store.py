@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS catalog (
     name TEXT PRIMARY KEY,
     owner TEXT,
     description TEXT,
-    sla_hours REAL,
+    freshness_target_hours REAL,
     row_count INTEGER,
     last_updated TEXT,
     freshness_ok INTEGER,
@@ -167,12 +167,13 @@ class SqliteStore:
             self.conn.execute(f'CREATE INDEX IF NOT EXISTS "{idx}" ON "{name}" ({col_sql})')
 
     def write_catalog(self, entries: Iterable[dict]) -> int:
+        """Replace the catalog, table included, so a mirror from an older schema still takes it."""
         rows = [
             (
                 e["name"],
                 e.get("owner"),
                 e.get("description"),
-                e.get("sla_hours"),
+                e.get("freshness_target_hours"),
                 e.get("row_count"),
                 e.get("last_updated"),
                 int(bool(e.get("freshness_ok", True))),
@@ -181,8 +182,10 @@ class SqliteStore:
             )
             for e in entries
         ]
+        self.conn.execute("DROP TABLE IF EXISTS catalog")
+        self.conn.executescript(CATALOG_DDL)
         self.conn.executemany(
-            "INSERT OR REPLACE INTO catalog (name, owner, description, sla_hours, row_count, last_updated, freshness_ok, contract, columns_json) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO catalog (name, owner, description, freshness_target_hours, row_count, last_updated, freshness_ok, contract, columns_json) VALUES (?,?,?,?,?,?,?,?,?)",
             rows,
         )
         self.conn.commit()

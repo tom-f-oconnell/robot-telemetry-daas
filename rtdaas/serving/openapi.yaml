@@ -32,7 +32,7 @@ paths:
   /api/catalog:
     get:
       tags: [meta]
-      summary: Data products with owner, SLA, columns, row count and freshness
+      summary: Data products with owner, freshness target, columns, row count and freshness
       responses:
         "200":
           description: OK
@@ -419,7 +419,7 @@ components:
         name: {type: string, example: telemetry.sessions}
         owner: {type: string}
         description: {type: string}
-        sla_hours: {type: number}
+        freshness_target_hours: {type: number, nullable: true, description: How old the newest row may get before the table shows as stale; null for no target}
         contract: {type: string, description: "Kafka subject for raw tables, derived otherwise"}
         pii: {type: boolean}
         columns:

@@ -19,6 +19,13 @@ def test_health(client):
     assert body["backend"] == "sqlite" and "telemetry.sessions" in body["tables"]
 
 
+def test_catalog_states_freshness_targets(client):
+    tables = {t["name"]: t for t in client.get("/api/catalog").json()["tables"]}
+    assert tables["telemetry.kpi_1m"]["freshness_target_hours"] == 1
+    assert tables["marts.gesture_skill_summary"]["freshness_target_hours"] is None
+    assert not any("sla_hours" in t for t in tables.values())
+
+
 def test_catalog_and_contracts(client):
     tables = client.get("/api/catalog").json()["tables"]
     names = {t["name"] for t in tables}

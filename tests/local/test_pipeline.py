@@ -141,3 +141,21 @@ def test_cli_and_quality_cli(pipeline_out, tmp_path, repo_root):
 def test_pipeline_without_bags_or_jigsaws(tmp_path):
     counts = run(None, None, tmp_path / "empty.sqlite", suites=[])
     assert counts["catalog"] >= 0 and "telemetry.sessions" not in counts
+
+
+def test_catalog_replaces_one_from_an_older_schema(tmp_path):
+    import sqlite3
+
+    from rtdaas.local.sqlite_store import SqliteStore
+
+    path = tmp_path / "old.sqlite"
+    old = sqlite3.connect(path)
+    old.execute("CREATE TABLE catalog (name TEXT PRIMARY KEY, sla_hours REAL)")
+    old.execute("INSERT INTO catalog VALUES ('gone', 26)")
+    old.commit()
+    old.close()
+
+    store = SqliteStore(path)
+    assert store.write_catalog([{"name": "t", "freshness_target_hours": 26.0}]) == 1
+    rows = store.conn.execute("SELECT name, freshness_target_hours FROM catalog").fetchall()
+    assert [tuple(r) for r in rows] == [("t", 26.0)]

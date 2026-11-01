@@ -31,7 +31,7 @@ writes a SQLite mirror — that is how the API, UI and quality suites are tested
    approximations ([ADR 0005](../adr/0005-batch-wins-idempotent-reprocessing.md)).
 4. **Quality is a gate, not a report.** Blocking failures stop publishing; every check result is a
    row in `dq.check_results` and visible in the UI ([quality gates](../pipelines/quality.md)).
-5. **Self-service.** Every published table has an owner, description, SLA and column docs in the
+5. **Self-service.** Every published table has an owner, description, freshness target and column docs in the
    catalog; the API ships its OpenAPI document; the UI needs no SQL.
 
 ## Component map

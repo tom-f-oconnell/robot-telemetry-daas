@@ -9,7 +9,7 @@ against them by a test ([ADR 0009](../adr/0009-starlette-api.md)); Swagger UI is
 | Method & path | Purpose |
 |---|---|
 | `GET /api/health` | backend type, version, table freshness summary |
-| `GET /api/catalog` | data products: owner, description, SLA, row count, freshness |
+| `GET /api/catalog` | data products: owner, description, freshness target, row count, freshness |
 | `GET /api/contracts` | subjects, versions and schemas (from `contracts/avro` or the registry) |
 | `GET /api/robots` | robots with first/last seen and session counts |
 | `GET /api/sessions?robot_id&start&end&limit&offset` | session list |

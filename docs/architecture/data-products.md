@@ -1,6 +1,6 @@
 # Data products and the catalog
 
-Every table the platform publishes is a *data product*: it has an owner, a description, an SLA,
+Every table the platform publishes is a *data product*: it has an owner, a description, a freshness target,
 documented columns, a contract (for raw tables, the Kafka subject; for derived tables, the
 pipeline that produces them) and a freshness status. The catalog is the first thing a new
 consumer sees, before any SQL.
@@ -9,7 +9,7 @@ consumer sees, before any SQL.
 
 - **Source:** `rtdaas/serving/catalog.yml` — one entry per table, reviewed with the code that
   produces the table.
-- **Materialized:** the `catalog` table (`name, owner, description, sla_hours, row_count,
+- **Materialized:** the `catalog` table (`name, owner, description, freshness_target_hours, row_count,
   last_updated, freshness_ok`) is written by `publish_marts.py` (Iceberg `dq.catalog`) and by
   the local pipeline (SQLite), so the numbers reflect the current state of the lake.
 - **Served:** `GET /api/catalog` and the **Catalog** page of the UI, which shows every table with
@@ -60,14 +60,20 @@ speed, gripper open/close cycles, and the mean video motion energy (mean absolut
 difference) — a cheap video-derived activity measure that can be compared with the
 kinematics-derived speed to catch desynchronized recordings.
 
-## SLAs and freshness
+## Freshness targets
 
-| Product | SLA | Freshness check |
+Each table's `freshness_target_hours` in `catalog.yml` is how old its newest row may get. These are
+objectives, not agreements with consumers: missing one turns the table's status on the Catalog page to
+"stale", and nothing else happens. Nothing alerts on it and no job fails.
+
+| Product | Target | Also checked by |
 |---|---|---|
-| `kpi_1m` (stream) | 2 min | `streaming.yml` → `freshness` ≤ 5 min (warning) |
-| `*_raw`, `sessions` | daily partition by 06:00 UTC | `telemetry.yml` → `freshness` ≤ 26 h |
-| `procedures.*` | on dataset drop | n/a |
-| `marts.*` | after the daily ingest DAGs | `freshness` via `dq.catalog`, DAG SLA miss callback |
+| `telemetry.kpi_1m` | 1 h | `streaming.yml`: `fresh_kpis`, 15 min (warning) |
+| `telemetry.*_raw`, `telemetry.sessions` | 26 h | `streaming.yml`: `fresh_heartbeats`, 6 min, heartbeats only (warning) |
+| `procedures.trials` | 168 h | |
+| `procedures.kinematics`, `gestures`, `frame_features` | 168 h, not checked: they name no timestamp column, so they always show as fresh | |
+| `dq.check_results`, `marts.robot_daily`, `session_daily`, `check_results` | 26 h | |
+| `marts.gesture_skill_summary` | none | |
 
 Freshness and row counts are recomputed into `dq.catalog` whenever the publish step runs, so the
 Catalog page is never more stale than the last pipeline run.

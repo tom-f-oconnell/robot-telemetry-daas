@@ -11,7 +11,7 @@ self-service surface for engineers who do not want to write SQL.
 | Procedures | JIGSAWS trials filterable by task, skill level, subject | `/api/trials` |
 | Trial detail | video player synchronized with PSM kinematics (cursor follows playback), gesture ribbon (click to seek), frame-feature strip, scrubber | `/api/trials/{id}/video`, `/kinematics`, `/frames` |
 | Gesture search | find segments by task / gesture code / skill level, jump into the trial at that frame | `/api/gestures` |
-| Catalog | every data product with owner, SLA, freshness badge and column docs | `/api/catalog` |
+| Catalog | every data product with owner, freshness target and status, and column docs | `/api/catalog` |
 | Quality | latest runs, pass/warn/fail counts, filterable results | `/api/quality/*` |
 | Contracts | subjects, versions, pretty-printed Avro schemas | `/api/contracts` |
 | Jobs | reprocess requests and their Airflow run ids | `/api/jobs` |

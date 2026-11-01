@@ -1,4 +1,5 @@
-# Data catalog: every published table, its owner, SLA and column documentation (spec §6).
+# Data catalog: every published table, its owner, freshness target and column documentation (spec §6).
+# freshness_target_hours is how old a table's newest row may get before it shows as stale; null for none.
 # Served by GET /api/catalog and rendered on the Catalog UI page. `contract` names the
 # schema-registry subject a raw table is derived from, or "derived" for computed tables.
 owner_default: data-platform@rtdaas
@@ -6,7 +7,7 @@ tables:
   - name: telemetry.tool_pose_raw
     owner: data-platform@rtdaas
     description: Instrument tip Cartesian pose, jaw angle and tip speed per arm at ~50 Hz, from streaming and recorded bags.
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: rtdaas.telemetry.tool_pose-value
     partitioning: [days(ts), robot_id]
     freshness_column: ts
@@ -31,7 +32,7 @@ tables:
   - name: telemetry.joint_states_raw
     owner: data-platform@rtdaas
     description: Joint positions, velocities and efforts per arm as published by the dVRK (measured_js).
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: rtdaas.telemetry.joint_states-value
     partitioning: [days(ts), robot_id]
     freshness_column: ts
@@ -52,7 +53,7 @@ tables:
   - name: telemetry.events_raw
     owner: data-platform@rtdaas
     description: Discrete system events (session boundaries, instrument swaps, clutch, joint-limit warnings, e-stop).
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: rtdaas.telemetry.events-value
     partitioning: [days(ts)]
     freshness_column: ts
@@ -72,7 +73,7 @@ tables:
   - name: telemetry.heartbeat_raw
     owner: data-platform@rtdaas
     description: 1 Hz liveness and coarse operating state per robot.
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: rtdaas.telemetry.heartbeat-value
     partitioning: [days(ts)]
     freshness_column: ts
@@ -91,7 +92,7 @@ tables:
   - name: telemetry.kpi_1m
     owner: data-platform@rtdaas
     description: Per robot x arm x 1-minute window KPIs (speed, path length, idle fraction, jaw cycles, event counts, heartbeat gaps). Stream rows are replaced by batch rows for the same window.
-    sla_hours: 1
+    freshness_target_hours: 1
     contract: derived
     partitioning: [days(window_start)]
     freshness_column: window_start
@@ -116,7 +117,7 @@ tables:
   - name: telemetry.sessions
     owner: data-platform@rtdaas
     description: Economy-of-motion summary per session x arm (path length, mean speed, idle fraction, jaw cycles, event counts, instrument swaps).
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: derived
     partitioning: [days(start_ts)]
     freshness_column: start_ts
@@ -143,7 +144,7 @@ tables:
   - name: procedures.trials
     owner: data-platform@rtdaas
     description: One row per JIGSAWS trial (task, subject, repetition, skill level, GRS score, durations, file paths).
-    sla_hours: 168
+    freshness_target_hours: 168
     contract: derived
     partitioning: [task]
     freshness_column: processed_at
@@ -169,7 +170,7 @@ tables:
   - name: procedures.kinematics
     owner: data-platform@rtdaas
     description: 30 Hz kinematics for all four manipulators (position, rotation, velocities, gripper) with the gesture label per sample.
-    sla_hours: 168
+    freshness_target_hours: 168
     contract: derived
     partitioning: [task, trial_id]
     freshness_column: null
@@ -188,7 +189,7 @@ tables:
   - name: procedures.gestures
     owner: data-platform@rtdaas
     description: One row per transcribed gesture segment with PSM path length, speed, gripper cycles and video motion energy.
-    sla_hours: 168
+    freshness_target_hours: 168
     contract: derived
     partitioning: [task]
     freshness_column: null
@@ -213,7 +214,7 @@ tables:
   - name: procedures.frame_features
     owner: data-platform@rtdaas
     description: Per video frame intensity, motion energy and sharpness, aligned with kinematic samples.
-    sla_hours: 168
+    freshness_target_hours: 168
     contract: derived
     partitioning: [task, trial_id]
     freshness_column: null
@@ -231,7 +232,7 @@ tables:
   - name: dq.check_results
     owner: data-platform@rtdaas
     description: Results of every data-quality check run (quality gate, dq_daily, local pipeline).
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: derived
     partitioning: [days(run_ts)]
     freshness_column: run_ts
@@ -253,7 +254,7 @@ tables:
   - name: marts.robot_daily
     owner: data-platform@rtdaas
     description: Per-robot daily rollup of sessions (active time, path length, warnings, errors, instrument swaps).
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: derived
     partitioning: [day]
     freshness_column: processed_at
@@ -272,7 +273,7 @@ tables:
   - name: marts.session_daily
     owner: data-platform@rtdaas
     description: telemetry.sessions as a day-partitioned mart (one row per session x arm).
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: derived
     partitioning: [day]
     freshness_column: processed_at
@@ -292,7 +293,7 @@ tables:
   - name: marts.gesture_skill_summary
     owner: data-platform@rtdaas
     description: JIGSAWS gesture statistics by task, gesture and skill level (replaced on every publish).
-    sla_hours: 0
+    freshness_target_hours: null
     contract: derived
     partitioning: []
     freshness_column: day
@@ -310,7 +311,7 @@ tables:
   - name: marts.check_results
     owner: data-platform@rtdaas
     description: dq.check_results as a day-partitioned mart.
-    sla_hours: 26
+    freshness_target_hours: 26
     contract: derived
     partitioning: [day]
     freshness_column: run_ts

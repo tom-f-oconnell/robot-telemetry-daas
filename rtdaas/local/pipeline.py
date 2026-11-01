@@ -393,11 +393,11 @@ def write_catalog(
         row_count = store.row_count(name)
         freshness_col = e.get("freshness_column")
         last = store.max_value(name, freshness_col) if freshness_col else None
-        sla = e.get("sla_hours")
+        target = e.get("freshness_target_hours")
         if last is not None:
             last_ts = pd.to_datetime(last, utc=True)
             age_h = (now - last_ts).total_seconds() / 3600.0
-            fresh = bool(age_h <= float(sla)) if sla is not None else True
+            fresh = bool(age_h <= float(target)) if target is not None else True
             last_updated = format_ts(last_ts)
         else:
             last_updated = format_ts(now) if row_count else None
@@ -407,7 +407,7 @@ def write_catalog(
                 "name": name,
                 "owner": e.get("owner"),
                 "description": e.get("description"),
-                "sla_hours": sla,
+                "freshness_target_hours": target,
                 "row_count": row_count,
                 "last_updated": last_updated,
                 "freshness_ok": fresh,

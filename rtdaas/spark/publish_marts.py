@@ -126,7 +126,7 @@ def catalog_entries(path: Path = CATALOG_YML) -> list[dict]:
                 "name": t["name"],
                 "owner": t.get("owner", default_owner),
                 "description": t.get("description", ""),
-                "sla_hours": float(t.get("sla_hours") or 0.0) or None,
+                "freshness_target_hours": float(t.get("freshness_target_hours") or 0.0) or None,
                 "freshness_column": t.get("freshness_column"),
             }
         )
@@ -155,18 +155,26 @@ def write_catalog(spark, settings: Settings | None = None, now: dt.datetime | No
             last_updated = r["last"] if "last" in r.asDict() else None
         except Exception as exc:  # table missing in this environment
             log.warning("catalog: cannot read %s (%s)", name, exc)
-        sla = entry["sla_hours"]
+        target = entry["freshness_target_hours"]
         if isinstance(last_updated, dt.date) and not isinstance(last_updated, dt.datetime):
             last_updated = dt.datetime.combine(last_updated, dt.time.min)  # a DATE column
         if last_updated is not None and last_updated.tzinfo is None:
             last_updated = last_updated.replace(tzinfo=dt.UTC)
         freshness_ok = True
-        if sla and last_updated is not None:
-            freshness_ok = (now - last_updated) <= dt.timedelta(hours=sla)
-        elif sla and row_count == 0:
+        if target and last_updated is not None:
+            freshness_ok = (now - last_updated) <= dt.timedelta(hours=target)
+        elif target and row_count == 0:
             freshness_ok = False
         rows.append(
-            (name, entry["owner"], entry["description"], sla, row_count, last_updated, freshness_ok)
+            (
+                name,
+                entry["owner"],
+                entry["description"],
+                target,
+                row_count,
+                last_updated,
+                freshness_ok,
+            )
         )
 
     df = spark.createDataFrame(rows, schema=ddl.struct_type(ddl.CATALOG_TABLE.name))

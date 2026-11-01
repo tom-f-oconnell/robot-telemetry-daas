@@ -322,9 +322,11 @@ async function viewGestures(params) {
 async function viewCatalog() {
   setActive("catalog");
   const { tables } = await api("/api/catalog");
-  main.innerHTML = `<h1>Data catalog</h1><div class="subtitle">Every published table with its owner, SLA, contract, columns and freshness. Numbers come from the last pipeline run.</div>
+  main.innerHTML = `<h1>Data catalog</h1><div class="subtitle">Every published table with its owner, freshness target, contract, columns and freshness. Numbers come from the last pipeline run.</div>
     <div class="grid cols-2">${tables.map((t) => `<div class="card">
-      <div class="toolbar"><strong class="mono">${esc(t.name)}</strong><span style="margin-left:auto"><span class="fresh-dot ${t.freshness_ok ? "ok" : "stale"}"></span><span class="small muted">${t.freshness_ok ? "fresh" : "stale"} · SLA ${fmt(t.sla_hours, 0)} h</span></span></div>
+      <div class="toolbar"><strong class="mono">${esc(t.name)}</strong><span style="margin-left:auto">${t.freshness_target_hours
+        ? `<span class="fresh-dot ${t.freshness_ok ? "ok" : "stale"}"></span><span class="small muted" title="The newest row should be at most ${fmt(t.freshness_target_hours, 0)} h old">${t.freshness_ok ? "fresh" : "stale"} · target ${fmt(t.freshness_target_hours, 0)} h</span>`
+        : '<span class="small muted">no freshness target</span>'}</span></div>
       <p class="small" style="margin:6px 0 8px">${esc(t.description)}</p>
       <div class="kv"><span class="k">Owner</span><span>${esc(t.owner)}</span><span class="k">Contract</span><span class="mono">${esc(t.contract)}</span><span class="k">Rows</span><span>${fmt(t.row_count)}</span><span class="k">Updated</span><span>${fmtTs(t.last_updated)}</span></div>
       <details style="margin-top:8px"><summary>${(t.columns || []).length} columns</summary><table style="margin-top:6px">${(t.columns || []).map((c) => `<tr><td class="mono">${esc(c.name)}</td><td class="muted">${esc(c.type)}</td><td>${esc(c.description || "")}</td></tr>`).join("")}</table></details>

@@ -20,7 +20,7 @@ by Argo CD.
 | **Real-time** | C++ ROS 2 → Kafka bridge (rosidl introspection, any message type), Spark Structured Streaming computing 1-minute KPIs per robot × arm into Iceberg + Elasticsearch. |
 | **Batch** | Airflow DAGs: daily bag ingestion (MCAP/CDR decoding → raw tables → sessions with economy-of-motion metrics → exact KPIs), JIGSAWS ingestion (OpenCV frame features joined to 30 Hz kinematics → per-gesture metrics), backfills, daily DQ, contracts sync. |
 | **Quality** | YAML check suites (null/range/unique/row-count/sample-rate/schema/freshness/SQL), one engine on pandas / SQLite / Spark, results in `dq.check_results`; blocking failures stop publishing. |
-| **Serving** | Starlette API with OpenAPI + Swagger, data catalog with owners/SLAs/freshness, Prometheus metrics; UI with trajectory replay, log search, synchronized video + kinematics, gesture search, quality dashboard, one-click reprocess. |
+| **Serving** | Starlette API with OpenAPI + Swagger, data catalog with owners and freshness targets, Prometheus metrics; UI with trajectory replay, log search, synchronized video + kinematics, gesture search, quality dashboard, one-click reprocess. |
 | **Infra** | Dockerfiles, docker compose (core / demo / observability), Terraform (libvirt + AWS), Ansible (k3s + Argo CD), Argo CD app-of-apps (Strimzi, Apicurio, spark-operator, Airflow, ECK, MinIO, Iceberg REST, kube-prometheus-stack), GitHub Actions (ci, contracts, images, integration, deploy). |
 
 ## Quick start

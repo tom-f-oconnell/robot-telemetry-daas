@@ -359,7 +359,7 @@ CATALOG_TABLE = _register(
             ("name", "string"),
             ("owner", "string"),
             ("description", "string"),
-            ("sla_hours", "double"),
+            ("freshness_target_hours", "double"),
             ("row_count", "bigint"),
             ("last_updated", "timestamp"),
             ("freshness_ok", "boolean"),

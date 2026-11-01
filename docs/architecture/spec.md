@@ -631,9 +631,9 @@ published day, or a full replace for unpartitioned marts) â†’ catalog refresh (Â
 
 ## 6. Data catalog (discoverability)
 
-`rtdaas/serving/catalog.yml` describes every published table: `name, owner, description, sla_hours,
+`rtdaas/serving/catalog.yml` describes every published table: `name, owner, description, freshness_target_hours,
 contract (subject or "derived"), pii: false, columns: [{name, type, description}]`. The local pipeline
-and `publish_marts.py` write the `catalog` table (`name, owner, description, sla_hours, row_count,
+and `publish_marts.py` write the `catalog` table (`name, owner, description, freshness_target_hours, row_count,
 last_updated, freshness_ok`) that `GET /api/catalog` serves. The Catalog UI page renders it.
 
 ---

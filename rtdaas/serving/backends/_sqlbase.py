@@ -164,13 +164,14 @@ class SqlBackendBase:
         return rows
 
     def freshness(self) -> dict[str, dict]:
-        """Per-table last-updated and SLA status, computed live from the tables."""
+        """Per-table last-updated and freshness status, computed live from the tables."""
         now = datetime.now(UTC)
         out: dict[str, dict] = {}
         for e in self._catalog_yml:
-            name, col, sla = e["name"], e.get("freshness_column"), e.get("sla_hours")
+            name, col = e["name"], e.get("freshness_column")
+            target = e.get("freshness_target_hours")
             info: dict[str, Any] = {
-                "sla_hours": sla,
+                "freshness_target_hours": target,
                 "last_updated": None,
                 "row_count": None,
                 "fresh": None,
@@ -184,12 +185,12 @@ class SqlBackendBase:
                         info["last_updated"] = r["m"] if r else None
                 except Exception as exc:  # pragma: no cover - engine specific
                     log.warning("freshness query failed for %s: %s", name, exc)
-            if info["last_updated"] and sla:
+            if info["last_updated"] and target:
                 last = pd.Timestamp(info["last_updated"])  # DATE / naive values are UTC
                 last = last.tz_localize(UTC) if last.tzinfo is None else last
                 age_h = (now - last.to_pydatetime()).total_seconds() / 3600
                 info["age_hours"] = round(age_h, 2)
-                info["fresh"] = age_h <= float(sla)
+                info["fresh"] = age_h <= float(target)
             out[name] = info
         return out
 
