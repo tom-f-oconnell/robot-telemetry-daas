@@ -24,8 +24,50 @@ position (3), rotation matrix (9), linear velocity (3), angular velocity (3), gr
 
 `rtdaas-jigsaws synth --out data/jigsaws` writes a synthetic dataset in exactly this layout
 (including small rendered videos whose moving shapes track the synthetic PSM positions), so the
-whole pipeline runs without the real data. Request the real dataset from JHU CIRL and point
-`--root` at it; nothing else changes.
+whole pipeline runs without the real data.
+
+## Using the real dataset
+
+Request it from JHU CIRL and unzip the task archives into one folder. Then tell the repository where
+it is, in a `.env` that git ignores (see `.env.example`):
+
+```bash
+JIGSAWS_ROOT=/path/to/JIGSAWS
+JIGSAWS_STAGE=/path/to/jigsaws-stage   # absolute; the browser-ready copy goes here
+```
+
+`make synth` and `make demo` then use it instead of the synthetic dataset. Both run `rtdaas-jigsaws
+import`, which writes the copy the pipelines read, because the download needs three things first:
+
+| The download has | The copy has |
+|---|---|
+| MPEG-4 Part 2 AVIs (DivX), which browsers cannot play | H.264 MP4s, frame for frame |
+| A video per eye | The left eye (`capture1`) |
+| 120 kinematics files: 16 with no video, transcript or skill score, and 1 empty | The 103 complete trials (39 suturing, 36 knot-tying, 28 needle-passing) |
+
+Keep the data out of git and public images.
+
+`make demo` replaces whatever dataset is already in the bucket and the `procedures` tables, because
+synthetic trials reuse real ids and a re-ingest only upserts gestures: an earlier dataset's segments
+would otherwise stay among the new one's. With real data it also deletes the local synthetic copy,
+which the API would otherwise serve in place of the bucket's video. It transcodes only videos whose
+source changed.
+
+The Spark job and `make local-pipeline` read this copy. Pointed straight at the download, they would
+ingest the incomplete trials, and the Spark job would pick an eye per trial at random.
+
+### What the real data looks like
+
+- 284,310 kinematics rows, 284,644 video frames and 1,703 gesture segments; 96 % of rows are labelled.
+- Video and kinematics never have the same length. Across the 103 trials the video is 2 to 17 frames
+  longer (median 5), except `Knot_Tying_F005`, whose source video is 470 frames shorter. No gesture
+  segment runs past the end of either.
+- The two eyes differ too (`Suturing_B001`: 5,640 and 5,637 frames, against 5,635 kinematics rows).
+- Frame features come from the MP4s. On 1,500 frames of `Suturing_B001`, against the AVI: motion
+  energy r = 0.996 (mean 5 % higher), sharpness r = 0.997 (mean 7 % higher).
+- `gripper_cycles` is not yet meaningful: gripper angles run from -1.32 to 0.54 rad, so its threshold
+  of 0.5 (`GRIPPER_OPEN`, chosen for the synthetic 0 to 1 range) only sees the jaw fully open, and
+  62 % of segments score 0.
 
 ## Processing (`batch_jigsaws.py`)
 

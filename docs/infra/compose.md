@@ -38,7 +38,7 @@ them in `infra/compose/.env` when running `docker compose` directly).
   `contracts/registry.yml`.
 - `registry-init` runs `rtdaas-contracts register` so the subjects exist with BACKWARD
   compatibility before any producer starts.
-- `minio-init` (aws-cli) makes sure the `rtdaas-raw` and `rtdaas-lake` buckets exist and writes the layout markers; the same container is reused by `scripts/demo.sh` to upload the synthetic JIGSAWS dataset.
+- `minio-init` (aws-cli) makes sure the `rtdaas-raw` and `rtdaas-lake` buckets exist and writes the layout markers; the same container is reused by `scripts/demo.sh` to upload the JIGSAWS dataset.
 - `airflow-init` migrates the metadata DB, creates the admin user, sets the Airflow Variable
   `rtdaas_spark_mode=submit`, the `rtdaas_s3` connection pointing at MinIO and the
   `spark_default` connection (`spark://spark-master:7077`, client mode). It is the one container
@@ -68,8 +68,9 @@ Set `RTDAAS_IMAGE_PREFIX` / `RTDAAS_IMAGE_TAG` to run published GHCR images inst
 
 ## Typical demo sequence
 
-1. `make demo` seeds S3 before starting anything that reads it: a synthetic JIGSAWS dataset
-   (`s3://rtdaas-raw/jigsaws`) and a closed batch of simulated bags dated *yesterday* (UTC)
+1. `make demo` seeds S3 before starting anything that reads it: a JIGSAWS dataset, the real one if
+   `.env` sets `JIGSAWS_ROOT` and otherwise synthetic (`s3://rtdaas-raw/jigsaws`; see
+   [JIGSAWS](../pipelines/jigsaws.md)), and a closed batch of simulated bags dated *yesterday* (UTC)
    (`s3://rtdaas-raw/bags/<robot>/<yyyy>/<mm>/<dd>/`). The live sim then streams to Kafka for
    `SIM_DURATION_S` (600 s) and the streaming job writes the raw tables and `telemetry.kpi_1m`
    every 30 s. Its bags close when it exits (also on `docker stop`), and `bag-lander` then lands

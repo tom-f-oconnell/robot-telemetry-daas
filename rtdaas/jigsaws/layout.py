@@ -157,6 +157,9 @@ def discover_trials(root: Path, tasks: Iterable[str] | None = None) -> list[Tria
             except ValueError:
                 log.warning("skipping unrecognised kinematics file %s", kin_path)
                 continue
+            if kin_path.stat().st_size == 0:  # the release has one (Knot_Tying_H002)
+                log.warning("skipping empty kinematics file %s", kin_path)
+                continue
             skill, grs = meta.get(trial_id, ("unknown", None))
             transcription = task_dir / "transcriptions" / f"{trial_id}.txt"
             trials.append(

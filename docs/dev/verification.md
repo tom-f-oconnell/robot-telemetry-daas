@@ -117,6 +117,20 @@ yet run on the k3s VMs or with the DuckDB backend.
 | Browser | headless Chrome on the real trial page: the player loads, seeks to 45 s and plays on | pass |
 | Store unreachable | 502 in about 2.4 s; `/api/live` still answers | pass |
 
+## Executed on the real JIGSAWS dataset (2026-10-31)
+
+| Area | How verified | Result |
+|---|---|---|
+| `rtdaas-jigsaws import` | 103 complete trials of 120 kinematics files; source and MP4 frame counts equal on all 103; about 3 minutes, 713 MB | pass |
+| Local pipeline | 103 trials, 284,310 kinematics rows, 284,644 frames, 1,703 gestures, in about 6 minutes; served by `make api` | pass |
+| `make demo`, `jigsaws_ingest` | same row counts from Spark and Iceberg; all 24 `procedures` checks pass; about 8 minutes on the default 1 GB executors (`spark_batch_jigsaws` 410 s, `quality_gate` 20 s) | pass |
+| Replacing an earlier dataset | started from volumes holding synthetic trials: only real data remains in the bucket, tables and index, and the six trial ids both datasets use serve the real video byte for byte | pass |
+| Browser | headless Chrome on the real trial page, on the DuckDB backend: plays, seeks, the kinematics cursor follows, charts draw | pass |
+
+Not yet run on k3s. That run moved the gate off a whole-table `toPandas`, which ran out of memory, and
+stopped stale synthetic videos replacing real ones. See `docs/pipelines/jigsaws.md` for what the data
+itself looks like.
+
 ## Written, compiles, not yet executed
 
 | Area | Why not yet | Where it runs |

@@ -25,7 +25,7 @@ rtdaas/
   mcap_lite/       dependency-free MCAP v1 writer/reader (chunked + zstd/lz4 via optional libs)
   sim/             ROS-free fleet simulator → Kafka (confluent_kafka) and ros2-bag-compatible MCAP
   landing/         rtdaas-land: closed MCAP bags → s3://<raw>/bags/<robot>/<yyyy>/<mm>/<dd>/ (boto3, [land] extra)
-  jigsaws/         JIGSAWS layout parser, synthetic dataset generator (H.264 video), OpenCV frame features
+  jigsaws/         JIGSAWS layout parser, synthetic dataset generator (H.264 video), importer for the real download, OpenCV frame features
   metrics/         session "economy of motion" metrics, 1-min KPI windows, gesture metrics (pure pandas/numpy)
   quality/         YAML check suites + one engine; adapters for pandas / SQLite / Spark
   local/           serial pure-Python pipeline → SQLite mirror of every Iceberg table (dev/test/demo)
@@ -54,10 +54,11 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (161 tests, ~10 s) — must stay green
+make test               # unit tier (166 tests, ~10 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
 make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
+# `.env` (git-ignored; see .env.example) sets machine-specific values, e.g. JIGSAWS_ROOT to use the real dataset
 pip install -e .[spark] && make test-spark      # needs Java 17
 ```
 
@@ -100,11 +101,14 @@ motion and fleet_monitor's CRTK mode; marts published to Iceberg (ADR 0012), mul
 Verified on real VMs (libvirt + k3s, 2026-10-30; see verification.md): Terraform + Ansible from zero, all 12 Argo CD
 apps Synced and Healthy, streaming on the Spark operator, all 5 DAGs in `k8s` mode, Ingress, Prometheus.
 
+Verified with the real JIGSAWS dataset (2026-10-31; see verification.md and docs/pipelines/jigsaws.md): import, the local
+pipeline, and `jigsaws_ingest` on the compose stack, with the UI's player in Chrome. Not yet on k3s.
+
 Open (highest-value next work):
 1. `envs/aws` has never run, and its Airflow S3 connection still points at MinIO. On k8s, nothing scrapes Kafka's
    metrics yet, and `rtdaas-bridge` stays at `replicas: 0` (it needs a dVRK on the ROS domain).
-2. Real JIGSAWS data (request from JHU CIRL; `--root` at it). Its videos are AVI, which browsers cannot play:
-   the trial page's player needs H.264 copies (an import step that transcodes is the obvious addition).
+2. `gripper_cycles` is not meaningful on real JIGSAWS data: angles run -1.32 to 0.54 rad, so `GRIPPER_OPEN = 0.5`
+   (chosen for the synthetic 0 to 1) only sees the jaw fully open, and 62 % of segments score 0.
 3. A batch merge and the stream writing the *same robot on the same day* can still conflict (merges are scoped
    by day and robot); Airflow retries cover it. The introspection walk's bounded-sequence branch is unexercised.
 
@@ -235,6 +239,18 @@ From the first k3s run on real VMs (each is fixed; the notes are so the fix is n
 - **One API replica**: a DuckDB file takes one process. The in-memory registry forgets schemas on restart, so a sidecar
   in the Apicurio pod keeps registering them. Airflow keys are fixed in values (the chart's hook Secrets regenerate on
   every sync). Task logs go to the lake bucket (worker pods are deleted, and their logs with them).
+
+From the first run on the real JIGSAWS data (each is fixed; the notes are so the fix is not undone):
+
+- **The pipelines read `rtdaas-jigsaws import`'s copy, not the download**: MPEG-4 AVIs become H.264 (frame for frame), one eye
+  per trial, and only the 103 complete trials of the 120 kinematics files. Spark's video glob matches both eyes; last one wins.
+- **Video and kinematics lengths never match** (2 to 17 frames, and `Knot_Tying_F005`'s source video is 470 short). Join on
+  `frame_idx` and expect gaps at the end; don't assume equal lengths, which synthetic data has by construction.
+- **`SparkAdapter.frame` selects only what the checks read** (`psml_x` from `psml.x`). `toPandas` on all of
+  procedures.kinematics ran 1 GB executors out of heap, so blocking checks errored and the gate failed.
+- **Switching datasets needs a purge**, which `make demo` does: the gesture `MERGE` only upserts, so old segments survive, and
+  the API prefers a local video to the bucket's, so `infra/compose/data/jigsaws` would serve synthetic video for real trials.
+- **`.env` is read by both make and bash**: plain `KEY=value`, no quotes, spaces or trailing comments.
 
 ## Useful commands
 

@@ -28,7 +28,7 @@ by Argo CD.
 ```bash
 make install           # pip install -e .[dev,api,video]
 make test              # pure-Python unit tests — no cluster required
-make synth             # synthetic JIGSAWS dataset + simulated robot bags
+make synth             # JIGSAWS dataset (synthetic unless .env.example's settings say otherwise) + simulated robot bags
 make local-pipeline    # bags → sessions/KPIs, JIGSAWS → gestures, quality gates → SQLite
 make api               # http://localhost:8080 — UI; /docs for the API
 ```

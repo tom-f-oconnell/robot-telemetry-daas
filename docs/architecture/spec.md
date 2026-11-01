@@ -407,6 +407,7 @@ def generate_dataset(out_dir: Path, n_trials_per_task: int = 2, tasks=("Suturing
 # cli.py -> console script `rtdaas-jigsaws`
 #   synth --out DIR [--trials N] [--seed S] [--duration S] [--no-video]
 #   inspect --root DIR
+#   import --root DIR --out DIR [--task T] [--jobs N]   (browser-ready copy of a download: importer.py)
 ```
 
 ### 4.5 `rtdaas.metrics`

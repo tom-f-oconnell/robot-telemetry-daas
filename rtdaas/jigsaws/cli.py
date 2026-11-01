@@ -1,4 +1,4 @@
-"""``rtdaas-jigsaws`` command line: generate a synthetic dataset or inspect a real one."""
+"""``rtdaas-jigsaws`` command line: generate a synthetic dataset, or inspect or import a real one."""
 
 from __future__ import annotations
 
@@ -66,6 +66,17 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_import(args: argparse.Namespace) -> int:
+    from rtdaas.jigsaws.importer import import_dataset
+
+    result = import_dataset(Path(args.root), Path(args.out), tasks=args.task, jobs=args.jobs)
+    sys.stdout.write(
+        f"{result['trials']} trials under {args.out} ({result['transcoded']} videos transcoded); "
+        f"skipped {len(result['skipped'])} incomplete: {' '.join(result['skipped'])}\n"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="rtdaas-jigsaws", description=__doc__)
     p.add_argument("--log-level", default=None)
@@ -86,6 +97,13 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--task", action="append")
     i.add_argument("--json", action="store_true")
     i.set_defaults(func=_cmd_inspect)
+
+    m = sub.add_parser("import", help="write a browser-ready copy of a downloaded dataset")
+    m.add_argument("--root", required=True, help="the download's folder")
+    m.add_argument("--out", required=True)
+    m.add_argument("--task", action="append", help="restrict to task (repeatable)")
+    m.add_argument("--jobs", type=int, default=4, help="videos transcoded at once")
+    m.set_defaults(func=_cmd_import)
     return p
 
 

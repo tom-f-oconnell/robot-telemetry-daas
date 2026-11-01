@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
+
 import numpy as np
 import pytest
 
@@ -114,3 +118,82 @@ def test_end_to_end_gesture_metrics(dataset):
 def test_frame_features_missing_file(tmp_path):
     with pytest.raises(VideoReadError):
         frame_features(tmp_path / "nope.mp4")
+
+
+def test_discover_skips_empty_kinematics(dataset, tmp_path):
+    root = tmp_path / "root"
+    shutil.copytree(dataset[0], root)
+    (root / "Suturing" / "kinematics" / "AllGestures" / "Suturing_Z009.txt").write_text("")
+    assert not any(t.trial_id == "Suturing_Z009" for t in discover_trials(root))
+
+
+@pytest.fixture
+def download(dataset, tmp_path):
+    """Shaped like the real download: two eyes of AVI per trial, and kinematics with nothing else."""
+    imageio_ffmpeg = pytest.importorskip("imageio_ffmpeg")
+    root = tmp_path / "download"
+    shutil.copytree(dataset[0], root)
+    for mp4 in root.glob("*/video/*_capture1.mp4"):
+        avi = mp4.with_suffix(".avi")
+        ffmpeg = [imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-i", str(mp4), "-c:v", "mpeg4"]
+        subprocess.run([*ffmpeg, str(avi)], check=True)
+        shutil.copy(avi, str(avi).replace("_capture1", "_capture2"))
+        mp4.unlink()
+    kin = root / "Suturing" / "kinematics" / "AllGestures"
+    shutil.copy(next(kin.glob("*.txt")), kin / "Suturing_Z001.txt")  # no video, transcript or meta
+    (kin / "Suturing_Z002.txt").write_text("")
+    (root / "Suturing" / "readme.txt").write_text("not part of the dataset")
+    return root
+
+
+def test_import_keeps_complete_trials_with_one_browser_ready_video(download, tmp_path):
+    from rtdaas.jigsaws.importer import import_dataset
+
+    out = tmp_path / "stage"
+    result = import_dataset(download, out, jobs=2)
+
+    assert result["skipped"] == ["Suturing_Z001"]
+    trials = discover_trials(out)
+    assert (
+        len(trials)
+        == result["trials"]
+        == result["transcoded"]
+        == len(discover_trials(download)) - 1
+    )
+    for t in trials:
+        assert t.video_path.name == f"{t.trial_id}_capture1.mp4"
+        assert t.transcription_path is not None and t.skill_level != "unknown"
+        data = t.video_path.read_bytes()
+        assert b"avc1" in data[:4096], "not H.264, or the index is not at the start"
+        source = next(s for s in discover_trials(download) if s.trial_id == t.trial_id)
+        assert source.video_path.name.endswith("_capture1.avi")
+        assert video_info(t.video_path)["n_frames"] == video_info(source.video_path)["n_frames"]
+    assert not list(out.rglob("*capture2*")) and not list(out.rglob("readme.txt"))
+    assert not list(out.rglob("*.part.mp4"))
+
+
+def test_import_again_transcodes_only_changed_videos(download, tmp_path):
+    from rtdaas.jigsaws.importer import import_dataset
+
+    out = tmp_path / "stage"
+    n = import_dataset(download, out, jobs=2)["trials"]
+    assert import_dataset(download, out, jobs=2)["transcoded"] == 0
+
+    source = next(download.glob("*/video/*_capture1.avi"))
+    os.utime(source, (source.stat().st_atime, source.stat().st_mtime + 3600))
+    assert import_dataset(download, out, jobs=2) == {
+        "trials": n,
+        "transcoded": 1,
+        "skipped": ["Suturing_Z001"],
+    }
+
+
+def test_import_reports_a_bad_video_and_finishes_the_rest(download, tmp_path):
+    from rtdaas.jigsaws.importer import import_dataset
+
+    next(download.glob("*/video/*_capture1.avi")).write_bytes(b"not a video")
+    out = tmp_path / "stage"
+    with pytest.raises(RuntimeError, match="1 of .* videos failed"):
+        import_dataset(download, out, jobs=2)
+    assert len(list(out.rglob("*.mp4"))) == len(discover_trials(download)) - 2
+    assert not list(out.rglob("*.part.mp4"))

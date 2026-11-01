@@ -4,6 +4,10 @@
 SHELL        := /bin/bash
 .DEFAULT_GOAL := help
 
+# Settings for this machine (not committed; see .env.example).
+-include .env
+export API_PORT
+
 PYTHON       ?= python3
 PIP          ?= $(PYTHON) -m pip
 DATA_DIR     ?= data
@@ -15,6 +19,10 @@ IMAGE_TAG    ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 SIM_ROBOTS   ?= 2
 SIM_SECONDS  ?= 120
 JIG_TRIALS   ?= 2
+JIGSAWS_ROOT ?=
+JIGSAWS_STAGE ?= $(abspath $(DATA_DIR)/jigsaws-real)
+# Absolute because the mirror stores this path, and the API resolves a relative one under MEDIA_ROOT.
+JIGSAWS_DIR   = $(abspath $(if $(JIGSAWS_ROOT),$(JIGSAWS_STAGE),$(DATA_DIR)/jigsaws))
 
 .PHONY: help install test test-spark test-airflow lint format contracts synth local-pipeline quality api docs docs-build \
         images demo demo-down demo-logs tf-local tf-aws ansible clean
@@ -47,20 +55,22 @@ contracts: ## Regenerate Avro from .msg and run the backward-compatibility check
 	bash ros2/check-msgs-in-sync.sh
 
 # ---------------------------------------------------------------- local (no cluster) demo
-synth: ## Synthetic JIGSAWS dataset + simulated robot bags under $(DATA_DIR)
+synth: ## JIGSAWS dataset (the real one if .env sets JIGSAWS_ROOT, else synthetic) + simulated robot bags under $(DATA_DIR)
 	mkdir -p $(DATA_DIR)
-	$(PYTHON) -m rtdaas.jigsaws.cli synth --out $(DATA_DIR)/jigsaws --trials $(JIG_TRIALS)
+	$(if $(JIGSAWS_ROOT),\
+	  $(PYTHON) -m rtdaas.jigsaws.cli import --root "$(JIGSAWS_ROOT)" --out "$(JIGSAWS_STAGE)",\
+	  $(PYTHON) -m rtdaas.jigsaws.cli synth --out $(DATA_DIR)/jigsaws --trials $(JIG_TRIALS))
 	$(PYTHON) -m rtdaas.sim.cli run --robots $(SIM_ROBOTS) --duration $(SIM_SECONDS) --rate 50 --mcap-out $(DATA_DIR)/bags --no-realtime
 
 local-pipeline: ## Serial pure-Python pipeline: bags + JIGSAWS -> sessions/KPIs/gestures/DQ -> SQLite mirror
-	$(PYTHON) -m rtdaas.local.cli pipeline --bags $(DATA_DIR)/bags --jigsaws $(DATA_DIR)/jigsaws --out $(SQLITE)
+	$(PYTHON) -m rtdaas.local.cli pipeline --bags $(DATA_DIR)/bags --jigsaws "$(JIGSAWS_DIR)" --out $(SQLITE)
 
 quality: ## Run every quality suite against the SQLite mirror
 	@for s in quality/checks/*.yml; do \
 	  echo "== $$s"; $(PYTHON) -m rtdaas.quality.cli run --suite $$s --backend sqlite --db $(SQLITE) --out-table || true; \
 	done
 
-api: ## Serve the API + UI from the SQLite mirror on http://localhost:8080
+api: ## Serve the API + UI from the SQLite mirror on http://localhost:$${API_PORT:-8080}
 	SERVING_BACKEND=sqlite SERVING_SQLITE_PATH=$(SQLITE) MEDIA_ROOT=$(DATA_DIR) $(PYTHON) -m rtdaas.serving.cli
 
 docs: ## Serve the docs site locally

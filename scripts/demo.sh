@@ -2,16 +2,18 @@
 # demo.sh up|down|status — bring the full compose stack up, seed it, and kick off the first DAG run.
 #
 #   up      build images (unless RTDAAS_IMAGE_PREFIX points at a registry), start core + demo
-#           profiles, wait for the services, generate a synthetic JIGSAWS dataset under
-#           infra/compose/data/jigsaws and a batch of simulated bags under infra/compose/data/bags-batch,
-#           upload both to MinIO, trigger jigsaws_ingest and telemetry_bag_ingest, and start the
-#           live simulator (Kafka) + the streaming job.
+#           profiles, wait for the services, prepare a JIGSAWS dataset (the real one if .env sets
+#           JIGSAWS_ROOT, else synthetic under infra/compose/data/jigsaws) and a batch of simulated
+#           bags under infra/compose/data/bags-batch, upload both to MinIO, trigger jigsaws_ingest
+#           and telemetry_bag_ingest, and start the live simulator (Kafka) + the streaming job.
 #   down    stop everything (volumes kept)
 #   status  print service health and the URLs
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
+# Settings for this machine (not committed; see .env.example).
+if [[ -f "$ROOT/.env" ]]; then set -a; source "$ROOT/.env"; set +a; fi
 COMPOSE_DIR="$ROOT/infra/compose"
 COMPOSE=(docker compose --project-directory "$COMPOSE_DIR" -f "$COMPOSE_DIR/docker-compose.yml")
 PROFILES=(--profile core --profile demo)
@@ -41,6 +43,35 @@ trigger_dag() {  # trigger_dag <dag_id> <json conf>
     && log "triggered $1" || log "could not trigger $1 (is Airflow up?)"
 }
 
+# Leaves one dataset in s3://rtdaas-raw/jigsaws and none in the tables. Synthetic trials reuse real
+# ids and a re-ingest only upserts gestures, so an earlier dataset's segments would otherwise stay
+# among the new one's. Ingest recreates the tables and the index.
+seed_jigsaws() {
+  local dataset
+  if [[ -n "${JIGSAWS_ROOT:-}" ]]; then
+    dataset="${JIGSAWS_STAGE:-$ROOT/data/jigsaws-real}"
+    log "importing the JIGSAWS download at $JIGSAWS_ROOT to $dataset"
+    mkdir -p "$dataset"
+    # An earlier synthetic dataset: the API prefers a local copy of a video to the bucket's, and
+    # synthetic trials reuse real ids.
+    rm -rf "$COMPOSE_DIR/data/jigsaws"
+    "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps -v "$JIGSAWS_ROOT:/jigsaws-download:ro" -v "$dataset:/jigsaws" \
+      --entrypoint rtdaas-jigsaws sim import --root /jigsaws-download --out /jigsaws
+  else
+    dataset="$COMPOSE_DIR/data/jigsaws"
+    log "generating a synthetic JIGSAWS dataset"
+    # --profile flags so compose can resolve sim's depends_on (kafka-init etc.), even with --no-deps
+    "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps --entrypoint rtdaas-jigsaws sim synth --out /data/jigsaws --trials 2
+  fi
+  log "uploading it to s3://rtdaas-raw/jigsaws, replacing any earlier dataset"
+  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps -v "$dataset:/jigsaws:ro" --entrypoint aws minio-init \
+    --endpoint-url http://minio:9000 s3 sync /jigsaws s3://rtdaas-raw/jigsaws --delete
+  for table in trials kinematics gestures frame_features; do
+    curl -sS -o /dev/null -X DELETE "http://localhost:8181/v1/namespaces/procedures/tables/$table?purgeRequested=true"
+  done
+  curl -sS -o /dev/null -X DELETE http://localhost:9200/rtdaas-gestures
+}
+
 up() {
   build_images
   mkdir -p "$COMPOSE_DIR/data"
@@ -54,11 +85,7 @@ up() {
   "$WAIT" "$AIRFLOW_URL/health" 300
   "$WAIT" "$API_URL/api/health" 120
 
-  log "generating a synthetic JIGSAWS dataset and uploading it to s3://rtdaas-raw/jigsaws"
-  # --profile flags so compose can resolve sim's depends_on (kafka-init etc.), even with --no-deps
-  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps --entrypoint rtdaas-jigsaws sim synth --out /data/jigsaws --trials 2
-  "${COMPOSE[@]}" "${PROFILES[@]}" run --rm --no-deps --entrypoint aws minio-init \
-    --endpoint-url http://minio:9000 s3 sync /data/jigsaws s3://rtdaas-raw/jigsaws || true
+  seed_jigsaws
 
   # The live simulator only closes its bags when it exits, and nothing lands them in S3, so seed
   # a closed batch (simulated time, no Kafka) for telemetry_bag_ingest. Date it yesterday (UTC):
