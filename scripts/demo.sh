@@ -70,6 +70,17 @@ seed_jigsaws() {
     curl -sS -o /dev/null -X DELETE "http://localhost:8181/v1/namespaces/procedures/tables/$table?purgeRequested=true"
   done
   curl -sS -o /dev/null -X DELETE http://localhost:9200/rtdaas-gestures
+  # The catalog's SQLite connections can pin an old WAL snapshot and go on serving a dropped table
+  # whose files are now gone, failing everything that loads it. A restart closes them.
+  "${COMPOSE[@]}" --profile core restart iceberg-rest
+  "$WAIT" http://localhost:8181/v1/config 120
+  # 404, or 200 if a running stream has already recreated the empty table.
+  for table in trials kinematics gestures frame_features; do
+    if [[ "$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:8181/v1/namespaces/procedures/tables/$table")" == 5* ]]; then
+      log "the Iceberg catalog cannot load procedures.$table after dropping it"
+      return 1
+    fi
+  done
 }
 
 up() {

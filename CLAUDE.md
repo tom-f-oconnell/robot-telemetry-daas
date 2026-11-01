@@ -54,7 +54,7 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (186 tests, ~10 s) — must stay green
+make test               # unit tier (188 tests, ~10 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
 make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
@@ -111,6 +111,7 @@ Open (highest-value next work):
    (chosen for the synthetic 0 to 1) only sees the jaw fully open, and 62 % of segments score 0.
 3. A batch merge and the stream writing the *same robot on the same day* can still conflict (merges are scoped
    by day and robot); Airflow retries cover it. The introspection walk's bounded-sequence branch is unexercised.
+   The SQLite-backed Iceberg catalog can serve stale reads (see Gotchas).
 
 ## CI mechanics worth knowing
 
@@ -251,6 +252,11 @@ From the first run on the real JIGSAWS data (each is fixed; the notes are so the
 - **Switching datasets needs a purge**, which `make demo` does: the gesture `MERGE` only upserts, so old segments survive, and
   the API prefers a local video to the bucket's, so `infra/compose/data/jigsaws` would serve synthetic video for real trials.
 - **`.env` is read by both make and bash**: plain `KEY=value`, no quotes, spaces or trailing comments.
+- **The Iceberg catalog's SQLite can serve a stale table.** With WAL on, the REST server went on returning an old metadata
+  pointer although its database was right (the `.db` had not changed in days; everything was in the WAL). The likely cause is a
+  connection pinned on an old snapshot; a restart cures it. Normally the old file still exists and nobody notices. After a purge
+  it does not: "Location does not exist", and all that calls `ensure_tables` fails, the stream too. So `demo.sh` restarts
+  iceberg-rest after purging. Stale reads can still happen elsewhere; a Postgres-backed catalog would end them.
 
 From adding the da Vinci simulation to the UI (see docs/serving/api.md):
 

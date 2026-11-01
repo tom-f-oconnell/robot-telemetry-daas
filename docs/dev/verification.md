@@ -126,6 +126,7 @@ yet run on the k3s VMs or with the DuckDB backend.
 | `make demo`, `jigsaws_ingest` | same row counts from Spark and Iceberg; all 24 `procedures` checks pass; about 8 minutes on the default 1 GB executors (`spark_batch_jigsaws` 410 s, `quality_gate` 20 s) | pass |
 | Replacing an earlier dataset | started from volumes holding synthetic trials: only real data remains in the bucket, tables and index, and the six trial ids both datasets use serve the real video byte for byte | pass |
 | Browser | headless Chrome on the real trial page, on the DuckDB backend: plays, seeks, the kinematics cursor follows, charts draw | pass |
+| Repeating `make demo` | a repeat run on existing volumes failed once on a stale catalog read after the purge (see "Gotchas" in `CLAUDE.md`); fixed by restarting the catalog after purging, then one clean run | pass |
 
 Not yet run on k3s. That run moved the gate off a whole-table `toPandas`, which ran out of memory, and
 stopped stale synthetic videos replacing real ones. See `docs/pipelines/jigsaws.md` for what the data
