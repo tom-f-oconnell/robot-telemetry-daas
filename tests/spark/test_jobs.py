@@ -133,3 +133,16 @@ def test_merge_on_clause_bounds_to_source_days(spark):
     assert "IN (" not in merge_on_clause(with_null, keys, "ts", "robot_id")
     with pytest.raises(ValueError):
         merge_on_clause(src, ["robot_id", "arm"], "ts")
+
+
+def test_quality_adapter_reads_only_the_requested_columns(spark):
+    from rtdaas.quality.adapters import SparkAdapter
+
+    df = spark.createDataFrame(
+        [("t1", 3, (0.1, 0.2))],
+        "trial_id string, frame_idx bigint, psml struct<x:double,gripper:double>",
+    )
+    projected = SparkAdapter._project(df, ["trial_id", "psml_x", "no_such_column"])
+    assert projected.columns == ["trial_id", "psml_x"]
+    assert projected.collect()[0]["psml_x"] == 0.1
+    assert SparkAdapter._project(df, []).columns == ["trial_id"]

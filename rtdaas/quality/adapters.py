@@ -20,9 +20,17 @@ class TableAdapter(Protocol):
     """Minimal interface the engine needs from a storage backend."""
 
     def frame(
-        self, table_name: str, partition_column: str | None, partition_value: str | None
+        self,
+        table_name: str,
+        partition_column: str | None,
+        partition_value: str | None,
+        columns: list[str] | None = None,
     ) -> pd.DataFrame:
-        """Return the (optionally partition-filtered) table as a pandas frame."""
+        """Return the (optionally partition-filtered) table as a pandas frame.
+
+        ``columns`` names the ones the caller will read (struct children in flattened form, like
+        ``psml_x``). An adapter may return more, or fewer if some do not exist.
+        """
 
     def sql(self, query: str) -> float | None:
         """Run a SQL query (table placeholders already substituted) and return its single numeric result."""
@@ -86,6 +94,7 @@ class PandasAdapter:
         table_name: str,
         partition_column: str | None = None,
         partition_value: str | None = None,
+        columns: list[str] | None = None,
     ) -> pd.DataFrame:
         if table_name not in self.tables:
             raise KeyError(f"unknown table {table_name!r}")
@@ -135,6 +144,7 @@ class SqliteAdapter:
         table_name: str,
         partition_column: str | None = None,
         partition_value: str | None = None,
+        columns: list[str] | None = None,
     ) -> pd.DataFrame:
         name = sqlite_table_name(table_name)
         if not self.table_exists(table_name):
@@ -188,8 +198,11 @@ class SparkAdapter:
         table_name: str,
         partition_column: str | None = None,
         partition_value: str | None = None,
+        columns: list[str] | None = None,
     ) -> pd.DataFrame:
         df = self._df(table_name, partition_column, partition_value)
+        if columns is not None:
+            df = self._project(df, columns)
         if self.row_limit:
             df = df.limit(self.row_limit)
         pdf = df.toPandas()
@@ -199,6 +212,29 @@ class SparkAdapter:
                 expanded = pd.DataFrame(pdf[col].tolist()).add_prefix(f"{col}_")
                 pdf = pd.concat([pdf.drop(columns=[col]), expanded], axis=1)
         return pdf
+
+    @staticmethod
+    def _project(df: Any, columns: list[str]) -> Any:
+        """Select ``columns``, reading ``psml_x`` from ``psml.x``.
+
+        Whole wide tables do not fit: procedures.kinematics at 284k rows of 76 doubles ran 1 GB
+        executors out of heap in ``toPandas``. One column stays selected so that row counts work
+        when the checks read none, and names that do not exist are left for the checks to report.
+        """
+        from pyspark.sql import functions as F  # noqa: N812
+
+        children = {
+            f"{field.name}_{child}": f"{field.name}.{child}"
+            for field in df.schema.fields
+            if hasattr(field.dataType, "fieldNames")
+            for child in field.dataType.fieldNames()
+        }
+        selected = [
+            F.col(c) if c in df.columns else F.col(children[c]).alias(c)
+            for c in columns
+            if c in df.columns or c in children
+        ]
+        return df.select(*selected) if selected else df.select(df.columns[0])
 
     def columns(self, table_name: str) -> dict[str, str]:
         df = self.spark.table(self.resolve_table(table_name))

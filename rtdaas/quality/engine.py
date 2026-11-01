@@ -330,6 +330,20 @@ _CHECKS: dict[str, Callable[..., tuple[str, float | None, str, str]]] = {
 _NEEDS_FRAME = {"not_null", "row_count", "value_range", "sample_rate", "unique", "freshness"}
 
 
+def _frame_columns(checks: list[dict]) -> list[str]:
+    """The columns the frame-based ``checks`` read, so an adapter can leave out the rest."""
+    names: list[str] = []
+    for check in checks:
+        if check["type"] not in _NEEDS_FRAME:
+            continue
+        if check["type"] in ("sample_rate", "freshness"):
+            names.append(check.get("ts_column", "ts"))
+        for key in ("column", "columns", "group_by"):
+            value = check.get(key) or []
+            names.extend([value] if isinstance(value, str) else value)
+    return list(dict.fromkeys(names))
+
+
 def run_suite(
     suite: dict,
     adapter: TableAdapter,
@@ -350,7 +364,9 @@ def run_suite(
         frame_error: str | None = None
         if any(c["type"] in _NEEDS_FRAME for c in checks):
             try:
-                frame = adapter.frame(table, partition_column, partition_value)
+                frame = adapter.frame(
+                    table, partition_column, partition_value, columns=_frame_columns(checks)
+                )
             except KeyError as exc:
                 frame_error = str(exc)
             except Exception as exc:  # noqa: BLE001 - adapter failures must not abort the suite

@@ -188,6 +188,27 @@ def test_sql_check_and_partition_filter():
     )  # 1200 rows without a filter
 
 
+def test_adapter_is_asked_only_for_the_columns_checks_read():
+    requested = []
+
+    class Recording(PandasAdapter):
+        def frame(self, table_name, partition_column=None, partition_value=None, columns=None):
+            requested.append(columns)
+            return super().frame(table_name, partition_column, partition_value, columns)
+
+    checks = [
+        {"name": "n", "type": "not_null", "column": "robot_id"},
+        {"name": "u", "type": "unique", "columns": ["robot_id", "arm"]},
+        {"name": "r", "type": "value_range", "column": "x", "min": -1, "max": 1},
+        {"name": "c", "type": "row_count", "min": 1},
+        {"name": "f", "type": "freshness", "max_age_hours": 1e6},
+        {"name": "s", "type": "schema_match", "expected": "spec"},
+    ]
+    results = run_suite(_suite(checks), Recording({"telemetry.tool_pose_raw": _pose()}), now=NOW)
+    assert requested[0] == ["robot_id", "arm", "x", "ts"]
+    assert {r.check_name for r in results} == {"n", "u", "r", "c", "f", "s"}
+
+
 def test_unknown_table_and_type_are_errors_not_exceptions():
     res = run_suite(
         {
