@@ -39,6 +39,32 @@ unknown ids.
 
 Both implement the same `Backend` protocol (spec §4.10); routes never touch SQL directly.
 
+## da Vinci simulation
+
+Trial and session pages show a 3-D replay of the arms when the data comes from a da Vinci
+(`/api/trials/{id}/simulation`, `/api/sessions/{id}/simulation`; `system` is null otherwise, and the
+page leaves the box out). It uses dVRK's Classic PSM model, built by `scripts/build-psm-model.py` from
+[jhu-dvrk/dvrk_model](https://github.com/jhu-dvrk/dvrk_model) (MIT; see
+`static/models/LICENSE.dvrk_model`), and three.js from a CDN. Without the CDN, the box says so and the
+page otherwise works.
+
+The data records tool poses, not joints, so `rtdaas/metrics/da_vinci.py` solves for them with inverse
+kinematics. Tool tips land where the data says (within 0.01 mm in the browser). The rest depends on the
+source:
+
+| Source | Follows | Recorded | Estimated |
+|---|---|---|---|
+| JIGSAWS | the video, frame for frame | tool tips, tool rotation, gripper | each arm's pivot and base, which way the jaws face, the scene's orientation |
+| Telemetry | its own clock and the Replay slider | tool tips, jaw, tool rotation if it fits the wrist | where each arm stands around the table |
+
+The cart is schematic in both. On a trial page the simulation reads the video's clock every frame, its
+play button and slider drive the video, and it runs on its own clock only when it has to: no video, a
+video that fails, or kinematics that continue after the video ends (`Knot_Tying_F005`, by 15.6 s).
+
+JIGSAWS' two arms are not quite in one frame: at their closest in needle transfers (G4), where the
+graspers should meet, they are about 5 cm apart, by an offset close to constant per surgeon. The scene
+removes the offset measured from the trial's own G4 segments, or the dataset's median without any.
+
 ## Operations
 
 - One replica on the DuckDB backend: its file (holding the `jobs` rows from reprocess requests)

@@ -131,6 +131,51 @@ def test_resolve_media_object_store_uri(tmp_path):
     assert resolve_media("s3a://rtdaas-raw", tmp_path) is None
 
 
+def test_trial_simulation(client):
+    tid = client.get("/api/trials").json()["trials"][0]["trial_id"]
+    sim = client.get(f"/api/trials/{tid}/simulation").json()
+    assert sim["system"] == "da_vinci" and sim["source"] == "jigsaws"
+    assert [a["name"] for a in sim["arms"]] == ["PSML", "PSMR"]
+    arm = sim["arms"][0]
+    n = len(arm["t_s"])
+    assert n and len(arm["tip"]) == n and len(arm["base"]) == 16
+    assert {"yaw", "pitch", "insertion", "roll", "wrist_pitch", "wrist_yaw", "jaw"} == set(arm["q"])
+    assert all(len(v) == n for v in arm["q"].values())
+    assert set(sim["views"]) == {"arms", "tools"}
+    half = client.get(f"/api/trials/{tid}/simulation", params={"downsample": 2}).json()
+    assert len(half["arms"][0]["t_s"]) == (n + 1) // 2
+    assert client.get("/api/trials/missing/simulation").status_code == 404
+
+
+def test_session_simulation(client):
+    sid = client.get("/api/sessions").json()["sessions"][0]["session_id"]
+    sim = client.get(f"/api/sessions/{sid}/simulation").json()
+    assert sim["system"] == "da_vinci" and sim["source"] == "telemetry"
+    assert {"PSM1", "PSM2", "ECM"} == {a["name"] for a in sim["arms"]}
+    assert client.get("/api/sessions/missing/simulation").status_code == 404
+    points = client.get(f"/api/sessions/{sid}/trajectory", params={"arm": "PSM1"}).json()["points"]
+    assert {"qx", "qy", "qz", "qw"} <= set(points[0])
+
+
+def test_simulation_is_only_for_systems_it_knows(tmp_path):
+    from starlette.testclient import TestClient
+
+    from rtdaas.config import Settings
+    from rtdaas.serving.app import create_app
+
+    backend = SimpleNamespace(session=lambda s: {"session_id": s, "arms": ["UR5"]})
+    settings = Settings(serving_backend="sqlite", media_root=str(tmp_path))
+    with TestClient(create_app(settings, backend=backend)) as c:
+        assert c.get("/api/sessions/s1/simulation").json() == {"system": None}
+
+
+def test_model_ships_with_the_ui(client):
+    model = client.get("/static/models/psm.glb")
+    assert model.status_code == 200 and model.content[:4] == b"glTF"
+    assert "MIT" in client.get("/static/models/LICENSE.dvrk_model").text
+    assert client.get("/static/robot-sim.js").status_code == 200
+
+
 class FakeS3:
     """The parts of a boto3 S3 client the video route uses, with its 404 and Range behaviour."""
 

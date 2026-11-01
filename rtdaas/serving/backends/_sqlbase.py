@@ -341,8 +341,8 @@ class SqlBackendBase:
         n = max(1, int(downsample))
         tp = self.ts_param()
         sql = f"""
-            SELECT ts, x, y, z, jaw_angle, speed FROM (
-                SELECT ts, x, y, z, jaw_angle, speed,
+            SELECT ts, x, y, z, qx, qy, qz, qw, jaw_angle, speed FROM (
+                SELECT ts, x, y, z, qx, qy, qz, qw, jaw_angle, speed,
                        ROW_NUMBER() OVER (ORDER BY ts) - 1 AS rn
                 FROM {self.table("telemetry.tool_pose_raw")}
                 WHERE robot_id = ? AND arm = ? AND ts >= {tp} AND ts <= {tp}

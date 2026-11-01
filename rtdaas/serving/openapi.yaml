@@ -138,6 +138,20 @@ paths:
                   kpis: {type: array, items: {$ref: "#/components/schemas/Kpi"}}
                   count: {type: integer}
         "404": {$ref: "#/components/responses/NotFound"}
+  /api/sessions/{session_id}/simulation:
+    get:
+      tags: [telemetry]
+      summary: Replay of the session on a simulated da Vinci
+      parameters:
+        - {$ref: "#/components/parameters/SessionId"}
+        - {name: downsample, in: query, schema: {type: integer, default: 1, minimum: 1, maximum: 10000}}
+      responses:
+        "200":
+          description: >-
+            Joint-space replay of the recorded tool poses on a da Vinci arm, for the UI's 3-D view.
+            `system` is null when this data is not from a system we can simulate.
+          content: {application/json: {schema: {$ref: "#/components/schemas/Simulation"}}}
+        "404": {$ref: "#/components/responses/NotFound"}
   /api/events:
     get:
       tags: [telemetry]
@@ -240,6 +254,20 @@ paths:
         "404": {$ref: "#/components/responses/NotFound"}
         "416": {description: range not satisfiable}
         "502": {description: the object store holding the video could not be read}
+  /api/trials/{trial_id}/simulation:
+    get:
+      tags: [procedures]
+      summary: Replay of the trial on a simulated da Vinci
+      parameters:
+        - {$ref: "#/components/parameters/TrialId"}
+        - {name: downsample, in: query, schema: {type: integer, default: 1, minimum: 1, maximum: 10000}}
+      responses:
+        "200":
+          description: >-
+            Joint-space replay of the recorded tool poses on a da Vinci arm, for the UI's 3-D view.
+            `system` is null when this data is not from a system we can simulate.
+          content: {application/json: {schema: {$ref: "#/components/schemas/Simulation"}}}
+        "404": {$ref: "#/components/responses/NotFound"}
   /api/gestures:
     get:
       tags: [procedures]
@@ -457,6 +485,27 @@ components:
           properties:
             per_arm: {type: array, items: {$ref: "#/components/schemas/SessionArm"}}
             events: {type: array, items: {$ref: "#/components/schemas/Event"}}
+    Simulation:
+      type: object
+      required: [system]
+      properties:
+        system: {type: string, nullable: true, description: "`da_vinci`, or null", example: da_vinci}
+        source: {type: string, enum: [jigsaws, telemetry]}
+        duration_s: {type: number}
+        note: {type: string, description: What is recorded and what is estimated}
+        views: {type: object, description: "Camera placements (`eye`, `target`), named `arms` and `tools`"}
+        arms:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string, example: PSML}
+              kind: {type: string, enum: [psm, ecm]}
+              base: {type: array, items: {type: number}, description: "Arm base in the scene, 4x4 row-major (psm)"}
+              pivot: {type: array, items: {type: number}, description: Remote centre of motion in the scene (ecm)}
+              t_s: {type: array, items: {type: number}}
+              q: {type: object, description: "Joint values per sample: yaw, pitch, insertion, roll, wrist_pitch, wrist_yaw, jaw (psm)"}
+              tip: {type: array, items: {type: array, items: {type: number}}, description: Tool tip per sample in the scene}
     TrajectoryPoint:
       type: object
       properties:
@@ -464,6 +513,10 @@ components:
         x: {type: number}
         y: {type: number}
         z: {type: number}
+        qx: {type: number}
+        qy: {type: number}
+        qz: {type: number}
+        qw: {type: number}
         jaw_angle: {type: number}
         speed: {type: number}
     Kpi:

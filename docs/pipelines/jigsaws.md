@@ -95,3 +95,6 @@ The trial page plays the video with a kinematics scrubber: the current frame dri
 the PSM position/speed/gripper traces, the gesture ribbon shows which `G<n>` segment the frame is
 in, and the frame-feature strip shows motion energy and sharpness. Gesture search filters
 `procedures.gestures` by task, gesture code and skill level and jumps straight to the segment.
+
+Beside the video, a 3-D [da Vinci simulation](../serving/api.md#da-vinci-simulation) replays the trial
+in step with it.

@@ -93,6 +93,39 @@ async function viewSessions(params) {
   bindRows(list, sessions, (r) => navigate(`/sessions/${r.session_id}`));
 }
 
+// The simulation's box, shown only for data from a system we can simulate. `video` is what it follows
+// when there is one. Returns the transport, or null if there is nothing to show.
+const SIM_CARD = `<div class="card" id="sim-card" hidden>
+    <div class="toolbar"><strong>da Vinci simulation</strong><span class="muted small" id="sim-status"></span>
+      <span class="seg" style="margin-left:auto"><button data-view="arms" class="ghost">Arms</button><button data-view="tools" class="ghost">Instruments</button></span></div>
+    <div id="sim" class="sim-view"></div>
+    <div class="toolbar" style="margin-top:8px"><button id="sim-play" class="ghost" aria-label="Play or pause">▶</button>
+      <input type="range" id="sim-time" min="0" max="1" step="0.01" value="0" style="flex:1"><span class="muted small mono" id="sim-clock"></span></div>
+    <div class="muted small" id="sim-note" style="margin-top:6px"></div></div>`;
+async function mountSimulation(url, params, video, options) {
+  const card = document.getElementById("sim-card");
+  if (!card) return null;
+  let data;
+  try { data = await api(url, params); } catch (e) { card.remove(); toast(`Simulation: ${e.message}`, true); return null; }
+  if (!data.system || !document.getElementById("sim-card")) { card.remove(); return null; }
+  card.hidden = false;
+  const box = document.getElementById("sim");
+  document.getElementById("sim-note").textContent = data.note || "";
+  try {
+    const { createRobotSim, runTransport } = await import("/static/robot-sim.js");
+    const sim = await createRobotSim(box, data);
+    if (!box.isConnected) { sim.dispose(); return null; }
+    box.robotSim = sim;
+    card.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => sim.setView(b.dataset.view)));
+    return runTransport(sim, { root: box, play: document.getElementById("sim-play"), slider: document.getElementById("sim-time"),
+      clock: document.getElementById("sim-clock"), status: document.getElementById("sim-status") }, video, options);
+  } catch (e) {
+    box.innerHTML = '<div class="empty">3-D library (three.js CDN) or model not reachable — simulation skipped.</div>';
+    console.warn("simulation:", e);
+    return null;
+  }
+}
+
 async function viewSessionDetail(sessionId) {
   setActive("sessions");
   const s = await api(`/api/sessions/${encodeURIComponent(sessionId)}`);
@@ -108,6 +141,7 @@ async function viewSessionDetail(sessionId) {
     <div class="grid cols-2"><div class="card"><h2 style="margin-top:0">3-D tool-tip trajectory</h2><div id="traj3d" class="plot tall"></div></div>
       <div class="card"><h2 style="margin-top:0">Position, speed and jaw</h2><div id="trajts" class="plot tall"></div></div></div>
     <div class="card"><div class="toolbar"><strong>Replay</strong><span class="muted small" id="replay-t"></span></div><input type="range" id="replay" min="0" max="0" value="0"></div>
+    ${SIM_CARD}
     <h2>Per-arm metrics</h2>${table([
       { key: "arm", label: "Arm" }, { key: "n_samples", label: "Samples", num: true }, { key: "path_length_m", label: "Path (m)", num: true, digits: 3 },
       { key: "mean_speed_mps", label: "Mean speed", num: true, digits: 4 }, { key: "idle_fraction", label: "Idle", num: true, digits: 2 },
@@ -129,6 +163,7 @@ async function viewSessionDetail(sessionId) {
       { ...PLOT_LAYOUT, barmode: "group", yaxis: { title: "path length / min (m)" } }, PLOT_CFG);
   } else document.getElementById("kpi").innerHTML = '<div class="empty">No KPI windows.</div>';
 
+  let simTransport = null;
   async function drawTrajectory() {
     const arm = document.getElementById("arm").value, ds = document.getElementById("ds").value;
     const { points } = await api(`/api/sessions/${encodeURIComponent(sessionId)}/trajectory`, { arm, downsample: ds });
@@ -145,13 +180,17 @@ async function viewSessionDetail(sessionId) {
     const slider = document.getElementById("replay"); slider.max = points.length - 1; slider.value = 0;
     slider.oninput = () => {
       const i = Number(slider.value);
-      document.getElementById("replay-t").textContent = `${t[i]} · speed ${points[i].speed.toFixed(4)} m/s · jaw ${points[i].jaw_angle.toFixed(2)} rad`;
+      document.getElementById("replay-t").textContent = `${t[i]} · speed ${fmt(points[i].speed, 4)} m/s · jaw ${fmt(points[i].jaw_angle, 2)} rad`;
       restyle("traj3d", { x: [[x[i]]], y: [[y[i]]], z: [[z[i]]] }, [1]);
       relayout("trajts", { "shapes[0].x0": t[i], "shapes[0].x1": t[i] });
+      simTransport?.seek((Date.parse(t[i]) - Date.parse(t[0])) / 1000);
     };
   }
   document.getElementById("arm").onchange = drawTrajectory; document.getElementById("ds").onchange = drawTrajectory;
   if (arms.length) drawTrajectory();
+  // No video to follow: it runs on its own clock, about 3000 samples per arm.
+  const perArm = (s.n_samples || 0) / Math.max(arms.length, 1);
+  simTransport = await mountSimulation(`/api/sessions/${encodeURIComponent(sessionId)}/simulation`, { downsample: Math.max(1, Math.ceil(perArm / 3000)) }, null);
 }
 
 async function viewEvents(params) {
@@ -197,7 +236,8 @@ async function viewTrialDetail(trialId, params) {
     <div class="grid cols-2"><div class="card"><video id="video" controls preload="metadata" src="/api/trials/${encodeURIComponent(t.trial_id)}/video"></video>
         <div class="toolbar" style="margin-top:8px"><strong id="cur-gesture" class="badge badge-muted">–</strong><span class="muted small" id="cur-t">t = 0.00 s · frame 0</span><button id="reproc" class="ghost" style="margin-left:auto">Reprocess trial</button></div>
         <div class="ribbon" id="ribbon"></div><input type="range" id="scrub" min="0" max="${Math.max(0, (t.n_frames || 1) - 1)}" value="0"></div>
-      <div class="card"><h2 style="margin-top:0">Kinematics (PSM left/right)</h2><div id="kin" class="plot tall"></div></div></div>
+      ${SIM_CARD}</div>
+    <div class="card"><h2 style="margin-top:0">Kinematics (PSM left/right)</h2><div id="kin" class="plot tall"></div></div>
     <div class="card"><h2 style="margin-top:0">Video frame features</h2><div id="frames" class="plot"></div></div>
     <h2>Gesture segments</h2>${table([{ key: "gesture", label: "Gesture", render: (r) => badge(r.gesture, "accent") }, { key: "start_frame", label: "Start", num: true }, { key: "end_frame", label: "End", num: true },
       { key: "duration_s", label: "Duration (s)", num: true, digits: 2 }, { key: "path_length_psml", label: "Path L (m)", num: true }, { key: "path_length_psmr", label: "Path R (m)", num: true },
@@ -209,6 +249,8 @@ async function viewTrialDetail(trialId, params) {
     catch (e) { toast(e.message, true); }
   });
   const video = document.getElementById("video"), scrub = document.getElementById("scrub");
+  // 15 Hz is plenty to interpolate between, and keeps the response small on long trials.
+  mountSimulation(`/api/trials/${encodeURIComponent(t.trial_id)}/simulation`, { downsample: (t.n_frames || 0) > 3000 ? 2 : 1 }, video);
   const gestures = t.gestures || [];
   const colorOf = (g) => GESTURE_COLORS[(parseInt(String(g).replace(/\D/g, ""), 10) || 0) % GESTURE_COLORS.length];
   const ribbon = document.getElementById("ribbon");

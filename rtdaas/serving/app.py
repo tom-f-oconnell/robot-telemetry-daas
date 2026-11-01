@@ -33,6 +33,7 @@ from starlette.staticfiles import StaticFiles
 
 from rtdaas import __version__
 from rtdaas.config import Settings, get_settings
+from rtdaas.metrics import da_vinci
 from rtdaas.serving import airflow_client
 from rtdaas.serving.backends import Backend, make_backend
 from rtdaas.serving.metrics import Metrics
@@ -199,6 +200,18 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         rows = backend.session_kpis(session_id)
         return JSONResponse({"session_id": session_id, "kpis": rows, "count": len(rows)})
 
+    def session_simulation(request: Request):
+        session_id = request.path_params["session_id"]
+        row = backend.session(session_id)
+        if row is None:
+            raise ApiError(404, "not_found", "unknown session_id")
+        arms = row.get("arms") or []
+        if da_vinci.system_for_arms(arms) is None:
+            return JSONResponse({"system": None})
+        downsample = q_int(request, "downsample", 1, 1, 10_000)
+        points = {arm: backend.trajectory(session_id, arm, downsample=downsample) for arm in arms}
+        return JSONResponse(da_vinci.session_scene(points))
+
     def events(request: Request):
         sev = q_str(request, "severity_min")
         severity_min = None
@@ -267,6 +280,16 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         if location is None:
             raise ApiError(404, "not_found", "video file not available")
         return range_object_response(request, s3_client(), *location)
+
+    def trial_simulation(request: Request):
+        trial_id = request.path_params["trial_id"]
+        row = backend.trial(trial_id)
+        if row is None:
+            raise ApiError(404, "not_found", "unknown trial_id")
+        samples = backend.trial_kinematics(
+            trial_id, ["psml", "psmr"], downsample=q_int(request, "downsample", 1, 1, 10_000)
+        )
+        return JSONResponse(da_vinci.trial_scene(samples, row.get("gestures") or []))
 
     def gestures(request: Request):
         rows = backend.gestures(
@@ -346,12 +369,14 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         Route("/api/sessions/{session_id}", session),
         Route("/api/sessions/{session_id}/trajectory", trajectory),
         Route("/api/sessions/{session_id}/kpis", session_kpis),
+        Route("/api/sessions/{session_id}/simulation", session_simulation),
         Route("/api/events", events),
         Route("/api/trials", trials),
         Route("/api/trials/{trial_id}", trial),
         Route("/api/trials/{trial_id}/kinematics", trial_kinematics),
         Route("/api/trials/{trial_id}/frames", trial_frames),
         Route("/api/trials/{trial_id}/video", trial_video),
+        Route("/api/trials/{trial_id}/simulation", trial_simulation),
         Route("/api/gestures", gestures),
         Route("/api/quality/runs", quality_runs),
         Route("/api/quality/results", quality_results),

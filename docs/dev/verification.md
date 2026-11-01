@@ -131,6 +131,21 @@ Not yet run on k3s. That run moved the gate off a whole-table `toPandas`, which 
 stopped stale synthetic videos replacing real ones. See `docs/pipelines/jigsaws.md` for what the data
 itself looks like.
 
+## Executed: da Vinci simulation (2026-10-31)
+
+Headless Chrome with software WebGL, on the real JIGSAWS data and the simulator's sessions, on both API
+backends. Not yet on k3s, and not yet in a browser with a real GPU.
+
+| Area | How verified | Result |
+|---|---|---|
+| Kinematics | closed forms against dvrk_model's URDF written out joint by joint; inverse kinematics round trip | pass |
+| The browser's model | its tool tips against the recording: 0.01 mm on trials, 0.005 mm on sessions | pass |
+| All 103 trials | yaw and insertion in limits throughout; pitch over its limit in 0.20 % of samples, the wrist at its limit in 0.15 % | pass |
+| Following the video | seeking lands exactly; the lag while playing stays under 0.13 s and does not grow; its play button and slider drive the video | pass |
+| When it cannot follow | a video that fails; kinematics continuing past the video's end (`Knot_Tying_F005`); a session with no video | pass |
+| Staying out of the way | non-da-Vinci data hides the box; with the three.js CDN blocked the box says so and video and charts work; no canvas left behind after navigating away | pass |
+| A needle transfer (G4), by eye | at 40 s of `Suturing_B002` the simulated graspers meet as they do in the video | pass |
+
 ## Written, compiles, not yet executed
 
 | Area | Why not yet | Where it runs |

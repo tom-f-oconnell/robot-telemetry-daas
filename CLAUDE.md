@@ -26,7 +26,7 @@ rtdaas/
   sim/             ROS-free fleet simulator → Kafka (confluent_kafka) and ros2-bag-compatible MCAP
   landing/         rtdaas-land: closed MCAP bags → s3://<raw>/bags/<robot>/<yyyy>/<mm>/<dd>/ (boto3, [land] extra)
   jigsaws/         JIGSAWS layout parser, synthetic dataset generator (H.264 video), importer for the real download, OpenCV frame features
-  metrics/         session "economy of motion" metrics, 1-min KPI windows, gesture metrics (pure pandas/numpy)
+  metrics/         session "economy of motion" metrics, 1-min KPI windows, gesture metrics, da Vinci arm kinematics (pure pandas/numpy)
   quality/         YAML check suites + one engine; adapters for pandas / SQLite / Spark
   local/           serial pure-Python pipeline → SQLite mirror of every Iceberg table (dev/test/demo)
   spark/           thin PySpark jobs: streaming_kpis, batch_mcap, batch_jigsaws, quality_gate, publish_marts, maintenance
@@ -54,7 +54,7 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (166 tests, ~10 s) — must stay green
+make test               # unit tier (186 tests, ~10 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
 make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
@@ -251,6 +251,20 @@ From the first run on the real JIGSAWS data (each is fixed; the notes are so the
 - **Switching datasets needs a purge**, which `make demo` does: the gesture `MERGE` only upserts, so old segments survive, and
   the API prefers a local video to the bucket's, so `infra/compose/data/jigsaws` would serve synthetic video for real trials.
 - **`.env` is read by both make and bash**: plain `KEY=value`, no quotes, spaces or trailing comments.
+
+From adding the da Vinci simulation to the UI (see docs/serving/api.md):
+
+- **`rtdaas/metrics/da_vinci.py` and `static/robot-sim.js` hold the same joints** (dvrk_model's URDF). Tests check the closed
+  forms against the URDF written out joint by joint; in a browser, `document.getElementById("sim").robotSim.tipPosition("PSML")`
+  must match the API's `tip` (0.01 mm).
+- **JIGSAWS' rotation columns are tool axes, column 2 the approach** (wrist bends stay near 10 degrees if so). Which way the jaws
+  face cannot be told from the data: all four candidates fit equally. Its arms have a ~5 cm offset, removed via G4; see the docs.
+- **An arm's mount cannot be up and outward at zero pitch** when its shaft leans outward, hence `MEAN_PITCH`. With the base
+  aimed along the mean shaft, mounts went below the floor.
+- **Telemetry's arms are in their own frames, RCM at the origin.** The ROS-free simulator's rotations are near identity, which
+  no wrist can reach, so those tools are held straight (`wrist_reachable`).
+- **Import three.js dynamically**: a failed static import would take down the whole single-page app, not just the box. Read
+  `video.currentTime` every animation frame; `timeupdate` fires at about 4 Hz.
 
 ## Useful commands
 

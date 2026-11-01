@@ -95,6 +95,9 @@ pre.schema { background: #fbfbf9; border: 1px solid var(--border); border-radius
 .ribbon > div:hover { filter: brightness(1.1); }
 .ribbon > div.none { background: #e6e4dc; color: var(--muted); }
 video { width: 100%; max-height: 360px; background: #000; border-radius: 8px; }
+.sim-view { width: 100%; height: 360px; background: #1b2027; border-radius: 8px; overflow: hidden; }
+.sim-view canvas { display: block; width: 100%; height: 100%; }
+.seg button { padding: 2px 10px; font-size: 12px; }
 input[type=range] { width: 100%; padding: 0; }
 .toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
 .toast { background: var(--text); color: #fff; padding: 10px 14px; border-radius: 8px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.18); max-width: 420px; }
