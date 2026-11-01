@@ -22,7 +22,7 @@ them in `infra/compose/.env` when running `docker compose` directly).
 
 | Service | URL |
 |---|---|
-| API + UI | http://localhost:8000 (Swagger at `/docs`) |
+| API + UI | http://localhost:29398 (Swagger at `/docs`) |
 | Airflow | http://localhost:8085 (airflow / airflow) |
 | Spark master UI | http://localhost:8082 |
 | Schema registry (ccompat) | http://localhost:8081/apis/ccompat/v7 |

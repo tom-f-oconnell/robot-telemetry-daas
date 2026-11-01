@@ -9,7 +9,7 @@
 # Or simply `make demo` from the repository root (wraps scripts/demo.sh).
 #
 # Host ports:
-#   API/UI 8000 | Airflow 8085 | Spark master UI 8082 | Apicurio 8081 | MinIO 9000/9001
+#   API/UI 29398 | Airflow 8085 | Spark master UI 8082 | Apicurio 8081 | MinIO 9000/9001
 #   Iceberg REST 8181 | Elasticsearch 9200 | Kafka (host clients) 29092 | Grafana 3000 | Prometheus 9090
 
 name: rtdaas
@@ -424,7 +424,7 @@ services:
     # DuckDB installs its iceberg/httpfs extensions under ~/.duckdb.
     user: "${RTDAAS_UID:-10001}:${RTDAAS_GID:-10001}"
     ports:
-      - "8000:8080"
+      - "29398:8080"
     environment:
       <<: *rtdaas-env
       SERVING_BACKEND: ${SERVING_BACKEND:-duckdb}

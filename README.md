@@ -37,7 +37,7 @@ Full stack (Kafka, schema registry, Spark, Airflow, Elasticsearch, MinIO, Iceber
 
 ```bash
 make demo              # docker compose --profile core --profile demo
-# Airflow http://localhost:8085 · Spark http://localhost:8082 · API/UI http://localhost:8000
+# Airflow http://localhost:8085 · Spark http://localhost:8082 · API/UI http://localhost:29398
 ```
 
 Multi-node: `infra/terraform/envs/{local,aws}` → `infra/ansible/site.yml` → Argo CD. See

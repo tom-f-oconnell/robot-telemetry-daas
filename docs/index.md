@@ -35,7 +35,7 @@ Full stack with Kafka, Spark, Airflow, Elasticsearch, MinIO and Iceberg:
 
 ```bash
 make demo                   # docker compose --profile core --profile demo up
-# Airflow  http://localhost:8085   Spark UI http://localhost:8082   API/UI http://localhost:8000
+# Airflow  http://localhost:8085   Spark UI http://localhost:8082   API/UI http://localhost:29398
 ```
 
 Multi-node: see [Terraform + Ansible + k3s](infra/kubernetes.md).

@@ -21,7 +21,7 @@ export RTDAAS_IMAGE_TAG="${RTDAAS_IMAGE_TAG:-dev}"
 export RTDAAS_UID="${RTDAAS_UID:-$(id -u)}"
 export RTDAAS_GID="${RTDAAS_GID:-$(id -g)}"
 AIRFLOW_URL="${AIRFLOW_URL:-http://localhost:8085}"
-API_URL="${API_URL:-http://localhost:8000}"
+API_URL="${API_URL:-http://localhost:29398}"
 WAIT="$HERE/wait-for.sh"
 
 log() { printf '\033[1;35m[demo]\033[0m %s\n' "$*"; }
