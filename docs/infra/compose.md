@@ -30,7 +30,7 @@ them in `infra/compose/.env` when running `docker compose` directly).
 | Iceberg REST catalog | http://localhost:8181 |
 | Elasticsearch | http://localhost:9200 |
 | Kafka (external listener) | localhost:29092 |
-| Grafana / Prometheus / Kibana | :3000 / :9090 / :5601 (observability profile) |
+| Grafana / Prometheus / Kibana | :3000 / :9090 / :5601 (observability profile; the UI's Kafka page needs its Prometheus and kafka-exporter) |
 
 ## What the init containers do
 

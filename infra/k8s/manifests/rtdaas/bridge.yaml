@@ -2,7 +2,9 @@
 # a DDS domain with the robot's ROS 2 nodes. Two supported layouts:
 #   1. Robot ROS 2 stack runs inside the cluster (e.g. the dvrk sim pod): pod network
 #      is fine; CycloneDDS is configured below to use the pod's interface and
-#      multicast-free peer discovery via ROS_STATIC_PEERS-style peer list.
+#      multicast-free peer discovery via ROS_STATIC_PEERS-style peer list. The peer is
+#      resolved once, at startup: start the bridge after the robot's pod, and restart it
+#      if that pod's IP changes. scripts/check-k8s-bridge.sh tests this layout.
 #   2. Robot on a physical host: run the bridge with hostNetwork: true on a node that
 #      can reach the robot's subnet, and add the robot host to the peers list.
 apiVersion: v1

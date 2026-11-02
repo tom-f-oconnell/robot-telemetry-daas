@@ -1,0 +1,99 @@
+# A simulated dVRK, for testing rtdaas-bridge on a cluster without hardware: the dVRK's kinematic
+# simulation and rtdaas's adapters, with the bridge left to the real Deployment. Not part of any Argo CD
+# app, and its image is not published: build it from infra/docker/dvrk-sim.Dockerfile and load it into
+# the cluster. scripts/check-k8s-bridge.sh uses this.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dvrk-sim-dds
+  namespace: rtdaas
+data:
+  # The cluster network has no multicast. Nodes in this pod find each other through the peer below, and
+  # the bridge finds them through its own peer list (manifests/rtdaas/bridge.yaml).
+  cyclonedds.xml: |
+    <?xml version="1.0" encoding="UTF-8" ?>
+    <CycloneDDS xmlns="https://cdds.io/config">
+      <Domain Id="any">
+        <General>
+          <Interfaces>
+            <NetworkInterface autodetermine="true" priority="default" multicast="false"/>
+          </Interfaces>
+          <AllowMulticast>false</AllowMulticast>
+        </General>
+        <Discovery>
+          <ParticipantIndex>auto</ParticipantIndex>
+          <MaxAutoParticipantIndex>64</MaxAutoParticipantIndex>
+          <Peers>
+            <Peer address="${POD_IP}"/>
+          </Peers>
+        </Discovery>
+      </Domain>
+    </CycloneDDS>
+---
+# Headless, so the bridge's peer resolves to the pod itself: DDS uses many ports a virtual IP would not pass.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dvrk-sim
+  namespace: rtdaas
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: dvrk-sim
+  ports:
+    - name: dds
+      protocol: UDP
+      port: 7400
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dvrk-sim
+  namespace: rtdaas
+  labels:
+    app.kubernetes.io/name: dvrk-sim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dvrk-sim
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dvrk-sim
+    spec:
+      containers:
+        - name: dvrk
+          image: rtdaas-dvrk-sim:latest
+          imagePullPolicy: Never
+          args:
+            - ros2
+            - launch
+            - rtdaas_launch
+            - fleet_sim.launch.py
+            - robot_count:=1
+            - arms:=PSM1
+            - launch_bridge:=false
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: RMW_IMPLEMENTATION
+              value: rmw_cyclonedds_cpp
+            - name: CYCLONEDDS_URI
+              value: file:///dds/cyclonedds.xml
+            - name: ROS_DOMAIN_ID
+              value: "0"
+          volumeMounts:
+            - name: dds
+              mountPath: /dds
+              readOnly: true
+          resources:
+            # About a dozen ROS nodes, with the dVRK's GUI on software rendering: 2 Gi is not enough.
+            requests: { cpu: 1, memory: 3Gi }
+            limits: { memory: 8Gi }
+      volumes:
+        - name: dds
+          configMap:
+            name: dvrk-sim-dds

@@ -54,7 +54,7 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (188 tests, ~10 s) — must stay green
+make test               # unit tier (198 tests, ~10 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
 make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
@@ -101,12 +101,15 @@ motion and fleet_monitor's CRTK mode; marts published to Iceberg (ADR 0012), mul
 Verified on real VMs (libvirt + k3s, 2026-10-30; see verification.md): Terraform + Ansible from zero, all 12 Argo CD
 apps Synced and Healthy, streaming on the Spark operator, all 5 DAGs in `k8s` mode, Ingress, Prometheus.
 
+Verified on a local kind cluster (2026-11-01; see verification.md), with the repo's manifests: the Kafka page against real
+Prometheus, the Postgres-backed catalog, and `rtdaas-bridge` against the dVRK simulation (`scripts/check-k8s-bridge.sh`). No
+hardware is needed to test the bridge. Argo CD keeps it at `replicas: 0` only because a real cluster has no ROS source.
+
 Verified with the real JIGSAWS dataset (2026-10-31; see verification.md and docs/pipelines/jigsaws.md): import, the local
 pipeline, and `jigsaws_ingest` on the compose stack, with the UI's player in Chrome. Not yet on k3s.
 
 Open (highest-value next work):
-1. `envs/aws` has never run, and its Airflow S3 connection still points at MinIO. On k8s, nothing scrapes Kafka's
-   metrics yet, and `rtdaas-bridge` stays at `replicas: 0` (it needs a dVRK on the ROS domain).
+1. `envs/aws` has never run, and its Airflow S3 connection still points at MinIO.
 2. A batch merge and the stream writing the *same robot on the same day* can still conflict (merges are scoped
    by day and robot); Airflow retries cover it. The introspection walk's bounded-sequence branch is unexercised.
 
@@ -247,6 +250,15 @@ From the first run on the real JIGSAWS data (each is fixed; the notes are so the
 - **Switching datasets needs a purge**, which `make demo` does: the gesture `MERGE` only upserts, so old segments survive, and
   the API prefers a local video to the bucket's, so `infra/compose/data/jigsaws` would serve synthetic video for real trials.
 - **`.env` is read by both make and bash**: plain `KEY=value`, no quotes, spaces or trailing comments.
+
+From taking the bridge and Kafka's metrics to Kubernetes (each is fixed; the notes are so the fix is not undone):
+
+- **The bridge resolves its DDS peer once, at startup**, and the cluster network has no multicast, so discovery is unicast over a
+  headless Service. Start it after the robot's pod, and restart it if that pod's IP changes.
+- **The simulated dVRK needs far more than 2 Gi**: about 300 MB per ROS node, and a kill looks like `Error 137`, not `OOMKilled`,
+  because the container's main process survives the first kills. Check the node's `dmesg`.
+- **The Kafka page uses kafka-exporter's metric names**, the same in compose and from Strimzi; bytes per second come from broker
+  JMX, so only on Kubernetes. The Spark stream keeps offsets in its checkpoints, so it never shows as a consumer group.
 
 From adding the da Vinci simulation to the UI (see docs/serving/api.md):
 

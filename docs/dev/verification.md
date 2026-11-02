@@ -147,13 +147,28 @@ backends. Not yet on k3s, and not yet in a browser with a real GPU.
 | Staying out of the way | non-da-Vinci data hides the box; with the three.js CDN blocked the box says so and video and charts work; no canvas left behind after navigating away | pass |
 | A needle transfer (G4), by eye | at 40 s of `Suturing_B002` the simulated graspers meet as they do in the video | pass |
 
+## Executed on a local Kubernetes cluster (kind, 2026-11-01)
+
+Three nodes, with the repo's manifests: Strimzi and the 3-broker Kafka, kube-prometheus-stack (without
+Grafana and Alertmanager), the catalog and its Postgres, and the API on the SQLite backend. Not yet on
+the k3s VMs.
+
+| Area | How verified | Result |
+|---|---|---|
+| Scraping Kafka | `manifests/kafka/metrics.yaml`: all 4 targets up (3 brokers, the exporter) | pass |
+| Kafka page | against real Prometheus, in a browser: rates match the source (2 robots x 3 arms x 20 Hz is 120 messages/s per topic); refreshes itself; a real consumer's lag shows and grows | pass |
+| `rtdaas-bridge` | the real Deployment, in its own pod, against the dVRK's kinematic simulation in another, with DDS discovery over the pod network (`scripts/check-k8s-bridge.sh`): a consumer decoded 13,720 Avro records keyed `dv_001` while the dVRK's test script moved the tool tip 10 cm; bridge `failed=0` | pass |
+| Catalog on Postgres | both pods deleted and recreated: the table survives; purge then load gives 404 | pass |
+
+Also moved to Postgres in the compose stack, keeping its data: all 16 tables registered at their exact
+metadata versions, and 150 create and purge cycles under load saw no stale read (the old failure). A
+`make demo` then ran ingest and publish through it.
+
 ## Written, compiles, not yet executed
 
 | Area | Why not yet | Where it runs |
 |---|---|---|
 | `envs/aws` Terraform and the overlay's S3 settings (the Airflow S3 connection still points at MinIO) | costs money | `make tf-aws` + `make ansible` |
-| `rtdaas-bridge` on k8s (`replicas: 0`: it needs a dVRK on the same ROS domain) | run in compose against the dVRK simulation instead | `manifests/rtdaas/bridge.yaml` |
-| Kafka metrics: Strimzi exports them, but no ServiceMonitor or PodMonitor scrapes them yet | not written | `manifests/kafka` |
 
 ## What to run first after cloning
 

@@ -23,6 +23,7 @@ against them by a test ([ADR 0009](../adr/0009-starlette-api.md)); Swagger UI is
 | `GET /api/trials/{id}/frames` | per-frame video features |
 | `GET /api/trials/{id}/video` | the trial video (HTTP Range supported) |
 | `GET /api/gestures?task&gesture&skill_level` | gesture search |
+| `GET /api/kafka/metrics?minutes=` | brokers, rates, partition health, per-topic sizes, consumer lag and recent history, from `PROMETHEUS_URL`; `available` is false, with a `reason`, when there are none |
 | `GET /api/quality/runs`, `GET /api/quality/results` | data-quality runs and per-check results |
 | `POST /api/jobs/reprocess` `{"kind": "session"\|"trial"\|"date", "target": "..."}` | triggers the matching Airflow DAG; `GET /api/jobs` lists requests |
 | `GET /openapi.json`, `GET /docs`, `GET /metrics` | OpenAPI, Swagger UI, Prometheus |

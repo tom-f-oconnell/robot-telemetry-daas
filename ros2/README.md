@@ -102,7 +102,9 @@ with an older `rtdaas_msgs` version still load.
   schema version, restart the bridge.
 - Integer fields wider than Avro `long` (`uint64` above 2^63) are rejected by the mapper.
 - DDS discovery across container/pod boundaries needs the CycloneDDS configuration shipped in the
-  image (`/config/cyclonedds.xml`) or host networking.
+  image (`/config/cyclonedds.xml`) or host networking. On Kubernetes it runs without multicast, over
+  a headless Service: `scripts/check-k8s-bridge.sh` tests the bridge there against the dVRK simulation
+  (`launch_bridge:=false` leaves the simulated robot without a bridge of its own), with no hardware.
 - A robot id is also its ROS namespace (`/dv_001/PSM1/measured_js`) and the `robot_id` of every
   record (the bag pipeline reads it from the topic path), so ids must be valid ROS 2 names:
   letters, digits and `_`, starting with a letter. `dv-001` (the original form) is rejected.
