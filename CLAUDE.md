@@ -109,7 +109,6 @@ Open (highest-value next work):
    metrics yet, and `rtdaas-bridge` stays at `replicas: 0` (it needs a dVRK on the ROS domain).
 2. A batch merge and the stream writing the *same robot on the same day* can still conflict (merges are scoped
    by day and robot); Airflow retries cover it. The introspection walk's bounded-sequence branch is unexercised.
-   The SQLite-backed Iceberg catalog can serve stale reads (see Gotchas).
 
 ## CI mechanics worth knowing
 
@@ -181,11 +180,12 @@ From the first `make demo` (each is fixed; the notes are so the fix is not undon
 - **rclpy raises "Logger severity cannot be changed between calls"** when one logging call site is used with
   different severities: one call per severity. `fleet_monitor._emit` had this and would have died on the first
   WARN/ERROR event (e.g. `JOINT_LIMIT_WARN`) on a real dVRK.
-- **The Iceberg catalog lives on the `iceberg-catalog` volume.** tabulario/iceberg-rest's default
-  `CATALOG_URI` is `jdbc:sqlite:file:/tmp/iceberg_rest_mode=memory` — a *file* (mode=memory is part of the
-  name) in the container layer, so `make demo-down` dropped every table definition while the data stayed in
-  MinIO. Compose mounts the volume at `/home/iceberg` (owned by the image user, so the volume inherits it).
-  After a down/up Airflow still remembers which runs succeeded: clear a run to re-ingest it.
+- **The Iceberg catalog is on Postgres, not the image's SQLite.** tabulario/iceberg-rest defaults to a SQLite *file* in the
+  container layer (`mode=memory` is part of its name), which `make demo-down` deleted. On a volume, SQLite took one writer at a
+  time ("database is locked", which killed the stream) and with WAL went on serving stale table locations; once a purge removed
+  the files those pointed at, everything calling `ensure_tables` failed, the stream too. A restart cleared it, and the database
+  itself was right. Compose uses the stack's Postgres, k8s a small one of its own. `scripts/migrate-iceberg-catalog.py` moves
+  tables over. After a down/up Airflow still remembers which runs succeeded: clear a run to re-ingest it.
 - **The simulator turns SIGTERM into a normal stop** (`docker stop`, `make demo-down`): Python's default
   SIGTERM exits without unwinding, which left bags without their footer — never "closed", never landed.
   `rtdaas-land` warns about open bags unchanged for `--stale-after` s.
@@ -195,9 +195,6 @@ From the first `make demo` (each is fixed; the notes are so the fix is not undon
 - **Elasticsearch gets events and KPI windows from both the stream and `batch_mcap`**, under shared ids
   (`es_event_id`, `es_kpi_id`); before, bag events never reached ES, and the DuckDB backend serves events from
   ES whenever it is reachable, so they were invisible in the API/UI.
-- **The Iceberg REST catalog is SQLite: one writer at a time.** Without a busy timeout, a commit that meets the
-  lock fails at once (500 "database is locked"), which concurrent jobs (stream + backfill + publish) hit and
-  which killed the streaming query. `CATALOG_URI=...db?journal_mode=WAL&busy_timeout=30000` (compose and k8s).
 - **Merges are scoped by day *and* robot** (`merge_on_clause(time_column, scope_column)`): the raw tables are
   partitioned by `(days(ts), robot_id)`, so a backfill of today's bags no longer conflicts with the stream
   writing other robots.
@@ -250,11 +247,6 @@ From the first run on the real JIGSAWS data (each is fixed; the notes are so the
 - **Switching datasets needs a purge**, which `make demo` does: the gesture `MERGE` only upserts, so old segments survive, and
   the API prefers a local video to the bucket's, so `infra/compose/data/jigsaws` would serve synthetic video for real trials.
 - **`.env` is read by both make and bash**: plain `KEY=value`, no quotes, spaces or trailing comments.
-- **The Iceberg catalog's SQLite can serve a stale table.** With WAL on, the REST server went on returning an old metadata
-  pointer although its database was right (the `.db` had not changed in days; everything was in the WAL). The likely cause is a
-  connection pinned on an old snapshot; a restart cures it. Normally the old file still exists and nobody notices. After a purge
-  it does not: "Location does not exist", and all that calls `ensure_tables` fails, the stream too. So `demo.sh` restarts
-  iceberg-rest after purging. Stale reads can still happen elsewhere; a Postgres-backed catalog would end them.
 
 From adding the da Vinci simulation to the UI (see docs/serving/api.md):
 

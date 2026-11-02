@@ -47,10 +47,13 @@ them in `infra/compose/.env` when running `docker compose` directly).
 
 ## State that survives `make demo-down`
 
-Named volumes keep Kafka, MinIO, Elasticsearch, Postgres (Airflow's metadata) and the Iceberg
-catalog (`iceberg-catalog`: the REST catalog's SQLite file; without it, removing the container
-dropped every table definition while the data files stayed in MinIO). `docker compose ... down -v`
-removes them all; `./data` is a host directory and is left alone.
+Named volumes keep Kafka, MinIO, Elasticsearch and Postgres, which holds Airflow's metadata and, in
+its `iceberg` database, the Iceberg catalog: without that, every table definition would be lost while
+the data files stayed in MinIO. `docker compose ... down -v` removes them all; `./data` is a host
+directory and is left alone.
+
+A stack from before the catalog moved to Postgres has its tables in a volume called `iceberg-catalog`.
+`scripts/migrate-iceberg-catalog.py` moves them; until then the tables look empty.
 
 ## Images
 

@@ -214,17 +214,15 @@ services:
       CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
       CATALOG_S3_ENDPOINT: http://minio:9000
       CATALOG_S3_PATH__STYLE__ACCESS: "true"
-      # The image's default catalog DB is a file in the container's /tmp, so removing the
-      # container (make demo-down) dropped every table definition while the data stayed in
-      # MinIO. Keep it on a volume, as the k8s manifest does with a PVC. /home/iceberg is owned
-      # by the image's user, so the fresh volume inherits that ownership.
-      # SQLite takes one writer at a time; without a busy timeout a commit that meets the lock
-      # fails at once (500 "database is locked"), which concurrent jobs hit. WAL lets reads proceed.
-      CATALOG_URI: jdbc:sqlite:file:/home/iceberg/iceberg_rest.db?journal_mode=WAL&busy_timeout=30000
-    volumes:
-      - iceberg-catalog:/home/iceberg
+      # On Postgres, not the image's default SQLite file. SQLite takes one writer at a time, and with
+      # WAL the server's connections could go on serving stale table locations.
+      CATALOG_URI: jdbc:postgresql://postgres:5432/iceberg
+      CATALOG_JDBC_USER: airflow
+      CATALOG_JDBC_PASSWORD: airflow
     depends_on:
       minio-init:
+        condition: service_completed_successfully
+      iceberg-db-init:
         condition: service_completed_successfully
     healthcheck:
       # the image ships bash + java only (no curl/wget), so speak HTTP over /dev/tcp
@@ -358,6 +356,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  # The Iceberg catalog's database, on a volume that may predate it.
+  iceberg-db-init:
+    image: postgres:16
+    container_name: rtdaas-iceberg-db-init
+    profiles: ["core"]
+    environment:
+      PGHOST: postgres
+      PGUSER: airflow
+      PGPASSWORD: airflow
+    entrypoint: ["sh", "-c", "psql -d airflow -tc \"SELECT 1 FROM pg_database WHERE datname = 'iceberg'\" | grep -q 1 || createdb iceberg"]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   airflow-init:
     <<: *airflow-common
@@ -545,7 +557,6 @@ services:
         condition: service_healthy
 
 volumes:
-  iceberg-catalog:
   kafka-data:
   minio-data:
   es-data:

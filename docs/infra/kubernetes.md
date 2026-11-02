@@ -55,7 +55,7 @@ environment overlay ConfigMap, and `infra/k8s/argocd/root.yaml`).
 | kafka-cluster | `manifests/kafka` | `Kafka` + `KafkaNodePool` (KRaft, 3 brokers), 4 `KafkaTopic` CRs from `registry.yml` |
 | apicurio | `manifests/apicurio` | in-memory registry for demo; swap to the SQL variant for persistence |
 | minio | `manifests/minio` | plain Deployment (MinIO withdrew its public images in 2025, which also broke the upstream chart); frozen `bitnamilegacy/minio` build by default, RustFS or real S3 are documented swaps; buckets auto-created (local env only) |
-| iceberg-rest | `manifests/iceberg-rest` | REST catalog over the lake bucket |
+| iceberg-rest | `manifests/iceberg-rest` | REST catalog over the lake bucket, with a small Postgres of its own |
 | spark-operator | Helm (kubeflow) 2.0 | watches namespace `rtdaas` |
 | eck-operator + elasticsearch | Helm `eck-operator` 2.14 + `Elasticsearch` CR | 1 node, no credentials for demo (anonymous superuser) |
 | airflow | Helm `airflow` 1.15 | KubernetesExecutor, git-sync of `rtdaas/airflow/dags`, env from the rtdaas ConfigMap/Secret |
