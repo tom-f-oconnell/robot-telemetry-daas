@@ -38,6 +38,9 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, m
 .sidebar > a.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
 .nav-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
 .nav-links { display: flex; flex-direction: column; gap: 2px; }
+.nav-links a.active { font-weight: 600; }
+.example h2 { margin: 0 0 6px; font-size: 16px; }
+.example p { margin: 0 0 8px; }
 
 .main { flex: 1; padding: 24px 32px; max-width: 1400px; }
 h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }

@@ -1,6 +1,6 @@
 // rtdaas web UI — vanilla JS single-page app driven entirely by the public API.
 // Views: sessions, session detail, events, trials, trial detail, gestures, catalog,
-// quality, contracts, jobs. Plotly (loaded from CDN in index.html) draws the charts.
+// quality, contracts, jobs, example uses. Plotly (loaded from CDN in index.html) draws the charts.
 
 const main = document.getElementById("main");
 const GESTURE_COLORS = ["#534ab7", "#0f6e56", "#993c1d", "#993556", "#185fa5", "#3b6d11", "#854f0b", "#a32d2d",
@@ -425,6 +425,40 @@ async function viewContracts() {
       <details><summary>Avro schema</summary><pre class="schema">${esc(JSON.stringify(c.schema, null, 2))}</pre></details></div>`).join("") || '<div class="empty">No contracts found.</div>'}`;
 }
 
+// Projects built on this API. `jigsaws` marks one that needs JIGSAWS data, so it goes when that is off.
+const EXAMPLE_USES = [
+  {
+    repo: "rtdaas-training-eval",
+    title: "Predicting operator skill",
+    jigsaws: true,
+    text: "Estimates a surgeon's skill level and expert rating from how they move the da Vinci's arms: speed, smoothness, economy of motion, and how the two hands work together. It scores each surgeon with a model that never saw them, because otherwise a model can recognise a person's style and read off their label, and it reports how far to trust the result.",
+    reads: "Trials, their kinematics, gesture segments and video features",
+  },
+  {
+    repo: "rtdaas-diag",
+    title: "Debugging an incident",
+    text: "Shows what a robot was doing in the minutes before a fault: its log, state, joint motion and tool path over a window you choose, with the likely causes ranked and the evidence for each. It can also add realistic simulated faults to the data as it reads, without changing anything stored, so the diagnosis can be tried on incidents whose cause is known.",
+    reads: "Events, heartbeats, joint states and tool poses by robot and time",
+  },
+  {
+    repo: "rtdaas-fleet-wear",
+    title: "Tracking joint wear across a fleet",
+    text: "A dashboard of every robot, keeping a running total of how far each joint has moved and comparing it with the same joint on other robots. Where effort readings are usable, it weights movement by load using standard wear approximations, to show which joints have worked hardest and may be worth inspecting.",
+    reads: "Joint positions, velocities and efforts by robot and time",
+  },
+];
+
+function viewExamples() {
+  setActive("examples");
+  const examples = EXAMPLE_USES.filter((e) => features.jigsaws || !e.jigsaws);
+  main.innerHTML = `<h1>Example uses</h1><div class="subtitle">Separate projects built on this platform. Each reads its data through the public API, as any client could.</div>
+    ${examples.map((e) => `<div class="card example">
+      <h2>${esc(e.title)}${e.jigsaws ? jigsawsTag() : ""}</h2>
+      <p>${esc(e.text)}</p>
+      <div class="kv"><span class="k">Reads</span><span>${esc(e.reads)}</span><span class="k">Source</span><a class="mono" href="https://github.com/tom-f-oconnell/${esc(e.repo)}" target="_blank" rel="noopener">${esc(e.repo)} ↗</a></div>
+    </div>`).join("")}`;
+}
+
 async function viewJobs() {
   setActive("jobs");
   const { jobs } = await api("/api/jobs", { limit: 200 });
@@ -462,6 +496,7 @@ async function route() {
     else if (parts[0] === "kafka") await viewKafka(params);
     else if (parts[0] === "contracts") await viewContracts();
     else if (parts[0] === "jobs") await viewJobs();
+    else if (parts[0] === "examples") viewExamples();
     else navigate("/sessions");
   } catch (e) {
     main.innerHTML = `<div class="error-box">Failed to load this page: ${esc(e.message)}</div>`;

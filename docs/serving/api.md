@@ -44,6 +44,7 @@ out. With `SERVE_JIGSAWS` on, the default, a `JIGSAWS` tag marks what shows it:
 |---|---|---|
 | Sessions, Log explorer, Kafka, Contracts | Robot telemetry only | Unchanged, and no tag |
 | Trials, Gesture search | Only JIGSAWS (or a synthetic stand-in in its format) | Gone. Their routes return 404, and their links redirect to Sessions |
+| Example uses | Links to projects built on the API, tagged if they need JIGSAWS | `rtdaas-training-eval` is left out |
 | Catalog, Quality, Jobs | Both, tagged per table, check or job | JIGSAWS tables, checks and `trial` jobs are left out, and new `trial` jobs are refused |
 
 The rule is enforced by the API, not the page, so nothing is one `curl` away: `rtdaas/serving/jigsaws.py`

@@ -199,3 +199,15 @@ def test_it_is_on_by_default():
 def test_a_mistyped_setting_stops_startup_rather_than_guessing():
     with pytest.raises(ValueError):
         Settings.from_env({"SERVE_JIGSAWS": "maybe"})
+
+
+def test_example_uses_page_links_each_project_and_marks_the_one_needing_jigsaws():
+    nav = _nav()
+    assert "hidden" not in nav["examples"] and "data-jigsaws" not in nav["examples"]
+    app = (STATIC_DIR / "app.js").read_text()
+    entries = re.findall(r'repo: "([\w-]+)",\s+title: "[^"]+",\s+(jigsaws: true,)?', app)
+    assert entries == [
+        ("rtdaas-training-eval", "jigsaws: true,"),
+        ("rtdaas-diag", ""),
+        ("rtdaas-fleet-wear", ""),
+    ]
