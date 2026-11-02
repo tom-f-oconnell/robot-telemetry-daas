@@ -381,13 +381,20 @@ class SqlBackendBase:
             clauses.append(f"ts <= {tp}")
             params.append(norm_ts(end, end=True))
         where = " AND ".join(clauses)
+        name = self.table(table)
+        paging = (int(limit), int(offset))
+        if (
+            int(downsample) <= 1
+        ):  # numbering every row would make each page of a long history sort it
+            sql = f"SELECT {columns} FROM {name} WHERE {where} ORDER BY ts LIMIT ? OFFSET ?"
+            return self.rows(sql, (*params, *paging))
         sql = f"""
             SELECT {columns} FROM (
                 SELECT {columns}, ROW_NUMBER() OVER (ORDER BY ts) - 1 AS rn
-                FROM {self.table(table)} WHERE {where}
+                FROM {name} WHERE {where}
             ) t WHERE rn % ? = 0 ORDER BY ts LIMIT ? OFFSET ?
         """
-        return self.rows(sql, (*params, max(1, int(downsample)), int(limit), int(offset)))
+        return self.rows(sql, (*params, int(downsample), *paging))
 
     def robot_joints(
         self, robot_id, arm=None, start=None, end=None, downsample=1, limit=1000, offset=0
