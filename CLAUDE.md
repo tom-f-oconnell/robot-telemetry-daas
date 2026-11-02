@@ -107,9 +107,7 @@ pipeline, and `jigsaws_ingest` on the compose stack, with the UI's player in Chr
 Open (highest-value next work):
 1. `envs/aws` has never run, and its Airflow S3 connection still points at MinIO. On k8s, nothing scrapes Kafka's
    metrics yet, and `rtdaas-bridge` stays at `replicas: 0` (it needs a dVRK on the ROS domain).
-2. `gripper_cycles` is not meaningful on real JIGSAWS data: angles run -1.32 to 0.54 rad, so `GRIPPER_OPEN = 0.5`
-   (chosen for the synthetic 0 to 1) only sees the jaw fully open, and 62 % of segments score 0.
-3. A batch merge and the stream writing the *same robot on the same day* can still conflict (merges are scoped
+2. A batch merge and the stream writing the *same robot on the same day* can still conflict (merges are scoped
    by day and robot); Airflow retries cover it. The introspection walk's bounded-sequence branch is unexercised.
    The SQLite-backed Iceberg catalog can serve stale reads (see Gotchas).
 

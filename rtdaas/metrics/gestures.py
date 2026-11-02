@@ -9,7 +9,7 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-GRIPPER_OPEN = 0.5
+MIN_GRIPPER_SWING = 0.2  # rad: an arm whose gripper barely moves never opens
 GESTURE_METRIC_COLUMNS: tuple[str, ...] = (
     "gesture",
     "start_frame",
@@ -34,12 +34,31 @@ def _path_and_speed(xyz: np.ndarray, dt: float) -> tuple[float, float]:
     return total, (total / duration if duration > 0 else 0.0)
 
 
-def _upward_crossings(x: np.ndarray, threshold: float) -> int:
-    x = x[np.isfinite(x)]
-    if x.size < 2:
-        return 0
-    above = x >= threshold
-    return int(np.count_nonzero(~above[:-1] & above[1:]))
+def _jaw_openings(gripper: np.ndarray) -> np.ndarray:
+    """Whether the jaw opens at each sample, for one arm over a whole trial.
+
+    What closed and open read differs by arm and trial (in JIGSAWS, closed is near -0.9 rad and open
+    anywhere from 0 to 0.5), so both come from this arm's own signal. An opening is a rise from the
+    lower 40 % of that range to the upper 40 %: with a single threshold, noise near it would count
+    over and over.
+    """
+    opens = np.zeros(gripper.shape, dtype=bool)
+    valid = gripper[np.isfinite(gripper)]
+    if valid.size < 2:
+        return opens
+    closed, wide_open = np.percentile(valid, [5, 95])
+    swing = wide_open - closed
+    if swing < MIN_GRIPPER_SWING:
+        return opens
+    low, high = closed + 0.4 * swing, closed + 0.6 * swing
+    is_open = None
+    for i, value in enumerate(gripper):
+        if value >= high:
+            opens[i] = is_open is False
+            is_open = True
+        elif value <= low:
+            is_open = False
+    return opens
 
 
 def gesture_metrics(
@@ -50,7 +69,8 @@ def gesture_metrics(
 ) -> pd.DataFrame:
     """One row per transcript segment with motion metrics for the PSM arms.
 
-    ``kin`` is the output of :func:`rtdaas.jigsaws.parse_kinematics` (0-based ``frame_idx``);
+    ``kin`` is the output of :func:`rtdaas.jigsaws.parse_kinematics` (0-based ``frame_idx``), for
+    the whole trial: gripper levels are judged across it;
     ``transcript`` has 1-based inclusive ``start_frame``/``end_frame`` and ``gesture``;
     ``frames`` (optional) is :func:`rtdaas.jigsaws.video.frame_features` output, used for
     ``motion_energy_mean`` (NaN when absent).
@@ -59,8 +79,8 @@ def gesture_metrics(
     frame_1based = kin["frame_idx"].to_numpy() + 1
     psml = kin[["psml_x", "psml_y", "psml_z"]].to_numpy(dtype=np.float64)
     psmr = kin[["psmr_x", "psmr_y", "psmr_z"]].to_numpy(dtype=np.float64)
-    grip_l = kin["psml_gripper"].to_numpy(dtype=np.float64)
-    grip_r = kin["psmr_gripper"].to_numpy(dtype=np.float64)
+    openings = _jaw_openings(kin["psml_gripper"].to_numpy(dtype=np.float64)).astype(int)
+    openings += _jaw_openings(kin["psmr_gripper"].to_numpy(dtype=np.float64))
 
     motion = None
     if frames is not None and len(frames) and "motion_energy" in frames:
@@ -92,8 +112,7 @@ def gesture_metrics(
                 "path_length_psmr": pl_r,
                 "mean_speed_psml": sp_l,
                 "mean_speed_psmr": sp_r,
-                "gripper_cycles": _upward_crossings(grip_l[mask], GRIPPER_OPEN)
-                + _upward_crossings(grip_r[mask], GRIPPER_OPEN),
+                "gripper_cycles": int(openings[mask].sum()),
                 "motion_energy_mean": me,
                 "n_frames": n,
             }

@@ -144,7 +144,7 @@ tables:
   - name: procedures.trials
     owner: data-platform@rtdaas
     description: One row per JIGSAWS trial (task, subject, repetition, skill level, GRS score, durations, file paths).
-    freshness_target_hours: 168
+    freshness_target_hours: null
     contract: derived
     partitioning: [task]
     freshness_column: processed_at
@@ -170,7 +170,7 @@ tables:
   - name: procedures.kinematics
     owner: data-platform@rtdaas
     description: 30 Hz kinematics for all four manipulators (position, rotation, velocities, gripper) with the gesture label per sample.
-    freshness_target_hours: 168
+    freshness_target_hours: null
     contract: derived
     partitioning: [task, trial_id]
     freshness_column: null
@@ -189,7 +189,7 @@ tables:
   - name: procedures.gestures
     owner: data-platform@rtdaas
     description: One row per transcribed gesture segment with PSM path length, speed, gripper cycles and video motion energy.
-    freshness_target_hours: 168
+    freshness_target_hours: null
     contract: derived
     partitioning: [task]
     freshness_column: null
@@ -207,14 +207,14 @@ tables:
       - {name: path_length_psmr, type: double, description: Right PSM tip path length, m.}
       - {name: mean_speed_psml, type: double, description: Left PSM mean speed, m/s.}
       - {name: mean_speed_psmr, type: double, description: Right PSM mean speed, m/s.}
-      - {name: gripper_cycles, type: long, description: Gripper open transitions, both PSMs.}
+      - {name: gripper_cycles, type: long, description: Times a gripper opened during the segment, both PSMs, each judged by its own closed and open levels.}
       - {name: motion_energy_mean, type: double, description: Mean video motion energy over the segment.}
       - {name: n_frames, type: long, description: Samples in the segment.}
 
   - name: procedures.frame_features
     owner: data-platform@rtdaas
     description: Per video frame intensity, motion energy and sharpness, aligned with kinematic samples.
-    freshness_target_hours: 168
+    freshness_target_hours: null
     contract: derived
     partitioning: [task, trial_id]
     freshness_column: null

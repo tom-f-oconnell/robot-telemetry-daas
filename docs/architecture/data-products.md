@@ -70,8 +70,7 @@ objectives, not agreements with consumers: missing one turns the table's status 
 |---|---|---|
 | `telemetry.kpi_1m` | 1 h | `streaming.yml`: `fresh_kpis`, 15 min (warning) |
 | `telemetry.*_raw`, `telemetry.sessions` | 26 h | `streaming.yml`: `fresh_heartbeats`, 6 min, heartbeats only (warning) |
-| `procedures.trials` | 168 h | |
-| `procedures.kinematics`, `gestures`, `frame_features` | 168 h, not checked: they name no timestamp column, so they always show as fresh | |
+| `procedures.*` | none: JIGSAWS is a fixed dataset, with no new data to be late | |
 | `dq.check_results`, `marts.robot_daily`, `session_daily`, `check_results` | 26 h | |
 | `marts.gesture_skill_summary` | none | |
 

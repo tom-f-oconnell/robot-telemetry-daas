@@ -65,9 +65,9 @@ ingest the incomplete trials, and the Spark job would pick an eye per trial at r
 - The two eyes differ too (`Suturing_B001`: 5,640 and 5,637 frames, against 5,635 kinematics rows).
 - Frame features come from the MP4s. On 1,500 frames of `Suturing_B001`, against the AVI: motion
   energy r = 0.996 (mean 5 % higher), sharpness r = 0.997 (mean 7 % higher).
-- `gripper_cycles` is not yet meaningful: gripper angles run from -1.32 to 0.54 rad, so its threshold
-  of 0.5 (`GRIPPER_OPEN`, chosen for the synthetic 0 to 1 range) only sees the jaw fully open, and
-  62 % of segments score 0.
+- `gripper_cycles` counts jaw openings, judged per arm and trial. Gripper angles run from -1.32 to
+  0.54 rad and are strongly two-level, but what closed and open read varies: closed from -1.17 to
+  -0.46 rad, open from -0.07 to 0.52.
 
 ## Processing (`batch_jigsaws.py`)
 
