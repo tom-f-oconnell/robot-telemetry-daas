@@ -36,10 +36,15 @@ make api               # http://localhost:8080 — UI; /docs for the API
 Full stack (Kafka, schema registry, Spark, Airflow, Elasticsearch, MinIO, Iceberg REST, API):
 
 ```bash
-make demo-no-jigsaws   # the same, with no JIGSAWS data on the site or from the API, and none ingested
 make demo              # docker compose --profile core --profile demo
+make demo-no-jigsaws   # the same, with no JIGSAWS data on the site or from the API, and none ingested
 # Airflow http://localhost:8085 · Spark http://localhost:8082 · API/UI http://localhost:29398
+
+make demo-down         # shut it all down; data is kept for next time
 ```
+
+`make demo-down` stops every container in the stack. To delete the stored data as well, run
+`docker compose --project-directory infra/compose --profile core --profile demo --profile observability down -v`.
 
 Multi-node: `infra/terraform/envs/{local,aws}` → `infra/ansible/site.yml` → Argo CD. See
 [docs/infra/kubernetes.md](docs/infra/kubernetes.md).
