@@ -51,6 +51,8 @@ class Settings(BaseModel):
     iceberg_rest_uri: str = "http://localhost:8181"
     iceberg_warehouse: str = "s3a://rtdaas-lake/warehouse"
 
+    prometheus_url: str = ""
+
     airflow_api_url: str = "http://localhost:8080/api/v1"
     airflow_user: str = "airflow"
     airflow_password: str = "airflow"

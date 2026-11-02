@@ -443,6 +443,7 @@ services:
       SERVING_SQLITE_PATH: /data/rtdaas.sqlite
       SERVING_DUCKDB_PATH: /data/rtdaas.duckdb
       MEDIA_ROOT: /data
+      PROMETHEUS_URL: http://prometheus:9090  # the observability profile, for the Kafka page
       API_HOST: 0.0.0.0
       API_PORT: 8080
       HOME: /tmp

@@ -23,6 +23,8 @@ arms                   comma-separated arm list (default "PSM1,PSM2,ECM")
 generation             dVRK arm generation: Classic | Si (default Classic)
 launch_dvrk            include the dVRK simulation (default true; false = adapters + bridge only,
                        e.g. when the dVRK consoles are started separately or on another host)
+launch_bridge          include the Kafka bridge (default true; false when one runs elsewhere, as
+                       on Kubernetes)
 rviz                   forwarded to the dVRK launch (default false; ignored if the installed
                        dvrk_model launch file has no such argument)
 dvrk_launch_file       launch file inside dvrk_model to include per arm (default arm.launch.py)
@@ -109,6 +111,7 @@ def robot_actions(
     dvrk_launch_file: str,
     bridge_params: Path,
     software_version: str,
+    launch_bridge: bool = True,
 ) -> list:
     actions: list = []
     if launch_dvrk:
@@ -147,17 +150,20 @@ def robot_actions(
                 "software_version": software_version,
             }],
         ),
-        Node(
-            package="rtdaas_kafka_bridge",
-            executable="kafka_bridge",
-            name="kafka_bridge",
-            namespace=robot_id,
-            output="screen",
-            parameters=[str(bridge_params)],
-            respawn=True,
-            respawn_delay=5.0,
-        ),
     ]
+    if launch_bridge:
+        actions.append(
+            Node(
+                package="rtdaas_kafka_bridge",
+                executable="kafka_bridge",
+                name="kafka_bridge",
+                namespace=robot_id,
+                output="screen",
+                parameters=[str(bridge_params)],
+                respawn=True,
+                respawn_delay=5.0,
+            )
+        )
     return actions
 
 
@@ -166,6 +172,7 @@ def launch_setup(context, *args, **kwargs):
     arms = [a.strip() for a in LaunchConfiguration("arms").perform(context).split(",") if a.strip()]
     generation = LaunchConfiguration("generation").perform(context)
     launch_dvrk = LaunchConfiguration("launch_dvrk").perform(context).lower() in ("true", "1", "yes")
+    launch_bridge = LaunchConfiguration("launch_bridge").perform(context).lower() in ("true", "1", "yes")
     rviz = LaunchConfiguration("rviz").perform(context)
     dvrk_launch_file = LaunchConfiguration("dvrk_launch_file").perform(context)
     kafka_bootstrap = LaunchConfiguration("kafka_bootstrap").perform(context)
@@ -181,7 +188,8 @@ def launch_setup(context, *args, **kwargs):
     for robot_id in robot_ids:
         params = render_bridge_params(robot_id, arms, kafka_bootstrap, registry_url, out_dir)
         actions += robot_actions(
-            robot_id, arms, generation, launch_dvrk, rviz, dvrk_launch_file, params, software_version)
+            robot_id, arms, generation, launch_dvrk, rviz, dvrk_launch_file, params, software_version,
+            launch_bridge)
     return actions
 
 
@@ -192,6 +200,7 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("arms", default_value="PSM1,PSM2,ECM"),
         DeclareLaunchArgument("generation", default_value="Classic", description="Classic | Si"),
         DeclareLaunchArgument("launch_dvrk", default_value="true"),
+        DeclareLaunchArgument("launch_bridge", default_value="true"),
         DeclareLaunchArgument("rviz", default_value="false"),
         DeclareLaunchArgument("dvrk_launch_file", default_value="arm.launch.py"),
         DeclareLaunchArgument("kafka_bootstrap", default_value="localhost:9092"),

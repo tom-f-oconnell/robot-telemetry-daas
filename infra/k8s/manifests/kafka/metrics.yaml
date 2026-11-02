@@ -1,0 +1,19 @@
+# Has kube-prometheus-stack scrape the brokers' JMX metrics and Strimzi's kafka-exporter, for the UI's
+# Kafka page. Both serve on a port named tcp-prometheus; of the cluster's pods, only they have one.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kafka
+  namespace: kafka
+  labels:
+    release: kps
+spec:
+  selector:
+    matchLabels:
+      strimzi.io/kind: Kafka
+  namespaceSelector:
+    matchNames: ["kafka"]
+  podMetricsEndpoints:
+    - port: tcp-prometheus
+      path: /metrics
+      interval: 30s

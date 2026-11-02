@@ -12,6 +12,7 @@ tags:
   - name: telemetry
   - name: procedures
   - name: quality
+  - name: kafka
   - name: jobs
 paths:
   /api/live:
@@ -323,6 +324,16 @@ paths:
                   results: {type: array, items: {$ref: "#/components/schemas/CheckResult"}}
                   count: {type: integer}
         "400": {$ref: "#/components/responses/BadRequest"}
+  /api/kafka/metrics:
+    get:
+      tags: [kafka]
+      summary: Kafka's brokers, topics, consumer lag and recent message rates, from Prometheus
+      parameters:
+        - {name: minutes, in: query, schema: {type: integer, default: 30, minimum: 5, maximum: 1440}, description: how much history}
+      responses:
+        "200":
+          description: The metrics, or `available` false with a `reason` when there are none to show
+          content: {application/json: {schema: {$ref: "#/components/schemas/KafkaMetrics"}}}
   /api/jobs:
     get:
       tags: [jobs]
@@ -506,6 +517,42 @@ components:
               t_s: {type: array, items: {type: number}}
               q: {type: object, description: "Joint values per sample: yaw, pitch, insertion, roll, wrist_pitch, wrist_yaw, jaw (psm)"}
               tip: {type: array, items: {type: array, items: {type: number}}, description: Tool tip per sample in the scene}
+    KafkaMetrics:
+      type: object
+      required: [available]
+      properties:
+        available: {type: boolean}
+        reason: {type: string, description: Why there is nothing to show}
+        minutes: {type: integer}
+        brokers: {type: integer}
+        messages_per_s: {type: number}
+        bytes_in_per_s: {type: number, nullable: true, description: Null unless the brokers' JMX metrics are scraped}
+        bytes_out_per_s: {type: number, nullable: true}
+        under_replicated_partitions: {type: integer}
+        offline_partitions: {type: integer}
+        topics:
+          type: array
+          items:
+            type: object
+            properties:
+              topic: {type: string}
+              partitions: {type: integer, nullable: true}
+              messages_per_s: {type: number, nullable: true}
+              retained_messages: {type: integer, nullable: true}
+              under_replicated_partitions: {type: integer}
+        consumer_groups:
+          type: array
+          items:
+            type: object
+            properties:
+              group: {type: string}
+              topic: {type: string}
+              lag: {type: integer}
+        history:
+          type: object
+          properties:
+            t: {type: array, items: {type: string}}
+            topics: {type: object, description: "Messages per second by topic, one value per `t`, null where missing"}
     TrajectoryPoint:
       type: object
       properties:

@@ -13,6 +13,7 @@ self-service surface for engineers who do not want to write SQL.
 | Gesture search | find segments by task / gesture code / skill level, jump into the trial at that frame | `/api/gestures` |
 | Catalog | every data product with owner, freshness target and status, and column docs | `/api/catalog` |
 | Quality | latest runs, pass/warn/fail counts, filterable results | `/api/quality/*` |
+| Kafka | brokers, message and byte rates, partition health, per-topic sizes, consumer lag, refreshed every 15 s | `/api/kafka/metrics` |
 | Contracts | subjects, versions, pretty-printed Avro schemas | `/api/contracts` |
 | Jobs | reprocess requests and their Airflow run ids | `/api/jobs` |
 

@@ -351,6 +351,45 @@ async function viewQuality(params) {
   document.getElementById("f").addEventListener("submit", (e) => { e.preventDefault(); navigate("/quality", Object.fromEntries(new FormData(e.target))); });
 }
 
+const KAFKA_REFRESH_MS = 15000;
+const fmtBytes = (v) => (v === null || v === undefined ? "–" : v >= 1e6 ? `${(v / 1e6).toFixed(1)} MB` : `${(v / 1e3).toFixed(1)} kB`);
+async function viewKafka(params) {
+  setActive("kafka");
+  const minutes = params.minutes || "30";
+  main.innerHTML = `<h1>Kafka</h1><div class="subtitle">Brokers, topics and consumer lag, from Prometheus. Refreshes every ${KAFKA_REFRESH_MS / 1000} s.</div>
+    <div class="row"><label>History<select id="kafka-minutes">${[["15", "15 min"], ["30", "30 min"], ["60", "1 h"], ["360", "6 h"], ["1440", "24 h"]].map(([v, l]) => `<option value="${v}" ${v === minutes ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
+    <div id="kafka-body"><div class="empty">Loading…</div></div>`;
+  document.getElementById("kafka-minutes").onchange = (e) => navigate("/kafka", { minutes: e.target.value });
+
+  let drawn = false;
+  async function draw() {
+    const body = document.getElementById("kafka-body");
+    if (!body) return false;
+    let m;
+    try { m = await api("/api/kafka/metrics", { minutes }); } catch (e) { body.innerHTML = `<div class="error-box">${esc(e.message)}</div>`; drawn = false; return true; }
+    if (!m.available) {
+      body.innerHTML = `<div class="empty">${esc(m.reason)} On Kubernetes this comes from kube-prometheus-stack; in compose, start the stack's <span class="mono">observability</span> profile.</div>`;
+      drawn = false;
+      return true;
+    }
+    const healthy = !m.under_replicated_partitions && !m.offline_partitions;
+    if (!drawn) body.innerHTML = '<div id="kafka-stats"></div><div class="card"><h2 style="margin-top:0">Messages per second, by topic</h2><div id="kafka-rate" class="plot"></div></div><div id="kafka-tables"></div>';
+    document.getElementById("kafka-stats").innerHTML = `<div class="grid cols-4">${stat("Brokers", fmt(m.brokers))}${stat("Messages", fmt(m.messages_per_s, 1), "/s")}${stat("Bytes in", fmtBytes(m.bytes_in_per_s), "/s")}${stat("Bytes out", fmtBytes(m.bytes_out_per_s), "/s")}</div>
+      <div class="toolbar" style="margin:10px 0">${healthy ? badge("All partitions healthy", "ok") : badge("Partitions need attention", "fail")}<span class="muted small">${fmt(m.under_replicated_partitions)} under-replicated · ${fmt(m.offline_partitions)} offline</span></div>`;
+    const traces = Object.entries(m.history.topics).map(([topic, y]) => ({ x: m.history.t, y, name: topic.replace("rtdaas.telemetry.", ""), mode: "lines", connectgaps: false }));
+    const layout = { ...PLOT_LAYOUT, yaxis: { title: "messages/s", rangemode: "tozero" }, uirevision: "keep" };
+    if (hasPlotly()) window.Plotly.react("kafka-rate", traces, layout, PLOT_CFG); else plot("kafka-rate", traces, layout, PLOT_CFG);
+    document.getElementById("kafka-tables").innerHTML = `<h2>Topics</h2>${table([{ key: "topic", label: "Topic", render: (r) => `<span class="mono">${esc(r.topic)}</span>` }, { key: "partitions", label: "Partitions", num: true },
+      { key: "messages_per_s", label: "Messages/s", num: true, digits: 1 }, { key: "retained_messages", label: "Retained messages", num: true }, { key: "under_replicated_partitions", label: "Under-replicated", num: true }], m.topics, { empty: "No topics." })}
+      <h2>Consumer lag</h2>${table([{ key: "group", label: "Group", render: (r) => `<span class="mono">${esc(r.group)}</span>` }, { key: "topic", label: "Topic", render: (r) => `<span class="mono">${esc(r.topic)}</span>` }, { key: "lag", label: "Lag (messages)", num: true }], m.consumer_groups,
+        { empty: "No consumer group has committed offsets. The Spark stream keeps its offsets in its own checkpoints, so it does not show here." })}`;
+    drawn = true;
+    return true;
+  }
+  await draw();
+  const timer = setInterval(async () => { if (!(await draw())) clearInterval(timer); }, KAFKA_REFRESH_MS);
+}
+
 async function viewContracts() {
   setActive("contracts");
   const { contracts } = await api("/api/contracts");
@@ -392,6 +431,7 @@ async function route() {
     else if (parts[0] === "gestures") await viewGestures(params);
     else if (parts[0] === "catalog") await viewCatalog();
     else if (parts[0] === "quality") await viewQuality(params);
+    else if (parts[0] === "kafka") await viewKafka(params);
     else if (parts[0] === "contracts") await viewContracts();
     else if (parts[0] === "jobs") await viewJobs();
     else navigate("/sessions");

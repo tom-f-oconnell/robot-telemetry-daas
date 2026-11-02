@@ -23,6 +23,7 @@ data:
   SERVING_SQLITE_PATH: /data/rtdaas.sqlite
   SERVING_DUCKDB_PATH: /data/rtdaas.duckdb
   MEDIA_ROOT: /data
+  PROMETHEUS_URL: http://kps-prometheus.monitoring.svc.cluster.local:9090
   API_HOST: "0.0.0.0"
   API_PORT: "8080"
   AWS_REGION: us-east-1

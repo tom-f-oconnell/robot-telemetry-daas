@@ -34,7 +34,7 @@ from starlette.staticfiles import StaticFiles
 from rtdaas import __version__
 from rtdaas.config import Settings, get_settings
 from rtdaas.metrics import da_vinci
-from rtdaas.serving import airflow_client
+from rtdaas.serving import airflow_client, kafka_metrics
 from rtdaas.serving.backends import Backend, make_backend
 from rtdaas.serving.metrics import Metrics
 
@@ -317,6 +317,10 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         )
         return JSONResponse({"results": rows, "count": len(rows)})
 
+    def kafka(request: Request):
+        minutes = q_int(request, "minutes", 30, 5, 1440)
+        return JSONResponse(kafka_metrics.kafka_overview(settings.prometheus_url, minutes))
+
     def jobs(request: Request):
         rows = backend.jobs(limit=q_int(request, "limit", 50, 1, 1000))
         return JSONResponse({"jobs": rows, "count": len(rows)})
@@ -380,6 +384,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         Route("/api/gestures", gestures),
         Route("/api/quality/runs", quality_runs),
         Route("/api/quality/results", quality_results),
+        Route("/api/kafka/metrics", kafka),
         Route("/api/jobs", jobs),
         Route("/api/jobs/reprocess", reprocess, methods=["POST"]),
         Route("/openapi.json", openapi),
