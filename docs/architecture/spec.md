@@ -582,6 +582,7 @@ HTTP routes (all JSON; see `openapi.yaml`):
 ```
 GET  /api/health                      GET /api/catalog                 GET /api/contracts
 GET  /api/robots                      GET /api/sessions                GET /api/sessions/{id}
+GET  /api/robots/{id}/joints           GET /api/robots/{id}/poses       GET /api/robots/{id}/heartbeats
 GET  /api/sessions/{id}/trajectory    GET /api/sessions/{id}/kpis      GET /api/events
 GET  /api/trials                      GET /api/trials/{id}             GET /api/trials/{id}/kinematics
 GET  /api/trials/{id}/frames          GET /api/trials/{id}/video       GET /api/gestures

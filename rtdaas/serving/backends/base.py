@@ -31,6 +31,34 @@ class Backend(Protocol):
     def session(self, session_id: str) -> dict | None: ...
     def trajectory(self, session_id: str, arm: str, downsample: int = 1) -> list[dict]: ...
     def session_kpis(self, session_id: str) -> list[dict]: ...
+    def robot_joints(
+        self,
+        robot_id: str,
+        arm: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        downsample: int = 1,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> list[dict]: ...
+    def robot_poses(
+        self,
+        robot_id: str,
+        arm: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        downsample: int = 1,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> list[dict]: ...
+    def robot_heartbeats(
+        self,
+        robot_id: str,
+        start: str | None = None,
+        end: str | None = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> list[dict]: ...
     def events(
         self,
         q: str | None = None,

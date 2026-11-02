@@ -153,6 +153,62 @@ paths:
             `system` is null when this data is not from a system we can simulate.
           content: {application/json: {schema: {$ref: "#/components/schemas/Simulation"}}}
         "404": {$ref: "#/components/responses/NotFound"}
+  /api/robots/{robot_id}/joints:
+    get:
+      tags: [telemetry]
+      summary: One robot's joint states in time order, across sessions (measured_js)
+      parameters: &robotSeriesParameters
+        - {name: robot_id, in: path, required: true, schema: {type: string}}
+        - {name: arm, in: query, schema: {type: string}, description: e.g. PSM1. All arms if omitted.}
+        - {name: start, in: query, schema: {type: string, format: date-time}}
+        - {name: end, in: query, schema: {type: string, format: date-time}}
+        - {name: downsample, in: query, schema: {type: integer, default: 1, minimum: 1, maximum: 10000}, description: keep every Nth row}
+        - {name: limit, in: query, schema: {type: integer, default: 1000, minimum: 1, maximum: 5000}}
+        - {name: offset, in: query, schema: {type: integer, default: 0, minimum: 0}, description: page with this; a short page means the end}
+      responses:
+        "200":
+          description: "Rows hold `arm, ts, recv_ts, joint_names, position, velocity, effort`. Empty for an unknown robot."
+          content: &robotSamples
+            application/json:
+              schema:
+                type: object
+                properties:
+                  robot_id: {type: string}
+                  samples: {type: array, items: {type: object}}
+                  count: {type: integer}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/robots/{robot_id}/poses:
+    get:
+      tags: [telemetry]
+      summary: One robot's tool poses in time order, across sessions
+      parameters: *robotSeriesParameters
+      responses:
+        "200":
+          description: "Rows hold `arm, ts, recv_ts, x, y, z, qx, qy, qz, qw, jaw_angle, speed`. Empty for an unknown robot."
+          content: *robotSamples
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/robots/{robot_id}/heartbeats:
+    get:
+      tags: [telemetry]
+      summary: One robot's heartbeats in time order, across sessions
+      parameters:
+        - {name: robot_id, in: path, required: true, schema: {type: string}}
+        - {name: start, in: query, schema: {type: string, format: date-time}}
+        - {name: end, in: query, schema: {type: string, format: date-time}}
+        - {name: limit, in: query, schema: {type: integer, default: 1000, minimum: 1, maximum: 5000}}
+        - {name: offset, in: query, schema: {type: integer, default: 0, minimum: 0}}
+      responses:
+        "200":
+          description: "Rows hold `ts, recv_ts, uptime_s, state, active_arms, software_version`. Empty for an unknown robot."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  robot_id: {type: string}
+                  heartbeats: {type: array, items: {type: object}}
+                  count: {type: integer}
+        "400": {$ref: "#/components/responses/BadRequest"}
   /api/events:
     get:
       tags: [telemetry]

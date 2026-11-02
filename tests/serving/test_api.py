@@ -335,6 +335,45 @@ def test_meta_routes(client):
     assert client.get("/api/nope").status_code == 404
 
 
+def _robot_id(client):
+    return client.get("/api/robots").json()["robots"][0]["robot_id"]
+
+
+def test_robot_joints_time_window_and_paging(client):
+    rid = _robot_id(client)
+    url = f"/api/robots/{rid}/joints"
+    first = client.get(url, params={"arm": "PSM1", "limit": 10}).json()["samples"]
+    assert len(first) == 10 and all(r["arm"] == "PSM1" for r in first)
+    assert first[0]["joint_names"][0] == "outer_yaw" and len(first[0]["effort"]) == 6
+    assert [r["ts"] for r in first] == sorted(r["ts"] for r in first)
+    page2 = client.get(url, params={"arm": "PSM1", "limit": 10, "offset": 10}).json()["samples"]
+    assert page2[0]["ts"] > first[-1]["ts"]
+    window = client.get(
+        url, params={"arm": "PSM1", "start": first[2]["ts"], "end": first[5]["ts"]}
+    ).json()["samples"]
+    assert [r["ts"] for r in window] == [r["ts"] for r in first[2:6]]
+    thinned = client.get(url, params={"arm": "PSM1", "limit": 5, "downsample": 2}).json()["samples"]
+    assert [r["ts"] for r in thinned] == [r["ts"] for r in first[::2]]
+    assert {r["arm"] for r in client.get(url, params={"limit": 50}).json()["samples"]} > {"PSM1"}
+    assert client.get(url, params={"arm": "nope"}).status_code == 400
+
+
+def test_robot_poses_and_heartbeats(client):
+    rid = _robot_id(client)
+    poses = client.get(f"/api/robots/{rid}/poses", params={"arm": "PSM1", "limit": 3}).json()
+    assert poses["count"] == 3 and {"x", "speed", "recv_ts"} <= set(poses["samples"][0])
+    beats = client.get(f"/api/robots/{rid}/heartbeats").json()["heartbeats"]
+    assert beats and {"state", "uptime_s", "software_version"} <= set(beats[0])
+    assert client.get("/api/robots/nobody/joints").json()["samples"] == []
+
+
+def test_nan_inside_an_array_is_null_in_json():
+    from rtdaas.serving.backends._sqlbase import SqlBackendBase
+
+    row = SqlBackendBase().post_row({"effort": "[1.0, NaN]", "velocity": [float("nan"), 2.0]})
+    assert row == {"effort": [1.0, None], "velocity": [None, 2.0]}
+
+
 def test_openapi_parity(client):
     doc = yaml.safe_load(OPENAPI_PATH.read_text())
     documented = {(m, p) for p, ops in doc["paths"].items() for m in ops}

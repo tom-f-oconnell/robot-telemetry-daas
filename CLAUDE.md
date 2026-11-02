@@ -139,6 +139,8 @@ Open (highest-value next work):
   from int64-nanosecond differences (float64 epoch-seconds lost ~0.2 µs — a real bug that was fixed).
 - Synthetic JIGSAWS video must be H.264 (`imageio-ffmpeg`) — OpenCV's `mp4v` is unplayable in browsers.
 - JIGSAWS transcripts are 1-based inclusive frames; `label_frames` maps to 0-based `frame_idx`.
+- **The simulator's joint `effort` is a load model** (gravity plus friction, scaled per robot and arm), not a measurement, and
+  sessions recorded before 2026-11-02 hold white noise there. `rtdaas-fleet-wear` flags noise rather than scoring it.
 - Streaming KPIs are approximations by design (`jaw_cycles = 0`, `path_length ≈ mean speed × span`); batch
   overwrites (`computed_by='batch'` wins in the MERGE predicate). ADRs 0005/0006.
 - Quality `sql` checks don't get an automatic partition filter — the query uses `{table}` and `{partition}` placeholders.

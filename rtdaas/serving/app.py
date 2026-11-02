@@ -163,6 +163,39 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
     def robots(request: Request):
         return JSONResponse({"robots": backend.robots()})
 
+    def _robot_series(request: Request, method):
+        robot_id = request.path_params["robot_id"]
+        arm = q_str(request, "arm")
+        if arm is not None and arm not in VALID_ARMS:
+            raise ApiError(400, "invalid_parameter", f"arm must be one of {sorted(VALID_ARMS)}")
+        rows = method(
+            robot_id,
+            arm=arm,
+            start=q_ts(request, "start"),
+            end=q_ts(request, "end"),
+            downsample=q_int(request, "downsample", 1, 1, 10_000),
+            limit=q_int(request, "limit", 1000, 1, 5000),
+            offset=q_int(request, "offset", 0, 0, 1_000_000_000),
+        )
+        return JSONResponse({"robot_id": robot_id, "samples": rows, "count": len(rows)})
+
+    def robot_joints(request: Request):
+        return _robot_series(request, backend.robot_joints)
+
+    def robot_poses(request: Request):
+        return _robot_series(request, backend.robot_poses)
+
+    def robot_heartbeats(request: Request):
+        robot_id = request.path_params["robot_id"]
+        rows = backend.robot_heartbeats(
+            robot_id,
+            start=q_ts(request, "start"),
+            end=q_ts(request, "end"),
+            limit=q_int(request, "limit", 1000, 1, 5000),
+            offset=q_int(request, "offset", 0, 0, 1_000_000_000),
+        )
+        return JSONResponse({"robot_id": robot_id, "heartbeats": rows, "count": len(rows)})
+
     def sessions(request: Request):
         rows = backend.sessions(
             robot_id=q_str(request, "robot_id"),
@@ -369,6 +402,9 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         Route("/api/catalog", catalog),
         Route("/api/contracts", contracts),
         Route("/api/robots", robots),
+        Route("/api/robots/{robot_id}/joints", robot_joints),
+        Route("/api/robots/{robot_id}/poses", robot_poses),
+        Route("/api/robots/{robot_id}/heartbeats", robot_heartbeats),
         Route("/api/sessions", sessions),
         Route("/api/sessions/{session_id}", session),
         Route("/api/sessions/{session_id}/trajectory", trajectory),

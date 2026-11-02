@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 
+import numpy as np
+
 from rtdaas.contracts.avro_binary import encode
 from rtdaas.contracts.cdr import CdrCodec
 from rtdaas.mcap_lite import read_messages
@@ -70,6 +72,30 @@ def test_deterministic_given_seed():
     b = dump(_run(seconds=1.0, seed=7))
     assert a == b
     assert a != dump(_run(seconds=1.0, seed=8))
+
+
+def test_effort_follows_the_load_model():
+    """Friction opposes motion and gravity loads the pitch axis; it is not white noise."""
+    states = [
+        m
+        for topic, ros, m in _run(seconds=60.0, rate=50.0)
+        if topic == "rtdaas.telemetry.joint_states" and ros.endswith("PSM1/measured_js")
+    ]
+    velocity = np.array([m["velocity"] for m in states])
+    effort = np.array([m["effort"] for m in states])
+    yaw_moving = np.abs(velocity[:, 0]) > 0.02
+    assert yaw_moving.sum() > 100
+    assert np.mean(np.sign(effort[yaw_moving, 0]) == np.sign(velocity[yaw_moving, 0])) > 0.95
+    assert effort[:, 1].mean() > 0.3  # holding the arm up, moving or not
+
+
+def test_effort_scale_differs_between_robots_and_arms():
+    def scales(seed):
+        return RobotSim(SimConfig(robot_id="dv_009", seed=seed)).arms
+
+    assert not np.allclose(scales(1)["PSM1"].load_scale, scales(2)["PSM1"].load_scale)
+    assert not np.allclose(scales(1)["PSM1"].load_scale, scales(1)["PSM2"].load_scale)
+    assert np.allclose(scales(1)["PSM1"].load_scale, scales(1)["PSM1"].load_scale)
 
 
 def test_cli_writes_decodable_bags(tmp_path, msg_registry):

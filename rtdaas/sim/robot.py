@@ -3,7 +3,7 @@
 :class:`RobotSim` emits, per tick, message dicts shaped exactly like the ROS 2
 messages in ``contracts/msgs`` for one robot:
 
-* ``sensor_msgs/JointState`` per arm (6 joints)
+* ``sensor_msgs/JointState`` per arm (6 joints), with efforts from a simple load model
 * ``rtdaas_msgs/ToolPose`` per arm (smooth pseudo-surgical motion with idle periods)
 * ``rtdaas_msgs/Heartbeat`` at 1 Hz with ``idle -> homing -> ready -> teleop``
 * ``rtdaas_msgs/SystemEvent``: ``SESSION_START`` on the first tick, ``SESSION_END``
@@ -46,6 +46,13 @@ JOINT_NAMES = (
     "outer_wrist_pitch",
     "outer_wrist_yaw",
 )
+
+# Effort model, per joint in JOINT_NAMES order, N.m (N for the prismatic insertion). Orders of
+# magnitude only, not identified from a real arm: see RobotSim._joint_efforts.
+COULOMB_FRICTION = np.array([0.12, 0.15, 1.2, 0.01, 0.015, 0.015])
+VISCOUS_FRICTION = np.array([0.05, 0.05, 2.0, 0.002, 0.002, 0.002])
+GRAVITY_LOAD = np.array([0.0, 0.6, 1.5, 0.0, 0.01, 0.0])
+ARM_LOAD_SCALE = {"PSM": 1.0, "ECM": 2.5, "MTM": 0.3}
 
 SEVERITY_INFO, SEVERITY_WARN, SEVERITY_ERROR = 1, 2, 3
 WORKSPACE_HALF_M = 0.05  # 10 cm cube
@@ -92,6 +99,7 @@ class _ArmState:
     jaw_phase: float
     rot_freqs: np.ndarray
     speed_scale: float
+    load_scale: np.ndarray = field(default_factory=lambda: np.ones(6))
     prev_joints: np.ndarray = field(default_factory=lambda: np.zeros(6))
     jaw: float = 0.0
     speed: float = 0.0
@@ -138,8 +146,12 @@ class RobotSim:
         freqs = self.rng.uniform(0.05, 0.4, size=(3, k))
         phases = self.rng.uniform(0, 2 * math.pi, size=(3, k))
         amps = self.rng.uniform(0.004, 0.02, size=(3, k)) * scale  # m/s velocity amplitudes
+        # From its own generator, so that adding this did not shift every other seeded value.
+        load_rng = np.random.default_rng([self.cfg.seed, *arm.encode()])
+        load_scale = ARM_LOAD_SCALE.get(arm[:3], 1.0) * load_rng.uniform(0.8, 1.25, size=6)
         return _ArmState(
             name=arm,
+            load_scale=load_scale,
             center=center,
             pos=center.copy(),
             prev_pos=center.copy(),
@@ -225,6 +237,20 @@ class RobotSim:
                 0.5 * math.cos(20.0 * x),
             ]
         )
+
+    def _joint_efforts(self, arm: _ArmState, joints: np.ndarray, vel: np.ndarray) -> np.ndarray:
+        """Gravity plus Coulomb and viscous friction, as a joint's measured effort would show.
+
+        Each robot and arm has its own scale per joint. A sketch of a load, not dynamics: there is no
+        inertia or contact, and the two axes that carry gravity are treated independently.
+        """
+        pitch = joints[1]
+        gravity = GRAVITY_LOAD * np.array(
+            [0.0, np.cos(pitch), np.cos(pitch), 0.0, np.cos(joints[4]), 0.0]
+        )
+        friction = COULOMB_FRICTION * np.tanh(vel / 0.01) + VISCOUS_FRICTION * vel
+        noise = self.rng.normal(0, 0.05, 6) * COULOMB_FRICTION * 2.0  # 10 % of Coulomb
+        return arm.load_scale * (gravity + friction + noise)
 
     def _mirror(self, arm: str) -> _ArmState | None:
         if arm == "MTMR" and "PSM1" in self.arms:
@@ -375,7 +401,7 @@ class RobotSim:
                         "name": list(JOINT_NAMES),
                         "position": [float(v) for v in joints],
                         "velocity": [float(v) for v in vel],
-                        "effort": [float(v) for v in self.rng.normal(0, 0.05, 6)],
+                        "effort": [float(v) for v in self._joint_efforts(arm, joints, vel)],
                     },
                 )
             )

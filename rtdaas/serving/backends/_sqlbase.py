@@ -117,11 +117,14 @@ class SqlBackendBase:
         """Normalise engine-native values to JSON (ISO timestamps, decoded arrays)."""
         out = {}
         for k, v in row.items():
-            if k in ARRAY_COLUMNS and isinstance(v, str):
-                try:
-                    v = json.loads(v)
-                except ValueError:
-                    pass
+            if k in ARRAY_COLUMNS:
+                if isinstance(v, str):
+                    try:
+                        v = json.loads(v)
+                    except ValueError:
+                        pass
+                if isinstance(v, (list, tuple)):  # a NaN inside an array is not valid JSON either
+                    v = [None if isinstance(x, float) and x != x else x for x in v]
             elif isinstance(v, float) and v != v:  # NaN -> null
                 v = None
             out[k] = to_iso(v)
@@ -350,6 +353,84 @@ class SqlBackendBase:
             ) t WHERE rn % ? = 0 ORDER BY ts
         """
         return self.rows(sql, (robot_id, arm, norm_ts(s), norm_ts(e), n))
+
+    def _robot_series(
+        self,
+        table,
+        columns,
+        robot_id,
+        arm=None,
+        start=None,
+        end=None,
+        downsample=1,
+        limit=1000,
+        offset=0,
+    ) -> list[dict]:
+        """One robot's raw rows in time order, independent of sessions. Pages after downsampling."""
+        if not self.table_exists(table):
+            return []
+        tp = self.ts_param()
+        clauses, params = ["robot_id = ?"], [robot_id]
+        if arm:
+            clauses.append("arm = ?")
+            params.append(arm)
+        if start:
+            clauses.append(f"ts >= {tp}")
+            params.append(norm_ts(start))
+        if end:
+            clauses.append(f"ts <= {tp}")
+            params.append(norm_ts(end, end=True))
+        where = " AND ".join(clauses)
+        sql = f"""
+            SELECT {columns} FROM (
+                SELECT {columns}, ROW_NUMBER() OVER (ORDER BY ts) - 1 AS rn
+                FROM {self.table(table)} WHERE {where}
+            ) t WHERE rn % ? = 0 ORDER BY ts LIMIT ? OFFSET ?
+        """
+        return self.rows(sql, (*params, max(1, int(downsample)), int(limit), int(offset)))
+
+    def robot_joints(
+        self, robot_id, arm=None, start=None, end=None, downsample=1, limit=1000, offset=0
+    ):
+        return self._robot_series(
+            "telemetry.joint_states_raw",
+            "arm, ts, recv_ts, joint_names, position, velocity, effort",
+            robot_id,
+            arm,
+            start,
+            end,
+            downsample,
+            limit,
+            offset,
+        )
+
+    def robot_poses(
+        self, robot_id, arm=None, start=None, end=None, downsample=1, limit=1000, offset=0
+    ):
+        return self._robot_series(
+            "telemetry.tool_pose_raw",
+            "arm, ts, recv_ts, x, y, z, qx, qy, qz, qw, jaw_angle, speed",
+            robot_id,
+            arm,
+            start,
+            end,
+            downsample,
+            limit,
+            offset,
+        )
+
+    def robot_heartbeats(self, robot_id, start=None, end=None, limit=1000, offset=0):
+        return self._robot_series(
+            "telemetry.heartbeat_raw",
+            "ts, recv_ts, uptime_s, state, active_arms, software_version",
+            robot_id,
+            None,
+            start,
+            end,
+            1,
+            limit,
+            offset,
+        )
 
     def session_kpis(self, session_id: str) -> list[dict]:
         span = self._session_span(session_id)

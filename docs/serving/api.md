@@ -12,6 +12,9 @@ against them by a test ([ADR 0009](../adr/0009-starlette-api.md)); Swagger UI is
 | `GET /api/catalog` | data products: owner, description, freshness target, row count, freshness |
 | `GET /api/contracts` | subjects, versions and schemas (from `contracts/avro` or the registry) |
 | `GET /api/robots` | robots with first/last seen and session counts |
+| `GET /api/robots/{id}/joints?arm&start&end&downsample&limit&offset` | joint positions, velocities and efforts by time, across sessions |
+| `GET /api/robots/{id}/poses?arm&start&end&downsample&limit&offset` | tool poses by time, across sessions |
+| `GET /api/robots/{id}/heartbeats?start&end&limit&offset` | robot state and uptime by time |
 | `GET /api/sessions?robot_id&start&end&limit&offset` | session list |
 | `GET /api/sessions/{id}` | one session with per-arm metrics |
 | `GET /api/sessions/{id}/trajectory?arm&downsample` | tool-tip trajectory for replay |
