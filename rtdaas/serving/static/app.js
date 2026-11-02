@@ -6,6 +6,30 @@ const main = document.getElementById("main");
 const GESTURE_COLORS = ["#534ab7", "#0f6e56", "#993c1d", "#993556", "#185fa5", "#3b6d11", "#854f0b", "#a32d2d",
   "#7f77dd", "#1d9e75", "#d85a30", "#d4537e", "#378add", "#639922", "#ba7517"];
 
+// ------------------------------------------------------------------ what this deployment shows
+
+// Nothing from JIGSAWS shows until the API says it may. The API enforces this too: see jigsaws.py.
+let features = { jigsaws: false, jigsaws_tables: [] };
+const JIGSAWS_TITLE = "From the JIGSAWS surgical dataset (academic research use only), or a synthetic stand-in in its format where the real one is not configured.";
+const jigsawsTag = () => (features.jigsaws ? `<span class="data-tag" title="${JIGSAWS_TITLE}">JIGSAWS</span>` : "");
+const partlyTag = () => (features.jigsaws ? `<span class="data-tag partly" title="Some of this comes from JIGSAWS; the rest is robot telemetry. Those parts are tagged.">part JIGSAWS</span>` : "");
+const isJigsawsTable = (name) => features.jigsaws_tables.includes(name);
+const jigsawsNote = (what) => (features.jigsaws ? `<div class="jigsaws-note">${jigsawsTag()} marks ${what} from the JIGSAWS dataset. The rest is robot telemetry.</div>` : "");
+
+async function loadFeatures() {
+  try { features = await api("/api/features"); } catch (_) { /* keep the safe default; pages report the API being down */ }
+  document.querySelectorAll('[data-jigsaws="only"]').forEach((el) => {
+    el.hidden = !features.jigsaws;
+    if (features.jigsaws && el.tagName === "A") el.insertAdjacentHTML("beforeend", jigsawsTag());
+  });
+  document.querySelectorAll('[data-jigsaws="mixed"]').forEach((el) => {
+    if (features.jigsaws) el.insertAdjacentHTML("beforeend", partlyTag());
+  });
+  const key = document.getElementById("jigsaws-key");
+  key.hidden = !features.jigsaws;
+  if (features.jigsaws) key.innerHTML = `<div>${jigsawsTag()}shows JIGSAWS data</div><div>${partlyTag()}shows some, tagged where it appears</div>`;
+}
+
 // ------------------------------------------------------------------ helpers
 
 // Plotly is loaded from a CDN; degrade gracefully when it is unavailable (offline demo).
@@ -211,7 +235,7 @@ async function viewEvents(params) {
 
 async function viewTrials(params) {
   setActive("trials");
-  main.innerHTML = `<h1>Procedures (JIGSAWS)</h1><div class="subtitle">Trials with synchronized da Vinci kinematics and endoscope video. Click a trial to scrub video against kinematics.</div>
+  main.innerHTML = `<h1>Procedures ${jigsawsTag()}</h1><div class="subtitle">Trials with synchronized da Vinci kinematics and endoscope video. Click a trial to scrub video against kinematics.</div>
     <form id="f" class="row"><label>Task<select name="task"><option value="">all</option>${["Suturing", "Knot_Tying", "Needle_Passing"].map((t) => `<option ${params.task === t ? "selected" : ""}>${t}</option>`).join("")}</select></label>
       <label>Skill<select name="skill_level"><option value="">all</option>${["novice", "intermediate", "expert"].map((t) => `<option ${params.skill_level === t ? "selected" : ""}>${t}</option>`).join("")}</select></label>
       <label>Subject<input name="subject" value="${esc(params.subject || "")}" placeholder="B"></label><button class="primary">Filter</button></form><div id="list"></div>`;
@@ -231,7 +255,7 @@ async function viewTrialDetail(trialId, params) {
   const t = await api(`/api/trials/${encodeURIComponent(trialId)}`);
   const fps = t.sample_rate_hz || 30;
   main.innerHTML = `<div class="toolbar"><a href="#/trials">← Trials</a></div>
-    <h1 class="mono">${esc(t.trial_id)}</h1>
+    <h1><span class="mono">${esc(t.trial_id)}</span> ${jigsawsTag()}</h1>
     <div class="subtitle">${esc(t.task)} · subject ${esc(t.subject)} · rep ${t.repetition} · ${badge(t.skill_level, "accent")} · GRS ${fmt(t.grs_total)} · ${fmt(t.duration_s, 1)} s · ${t.n_frames} frames @ ${fps} Hz</div>
     <div class="grid cols-2"><div class="card"><video id="video" controls preload="metadata" src="/api/trials/${encodeURIComponent(t.trial_id)}/video"></video>
         <div class="toolbar" style="margin-top:8px"><strong id="cur-gesture" class="badge badge-muted">–</strong><span class="muted small" id="cur-t">t = 0.00 s · frame 0</span><button id="reproc" class="ghost" style="margin-left:auto">Reprocess trial</button></div>
@@ -301,7 +325,7 @@ async function viewTrialDetail(trialId, params) {
 
 async function viewGestures(params) {
   setActive("gestures");
-  main.innerHTML = `<h1>Gesture search</h1><div class="subtitle">Find gesture segments across trials by task, gesture code and skill level; click to jump into the trial at that frame.</div>
+  main.innerHTML = `<h1>Gesture search ${jigsawsTag()}</h1><div class="subtitle">Find gesture segments across trials by task, gesture code and skill level; click to jump into the trial at that frame.</div>
     <form id="f" class="row"><label>Task<select name="task"><option value="">all</option>${["Suturing", "Knot_Tying", "Needle_Passing"].map((t) => `<option ${params.task === t ? "selected" : ""}>${t}</option>`).join("")}</select></label>
       <label>Gesture<input name="gesture" value="${esc(params.gesture || "")}" placeholder="G4"></label>
       <label>Skill<select name="skill_level"><option value="">all</option>${["novice", "intermediate", "expert"].map((t) => `<option ${params.skill_level === t ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -323,8 +347,9 @@ async function viewCatalog() {
   setActive("catalog");
   const { tables } = await api("/api/catalog");
   main.innerHTML = `<h1>Data catalog</h1><div class="subtitle">Every published table with its owner, freshness target, contract, columns and freshness. Numbers come from the last pipeline run.</div>
+    ${jigsawsNote("tables")}
     <div class="grid cols-2">${tables.map((t) => `<div class="card">
-      <div class="toolbar"><strong class="mono">${esc(t.name)}</strong><span style="margin-left:auto">${t.freshness_target_hours
+      <div class="toolbar"><strong class="mono">${esc(t.name)}</strong>${t.dataset === "jigsaws" ? jigsawsTag() : t.dataset === "mixed" ? partlyTag() : ""}<span style="margin-left:auto">${t.freshness_target_hours
         ? `<span class="fresh-dot ${t.freshness_ok ? "ok" : "stale"}"></span><span class="small muted" title="The newest row should be at most ${fmt(t.freshness_target_hours, 0)} h old">${t.freshness_ok ? "fresh" : "stale"} · target ${fmt(t.freshness_target_hours, 0)} h</span>`
         : '<span class="small muted">no freshness target</span>'}</span></div>
       <p class="small" style="margin:6px 0 8px">${esc(t.description)}</p>
@@ -340,12 +365,13 @@ async function viewQuality(params) {
   const counts = { pass: 0, fail: 0, error: 0, skipped: 0 }; results.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
   const blocking = results.filter((r) => r.status === "fail" && r.severity === "blocking").length;
   main.innerHTML = `<h1>Data quality</h1><div class="subtitle">Check results from quality gates and the daily DQ run. Blocking failures stop publishing.</div>
+    ${jigsawsNote("checks")}
     <div class="grid cols-4">${stat("Pass", counts.pass)}${stat("Warnings", counts.fail - blocking)}${stat("Blocking failures", blocking)}${stat("Errors", counts.error)}</div>
-    <h2>Runs</h2>${table([{ key: "run_ts", label: "Run", render: (r) => fmtTs(r.run_ts) }, { key: "run_id", label: "Run id", render: (r) => `<a href="#/quality?run_id=${esc(r.run_id)}" class="mono">${esc(r.run_id)}</a>` }, { key: "suite", label: "Suite" },
+    <h2>Runs</h2>${table([{ key: "run_ts", label: "Run", render: (r) => fmtTs(r.run_ts) }, { key: "run_id", label: "Run id", render: (r) => `<a href="#/quality?run_id=${esc(r.run_id)}" class="mono">${esc(r.run_id)}</a>` }, { key: "suite", label: "Suite", render: (r) => `${esc(r.suite)}${r.suite === "procedures" ? jigsawsTag() : ""}` },
       { key: "partition_value", label: "Partition" }, { key: "n_checks", label: "Checks", num: true }, { key: "n_pass", label: "Pass", num: true }, { key: "n_warn_fail", label: "Warn", num: true }, { key: "n_blocking_fail", label: "Blocking", num: true, render: (r) => r.n_blocking_fail ? badge(r.n_blocking_fail, "fail") : "0" }], runs, { empty: "No runs yet." })}
     <h2>Results</h2><form id="f" class="row"><label>Run id<input name="run_id" value="${esc(params.run_id || "")}"></label><label>Table<input name="table_name" value="${esc(params.table_name || "")}" placeholder="telemetry.sessions"></label>
       <label>Status<select name="status"><option value="">all</option>${["pass", "fail", "error", "skipped"].map((s) => `<option ${params.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></label><button class="primary">Filter</button></form>
-    ${table([{ key: "run_ts", label: "Time", render: (r) => fmtTs(r.run_ts) }, { key: "table_name", label: "Table", render: (r) => `<span class="mono">${esc(r.table_name)}</span>` }, { key: "check_name", label: "Check" },
+    ${table([{ key: "run_ts", label: "Time", render: (r) => fmtTs(r.run_ts) }, { key: "table_name", label: "Table", render: (r) => `<span class="mono">${esc(r.table_name)}</span>${isJigsawsTable(r.table_name) ? jigsawsTag() : ""}` }, { key: "check_name", label: "Check" },
       { key: "severity", label: "Severity", render: (r) => badge(r.severity) }, { key: "status", label: "Status", render: (r) => badge(r.status) }, { key: "observed", label: "Observed", num: true },
       { key: "threshold", label: "Threshold" }, { key: "message", label: "Message" }], results, { empty: "No results match." })}`;
   document.getElementById("f").addEventListener("submit", (e) => { e.preventDefault(); navigate("/quality", Object.fromEntries(new FormData(e.target))); });
@@ -403,8 +429,9 @@ async function viewJobs() {
   setActive("jobs");
   const { jobs } = await api("/api/jobs", { limit: 200 });
   main.innerHTML = `<h1>Jobs</h1><div class="subtitle">Reprocess requests sent to Airflow from the UI or the API.</div>
-    <div class="card compact"><form id="f" class="row" style="margin:0"><label>Kind<select name="kind"><option>date</option><option>session</option><option>trial</option></select></label><label>Target<input name="target" placeholder="2026-10-28" required></label><button class="primary">Reprocess</button></form></div>
-    ${table([{ key: "requested_at", label: "Requested", render: (r) => fmtTs(r.requested_at) }, { key: "kind", label: "Kind" }, { key: "target", label: "Target", render: (r) => `<span class="mono">${esc(r.target)}</span>` },
+    ${jigsawsNote("jobs")}
+    <div class="card compact"><form id="f" class="row" style="margin:0"><label>Kind<select name="kind"><option>date</option><option>session</option>${features.jigsaws ? "<option>trial</option>" : ""}</select></label><label>Target<input name="target" placeholder="2026-10-28" required></label><button class="primary">Reprocess</button></form></div>
+    ${table([{ key: "requested_at", label: "Requested", render: (r) => fmtTs(r.requested_at) }, { key: "kind", label: "Kind", render: (r) => `${esc(r.kind)}${r.kind === "trial" ? jigsawsTag() : ""}` }, { key: "target", label: "Target", render: (r) => `<span class="mono">${esc(r.target)}</span>` },
       { key: "status", label: "Status", render: (r) => badge(r.status) }, { key: "dag_run_id", label: "DAG run", render: (r) => `<span class="mono">${esc(r.dag_run_id || "–")}</span>` }], jobs, { empty: "No jobs yet." })}`;
   document.getElementById("f").addEventListener("submit", async (e) => {
     e.preventDefault(); const body = Object.fromEntries(new FormData(e.target));
@@ -422,6 +449,7 @@ async function route() {
   const [path, qs] = hash.split("?");
   const params = Object.fromEntries(new URLSearchParams(qs || ""));
   const parts = path.split("/").filter(Boolean);
+  if (!features.jigsaws && ["trials", "gestures"].includes(parts[0])) { navigate("/sessions"); return; }
   try {
     if (parts[0] === "sessions" && parts[1]) await viewSessionDetail(decodeURIComponent(parts[1]));
     else if (parts[0] === "sessions") await viewSessions(params);
@@ -445,4 +473,5 @@ async function health() {
   catch (e) { el.textContent = "API down"; el.className = "badge badge-fail"; }
 }
 window.addEventListener("hashchange", route);
+await loadFeatures();
 route(); health();

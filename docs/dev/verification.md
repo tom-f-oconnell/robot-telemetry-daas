@@ -164,6 +164,16 @@ Also moved to Postgres in the compose stack, keeping its data: all 16 tables reg
 metadata versions, and 150 create and purge cycles under load saw no stale read (the old failure). A
 `make demo` then ran ingest and publish through it.
 
+## JIGSAWS on and off on the site (2026-11-02)
+
+| Area | How verified | Result |
+|---|---|---|
+| API, `SERVE_JIGSAWS=false` | the real image on the compose network, against the live lake holding the real dataset: all 7 JIGSAWS routes return 404, 12 others hold no JIGSAWS data, and `trial` jobs are refused | pass |
+| The same image, on | all 7 routes serve, and catalog and quality hold the JIGSAWS tables and checks | pass |
+| Site | headless Chrome in both modes: tags on the nav, pages and rows; with it off the section is gone and `#/trials` redirects | pass |
+| `scripts/demo.sh up-no-jigsaws` | control flow with docker and curl stubbed (`tests/scripts`), and `docker compose config` shows the setting reaching the API and Airflow | pass |
+| `make demo-no-jigsaws` end to end | not run: it would switch the running demo over | not yet |
+
 ## Written, compiles, not yet executed
 
 | Area | Why not yet | Where it runs |

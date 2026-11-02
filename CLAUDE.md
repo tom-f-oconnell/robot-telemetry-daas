@@ -54,9 +54,10 @@ See ADR 0001.
 
 ```bash
 make install            # pip install -e .[dev,api,video]
-make test               # unit tier (198 tests, ~10 s) — must stay green
+make test               # unit tier (239 tests, ~10 s) — must stay green
 make lint / make format # ruff (CI enforces check + format)
 make synth && make local-pipeline && make api   # no-cluster demo → http://localhost:8080
+make demo-no-jigsaws     # the same, with no JIGSAWS data on the site or from the API, and none ingested
 make demo               # full compose stack (needs Docker, ~16 GB RAM); exercised 2026-10-30, see verification.md
 # `.env` (git-ignored; see .env.example) sets machine-specific values, e.g. JIGSAWS_ROOT to use the real dataset
 pip install -e .[spark] && make test-spark      # needs Java 17
@@ -139,6 +140,9 @@ Open (highest-value next work):
   from int64-nanosecond differences (float64 epoch-seconds lost ~0.2 µs — a real bug that was fixed).
 - Synthetic JIGSAWS video must be H.264 (`imageio-ffmpeg`) — OpenCV's `mp4v` is unplayable in browsers.
 - JIGSAWS transcripts are 1-based inclusive frames; `label_frames` maps to 0-based `frame_idx`.
+- **`SERVE_JIGSAWS=false` is enforced by the API** (`rtdaas/serving/jigsaws.py`), not the page: the procedure routes are not
+  mounted, and the backend wrapper filters catalog, health, quality and jobs. A new table's `dataset` in `catalog.yml` and a new
+  route's `procedures` tag in `openapi.yaml` decide where it falls; `tests/serving/test_jigsaws.py` sweeps every documented route.
 - **The simulator's joint `effort` is a load model** (gravity plus friction, scaled per robot and arm), not a measurement, and
   sessions recorded before 2026-11-02 hold white noise there. `rtdaas-fleet-wear` flags noise rather than scoring it.
 - Streaming KPIs are approximations by design (`jaw_cycles = 0`, `path_length ≈ mean speed × span`); batch

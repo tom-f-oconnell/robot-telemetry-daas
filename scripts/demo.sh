@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# demo.sh up|down|status — bring the full compose stack up, seed it, and kick off the first DAG run.
+# demo.sh up|up-no-jigsaws|down|status — bring the full compose stack up, seed it, and kick off the first DAG run.
 #
 #   up      build images (unless RTDAAS_IMAGE_PREFIX points at a registry), start core + demo
 #           profiles, wait for the services, prepare a JIGSAWS dataset (the real one if .env sets
 #           JIGSAWS_ROOT, else synthetic under infra/compose/data/jigsaws) and a batch of simulated
 #           bags under infra/compose/data/bags-batch, upload both to MinIO, trigger jigsaws_ingest
 #           and telemetry_bag_ingest, and start the live simulator (Kafka) + the streaming job.
+#   up-no-jigsaws
+#           the same with no JIGSAWS data on the site or from the API (SERVE_JIGSAWS=false). None is
+#           prepared or ingested either; what an earlier run ingested stays in the lake, undisplayed.
 #   down    stop everything (volumes kept)
 #   status  print service health and the URLs
 set -euo pipefail
@@ -26,6 +29,10 @@ AIRFLOW_URL="${AIRFLOW_URL:-http://localhost:8085}"
 API_URL="${API_URL:-http://localhost:29398}"
 WAIT="$HERE/wait-for.sh"
 
+jigsaws_on() {
+  case "${SERVE_JIGSAWS:-true}" in false | False | FALSE | 0 | no | off) return 1 ;; esac
+}
+
 log() { printf '\033[1;35m[demo]\033[0m %s\n' "$*"; }
 
 build_images() {
@@ -35,6 +42,11 @@ build_images() {
       docker build -f "$ROOT/infra/docker/$img.Dockerfile" -t "rtdaas-$img:$RTDAAS_IMAGE_TAG" "$ROOT"
     done
   fi
+}
+
+set_paused() {  # set_paused <dag_id> true|false
+  curl -fsS -u airflow:airflow -H 'Content-Type: application/json' -X PATCH \
+    "$AIRFLOW_URL/api/v1/dags/$1" -d "{\"is_paused\": $2}" >/dev/null || true
 }
 
 trigger_dag() {  # trigger_dag <dag_id> <json conf>
@@ -92,7 +104,7 @@ up() {
   "$WAIT" "$AIRFLOW_URL/health" 300
   "$WAIT" "$API_URL/api/health" 120
 
-  seed_jigsaws
+  if jigsaws_on; then seed_jigsaws; else log "SERVE_JIGSAWS is off: not preparing a JIGSAWS dataset"; fi
 
   # The live simulator only closes its bags when it exits, and nothing lands them in S3, so seed
   # a closed batch (simulated time, no Kafka) for telemetry_bag_ingest. Date it yesterday (UTC):
@@ -114,13 +126,22 @@ up() {
   # dq_daily stays paused: unpaused it would fire at once, before anything has been ingested;
   # trigger it from the UI once the ingest runs are green.
   log "unpausing DAGs and triggering the first runs"
-  for d in telemetry_bag_ingest jigsaws_ingest contracts_sync; do
-    curl -fsS -u airflow:airflow -H 'Content-Type: application/json' -X PATCH \
-      "$AIRFLOW_URL/api/v1/dags/$d" -d '{"is_paused": false}' >/dev/null || true
+  for d in telemetry_bag_ingest contracts_sync; do
+    set_paused "$d" false
   done
   trigger_dag contracts_sync '{}'
-  trigger_dag jigsaws_ingest '{}'
+  if jigsaws_on; then
+    set_paused jigsaws_ingest false
+    trigger_dag jigsaws_ingest '{}'
+  else
+    set_paused jigsaws_ingest true
+  fi
   status
+  jigsaws_on || cat <<EOF
+
+  JIGSAWS is off on the site and in the API. Data from an earlier \`make demo\` is not deleted: it
+  stays in MinIO, Iceberg and Elasticsearch, and their own consoles above can still show it.
+EOF
 }
 
 down() {
@@ -143,7 +164,8 @@ EOF
 
 case "${1:-up}" in
   up) up ;;
+  up-no-jigsaws) export SERVE_JIGSAWS=false; up ;;
   down) down ;;
   status) status ;;
-  *) echo "usage: $0 up|down|status" >&2; exit 1 ;;
+  *) echo "usage: $0 up|up-no-jigsaws|down|status" >&2; exit 1 ;;
 esac

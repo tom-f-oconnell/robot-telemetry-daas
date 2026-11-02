@@ -36,6 +36,12 @@ from rtdaas.config import Settings, get_settings
 from rtdaas.metrics import da_vinci
 from rtdaas.serving import airflow_client, kafka_metrics
 from rtdaas.serving.backends import Backend, make_backend
+from rtdaas.serving.jigsaws import (
+    JIGSAWS_JOB_KINDS,
+    JIGSAWS_TABLES,
+    WithoutJigsaws,
+    without_jigsaws_openapi,
+)
 from rtdaas.serving.metrics import Metrics
 
 log = logging.getLogger(__name__)
@@ -125,9 +131,14 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 def create_app(settings: Settings | None = None, backend: Backend | None = None) -> Starlette:
     settings = settings or get_settings()
     backend = backend or make_backend(settings)
+    if not settings.serve_jigsaws:
+        backend = WithoutJigsaws(backend)
     metrics = Metrics()
     openapi_doc = yaml.safe_load(OPENAPI_PATH.read_text())
     openapi_doc.setdefault("info", {})["version"] = __version__
+    job_kinds = JOB_KINDS if settings.serve_jigsaws else JOB_KINDS - set(JIGSAWS_JOB_KINDS)
+    if not settings.serve_jigsaws:
+        openapi_doc = without_jigsaws_openapi(openapi_doc)
     media_root = Path(settings.media_root).resolve()
     s3_client = functools.cache(lambda: make_s3_client(settings))
 
@@ -137,6 +148,13 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
     async def live(request: Request):
         """For probes: answers while the process is up, without touching the backend."""
         return JSONResponse({"status": "ok"})
+
+    async def features(request: Request):
+        """What this deployment shows, so that the UI need not guess."""
+        serving = settings.serve_jigsaws
+        return JSONResponse(
+            {"jigsaws": serving, "jigsaws_tables": list(JIGSAWS_TABLES) if serving else []}
+        )
 
     def health(request: Request):
         info = backend.health()
@@ -367,8 +385,8 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
             raise ApiError(400, "invalid_body", "body must be a JSON object")
         kind = body.get("kind")
         target = body.get("target")
-        if kind not in JOB_KINDS:
-            raise ApiError(400, "invalid_body", f"kind must be one of {sorted(JOB_KINDS)}")
+        if kind not in job_kinds:
+            raise ApiError(400, "invalid_body", f"kind must be one of {sorted(job_kinds)}")
         if not isinstance(target, str) or not target:
             raise ApiError(400, "invalid_body", "target must be a non-empty string")
         if kind == "date" and not DATE_RE.match(target):
@@ -398,6 +416,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
 
     routes = [
         Route("/api/live", live),
+        Route("/api/features", features),
         Route("/api/health", health),
         Route("/api/catalog", catalog),
         Route("/api/contracts", contracts),
@@ -411,13 +430,19 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         Route("/api/sessions/{session_id}/kpis", session_kpis),
         Route("/api/sessions/{session_id}/simulation", session_simulation),
         Route("/api/events", events),
-        Route("/api/trials", trials),
-        Route("/api/trials/{trial_id}", trial),
-        Route("/api/trials/{trial_id}/kinematics", trial_kinematics),
-        Route("/api/trials/{trial_id}/frames", trial_frames),
-        Route("/api/trials/{trial_id}/video", trial_video),
-        Route("/api/trials/{trial_id}/simulation", trial_simulation),
-        Route("/api/gestures", gestures),
+        *(
+            [
+                Route("/api/trials", trials),
+                Route("/api/trials/{trial_id}", trial),
+                Route("/api/trials/{trial_id}/kinematics", trial_kinematics),
+                Route("/api/trials/{trial_id}/frames", trial_frames),
+                Route("/api/trials/{trial_id}/video", trial_video),
+                Route("/api/trials/{trial_id}/simulation", trial_simulation),
+                Route("/api/gestures", gestures),
+            ]
+            if settings.serve_jigsaws
+            else []
+        ),
         Route("/api/quality/runs", quality_runs),
         Route("/api/quality/results", quality_results),
         Route("/api/kafka/metrics", kafka),

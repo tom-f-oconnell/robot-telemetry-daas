@@ -54,6 +54,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY:-rtdaas-dev-secret}
     AIRFLOW_VAR_RTDAAS_SPARK_MODE: submit
+    AIRFLOW_VAR_RTDAAS_JIGSAWS: ${SERVE_JIGSAWS:-true}
     AIRFLOW_VAR_RTDAAS_SPARK_MASTER: spark://spark-master:7077
     AIRFLOW_VAR_RTDAAS_HOME: /opt/rtdaas
     AIRFLOW_CONN_RTDAAS_S3: 'aws://${S3_ACCESS_KEY:-minioadmin}:${S3_SECRET_KEY:-minioadmin}@/?endpoint_url=http%3A%2F%2Fminio%3A9000&region_name=us-east-1'
@@ -440,6 +441,7 @@ services:
     environment:
       <<: *rtdaas-env
       SERVING_BACKEND: ${SERVING_BACKEND:-duckdb}
+      SERVE_JIGSAWS: ${SERVE_JIGSAWS:-true}  # false: scripts/demo.sh up-no-jigsaws
       SERVING_SQLITE_PATH: /data/rtdaas.sqlite
       SERVING_DUCKDB_PATH: /data/rtdaas.duckdb
       MEDIA_ROOT: /data

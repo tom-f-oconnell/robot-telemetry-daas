@@ -35,7 +35,16 @@ except ImportError:  # DAG files outside their folder (the installed package)
         spark_task_mapped,
         suite_path,
     )
-SUITES = ("telemetry.yml", "procedures.yml", "streaming.yml")
+ALL_SUITES = ("telemetry.yml", "procedures.yml", "streaming.yml")
+
+
+def active_suites() -> tuple[str, ...]:
+    """Every suite, less JIGSAWS' on a stack that does not ingest it: its tables would not exist."""
+    from airflow.models import Variable
+
+    if Variable.get("rtdaas_jigsaws", default_var="true").lower() in ("false", "0", "no", "off"):
+        return tuple(s for s in ALL_SUITES if s != "procedures.yml")
+    return ALL_SUITES
 
 
 with DAG(
@@ -57,7 +66,10 @@ with DAG(
         day = (end - dt.timedelta(days=1)).strftime("%Y-%m-%d")
         # streaming.yml checks liveness: yesterday's partition would always look stale
         partitions = {"streaming.yml": end.strftime("%Y-%m-%d")}
-        return [["--suite", suite_path(s), "--partition", partitions.get(s, day)] for s in SUITES]
+        return [
+            ["--suite", suite_path(s), "--partition", partitions.get(s, day)]
+            for s in active_suites()
+        ]
 
     gates = spark_task_mapped(
         "quality_gate", "quality_gate.py", suite_args(), executors=1, retries=0
@@ -73,7 +85,7 @@ with DAG(
         ]
         if failed:
             raise RuntimeError(
-                f"blocking quality failures in suites: {[SUITES[i] for i in failed if i >= 0]}"
+                f"blocking quality failures in suites: {[active_suites()[i] for i in failed if i >= 0]}"
             )
         return "all suites passed"
 

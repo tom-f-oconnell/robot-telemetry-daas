@@ -58,6 +58,7 @@ class Settings(BaseModel):
     airflow_password: str = "airflow"
 
     serving_backend: str = "sqlite"
+    serve_jigsaws: bool = True  # off: no JIGSAWS data from the API or on the site
     serving_sqlite_path: str = "./data/rtdaas.sqlite"
     serving_duckdb_path: str = "./data/rtdaas.duckdb"
     media_root: str = "./data"

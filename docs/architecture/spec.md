@@ -581,6 +581,7 @@ HTTP routes (all JSON; see `openapi.yaml`):
 
 ```
 GET  /api/health                      GET /api/catalog                 GET /api/contracts
+GET  /api/features
 GET  /api/robots                      GET /api/sessions                GET /api/sessions/{id}
 GET  /api/robots/{id}/joints           GET /api/robots/{id}/poses       GET /api/robots/{id}/heartbeats
 GET  /api/sessions/{id}/trajectory    GET /api/sessions/{id}/kpis      GET /api/events
@@ -682,6 +683,7 @@ last_updated, freshness_ok`) that `GET /api/catalog` serves. The Catalog UI page
 | `AIRFLOW_API_URL`        | `http://localhost:8080/api/v1`            | api                     |
 | `AIRFLOW_USER` / `AIRFLOW_PASSWORD` | `airflow` / `airflow`          | api                     |
 | `SERVING_BACKEND`        | `sqlite`                                  | api                     |
+| `SERVE_JIGSAWS`          | `true`                                    | api (false: no JIGSAWS data on the site or from the API) |
 | `SERVING_SQLITE_PATH`    | `./data/rtdaas.sqlite`                    | api, local pipeline     |
 | `SERVING_DUCKDB_PATH`    | `./data/rtdaas.duckdb`                    | api                     |
 | `PROMETHEUS_URL`         | none                                      | api (Kafka page)        |

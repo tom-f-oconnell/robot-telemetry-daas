@@ -22,6 +22,20 @@ paths:
       responses:
         "200":
           description: OK
+  /api/features:
+    get:
+      tags: [meta]
+      summary: What this deployment shows (JIGSAWS data can be switched off)
+      responses:
+        "200":
+          description: "`jigsaws_tables` lists the tables holding only JIGSAWS data, for labelling."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jigsaws: {type: boolean}
+                  jigsaws_tables: {type: array, items: {type: string}}
   /api/health:
     get:
       tags: [meta]

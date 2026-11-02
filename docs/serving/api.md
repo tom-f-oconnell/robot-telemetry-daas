@@ -9,6 +9,7 @@ against them by a test ([ADR 0009](../adr/0009-starlette-api.md)); Swagger UI is
 | Method & path | Purpose |
 |---|---|
 | `GET /api/health` | backend type, version, table freshness summary |
+| `GET /api/features` | what this deployment shows: whether JIGSAWS data is served, and its tables |
 | `GET /api/catalog` | data products: owner, description, freshness target, row count, freshness |
 | `GET /api/contracts` | subjects, versions and schemas (from `contracts/avro` or the registry) |
 | `GET /api/robots` | robots with first/last seen and session counts |
@@ -33,6 +34,30 @@ against them by a test ([ADR 0009](../adr/0009-starlette-api.md)); Swagger UI is
 
 Errors are JSON `{"error": "...", "detail": "..."}` with 400 for bad parameters and 404 for
 unknown ids.
+
+## JIGSAWS data on the site
+
+JIGSAWS' licence restricts it to academic research, so the site says where it appears, and can leave it
+out. With `SERVE_JIGSAWS` on, the default, a `JIGSAWS` tag marks what shows it:
+
+| Page | Holds | With `SERVE_JIGSAWS=false` |
+|---|---|---|
+| Sessions, Log explorer, Kafka, Contracts | Robot telemetry only | Unchanged, and no tag |
+| Trials, Gesture search | Only JIGSAWS (or a synthetic stand-in in its format) | Gone. Their routes return 404, and their links redirect to Sessions |
+| Catalog, Quality, Jobs | Both, tagged per table, check or job | JIGSAWS tables, checks and `trial` jobs are left out, and new `trial` jobs are refused |
+
+The rule is enforced by the API, not the page, so nothing is one `curl` away: `rtdaas/serving/jigsaws.py`
+filters the backend, and `catalog.yml`'s `dataset` field says which tables count. `/api/health`,
+`/openapi.json` and Swagger follow it too. The UI asks `/api/features` what to show, and shows nothing from
+JIGSAWS until it has an answer.
+
+`make demo-no-jigsaws` starts the stack this way, and neither prepares nor ingests a dataset. It does not
+delete anything: data from an earlier `make demo` stays in MinIO, Iceberg and Elasticsearch, and those
+services' own consoles can still show it. To be sure none is present, start from empty volumes
+(`docker compose down -v`). The same setting works anywhere the API runs, for example with `make api`.
+
+The Sessions page's 3-D view is independent of JIGSAWS. The trial page's view uses a constant measured from
+it (`DEFAULT_ARM_OFFSET`), and that view is hidden with the page.
 
 ## Backends
 

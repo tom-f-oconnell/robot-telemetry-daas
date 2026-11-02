@@ -36,6 +36,7 @@ make api               # http://localhost:8080 — UI; /docs for the API
 Full stack (Kafka, schema registry, Spark, Airflow, Elasticsearch, MinIO, Iceberg REST, API):
 
 ```bash
+make demo-no-jigsaws   # the same, with no JIGSAWS data on the site or from the API, and none ingested
 make demo              # docker compose --profile core --profile demo
 # Airflow http://localhost:8085 · Spark http://localhost:8082 · API/UI http://localhost:29398
 ```

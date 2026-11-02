@@ -565,9 +565,10 @@ class SqlBackendBase:
         )
 
     # ------------------------------------------------------------------ quality / jobs
-    def quality_runs(self, limit: int = 50) -> list[dict]:
+    def quality_runs(self, limit: int = 50, exclude_tables: tuple[str, ...] = ()) -> list[dict]:
         if not self.table_exists("dq.check_results"):
             return []
+        where = _not_in("table_name", exclude_tables)
         return self.rows(
             f"""SELECT run_id, MAX(run_ts) AS run_ts, MIN(suite) AS suite,
                        COUNT(*) AS n_checks,
@@ -577,12 +578,14 @@ class SqlBackendBase:
                        SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS n_error,
                        SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS n_skipped,
                        MAX(partition_value) AS partition_value
-                FROM {self.table("dq.check_results")}
+                FROM {self.table("dq.check_results")} {where}
                 GROUP BY run_id ORDER BY MAX(run_ts) DESC LIMIT ?""",
-            (int(limit),),
+            (*exclude_tables, int(limit)),
         )
 
-    def quality_results(self, run_id=None, table_name=None, status=None, limit=500) -> list[dict]:
+    def quality_results(
+        self, run_id=None, table_name=None, status=None, limit=500, exclude_tables=()
+    ) -> list[dict]:
         if not self.table_exists("dq.check_results"):
             return []
         clauses, params = [], []
@@ -590,6 +593,9 @@ class SqlBackendBase:
             if val:
                 clauses.append(f"{col} = ?")
                 params.append(val)
+        if exclude_tables:
+            clauses.append(_not_in("table_name", exclude_tables, keyword=""))
+            params.extend(exclude_tables)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         return self.rows(
             f"""SELECT * FROM {self.table("dq.check_results")} {where}
@@ -613,11 +619,13 @@ class SqlBackendBase:
         )
         return job
 
-    def jobs(self, limit: int = 50) -> list[dict]:
+    def jobs(self, limit: int = 50, exclude_kinds: tuple[str, ...] = ()) -> list[dict]:
         if not self.table_exists("jobs"):
             return []
+        where = _not_in("kind", exclude_kinds)
         return self.rows(
-            f"SELECT * FROM {self.table('jobs')} ORDER BY requested_at DESC LIMIT ?", (int(limit),)
+            f"SELECT * FROM {self.table('jobs')} {where} ORDER BY requested_at DESC LIMIT ?",
+            (*exclude_kinds, int(limit)),
         )
 
     # ------------------------------------------------------------------ misc
@@ -636,6 +644,13 @@ class SqlBackendBase:
                 for k, v in fresh.items()
             },
         }
+
+
+def _not_in(column: str, values: tuple[str, ...], keyword: str = "WHERE") -> str:
+    """A SQL filter with one ``?`` per value, or nothing when there are no values."""
+    if not values:
+        return ""
+    return f"{keyword} {column} NOT IN ({', '.join('?' for _ in values)})".strip()
 
 
 def _field_summary(schema: dict) -> list[dict]:

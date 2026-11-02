@@ -105,3 +105,14 @@ input[type=range] { width: 100%; padding: 0; }
 .fresh-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .fresh-dot.ok { background: #1d9e75; } .fresh-dot.stale { background: #e24b4a; }
 @media (max-width: 900px) { body { flex-direction: column; } .sidebar { width: 100%; height: auto; position: static; } .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; } }
+
+/* Which parts of the site show JIGSAWS data. */
+[hidden] { display: none !important; }
+.data-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-bg); color: var(--accent); font-size: 10.5px; font-weight: 600; line-height: 1.6; vertical-align: middle; white-space: nowrap; }
+.data-tag.partly { background: transparent; font-weight: 500; }
+h1 .data-tag { font-size: 12px; }
+.sidebar > a .data-tag { float: right; margin-left: 2px; margin-top: 1px; }
+.nav-key { margin-top: 14px; padding: 8px 6px 2px; border-top: 1px solid var(--line, #e1e0d9); font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.nav-key .data-tag { margin-left: 0; margin-right: 4px; }
+.nav-key div { margin-bottom: 5px; }
+.jigsaws-note { margin: -10px 0 16px; font-size: 12.5px; color: var(--muted); }

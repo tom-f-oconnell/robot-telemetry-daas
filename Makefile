@@ -25,7 +25,7 @@ JIGSAWS_STAGE ?= $(abspath $(DATA_DIR)/jigsaws-real)
 JIGSAWS_DIR   = $(abspath $(if $(JIGSAWS_ROOT),$(JIGSAWS_STAGE),$(DATA_DIR)/jigsaws))
 
 .PHONY: help install test test-spark test-airflow lint format contracts synth local-pipeline quality api docs docs-build \
-        images demo demo-down demo-logs tf-local tf-aws ansible clean
+        images demo demo-no-jigsaws demo-down demo-logs tf-local tf-aws ansible clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -87,6 +87,9 @@ images: ## Build all five images locally (tagged $(IMAGE_PREFIX)/rtdaas-<name>:$
 
 demo: ## Full stack with docker compose (core + demo profiles), init, simulator, first DAG run
 	bash scripts/demo.sh up
+
+demo-no-jigsaws: ## The same, with no JIGSAWS data on the site or from the API, and none ingested
+	bash scripts/demo.sh up-no-jigsaws
 
 demo-down: ## Stop the compose stack (keeps volumes; add -v manually to wipe)
 	$(COMPOSE) --profile core --profile demo --profile observability down

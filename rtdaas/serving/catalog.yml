@@ -142,6 +142,7 @@ tables:
       - {name: processed_at, type: timestamp, description: Processing time.}
 
   - name: procedures.trials
+    dataset: jigsaws
     owner: data-platform@rtdaas
     description: One row per JIGSAWS trial (task, subject, repetition, skill level, GRS score, durations, file paths).
     freshness_target_hours: null
@@ -168,6 +169,7 @@ tables:
       - {name: pipeline_version, type: string, description: rtdaas version.}
 
   - name: procedures.kinematics
+    dataset: jigsaws
     owner: data-platform@rtdaas
     description: 30 Hz kinematics for all four manipulators (position, rotation, velocities, gripper) with the gesture label per sample.
     freshness_target_hours: null
@@ -187,6 +189,7 @@ tables:
       - {name: gesture, type: string, description: Gesture code (G1..G15) or null.}
 
   - name: procedures.gestures
+    dataset: jigsaws
     owner: data-platform@rtdaas
     description: One row per transcribed gesture segment with PSM path length, speed, gripper cycles and video motion energy.
     freshness_target_hours: null
@@ -212,6 +215,7 @@ tables:
       - {name: n_frames, type: long, description: Samples in the segment.}
 
   - name: procedures.frame_features
+    dataset: jigsaws
     owner: data-platform@rtdaas
     description: Per video frame intensity, motion energy and sharpness, aligned with kinematic samples.
     freshness_target_hours: null
@@ -230,6 +234,7 @@ tables:
       - {name: gesture, type: string, description: Gesture label at this frame.}
 
   - name: dq.check_results
+    dataset: mixed
     owner: data-platform@rtdaas
     description: Results of every data-quality check run (quality gate, dq_daily, local pipeline).
     freshness_target_hours: 26
@@ -291,6 +296,7 @@ tables:
       - {name: idle_fraction, type: double, description: Fraction of samples below the idle speed.}
       - {name: processed_at, type: timestamp, description: When the session row was computed.}
   - name: marts.gesture_skill_summary
+    dataset: jigsaws
     owner: data-platform@rtdaas
     description: JIGSAWS gesture statistics by task, gesture and skill level (replaced on every publish).
     freshness_target_hours: null
@@ -309,6 +315,7 @@ tables:
       - {name: mean_motion_energy, type: double, description: Mean video motion energy.}
       - {name: day, type: date, description: Date of the publish run.}
   - name: marts.check_results
+    dataset: mixed
     owner: data-platform@rtdaas
     description: dq.check_results as a day-partitioned mart.
     freshness_target_hours: 26
