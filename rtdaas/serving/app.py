@@ -8,6 +8,7 @@ mounted route is documented (and vice versa). Static UI files are served from ``
 from __future__ import annotations
 
 import functools
+import hashlib
 import logging
 import mimetypes
 import os
@@ -411,8 +412,10 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         return JSONResponse(job, status_code=202)
 
     # ---- UI ----------------------------------------------------------------
+    index_html = fingerprinted_index(STATIC_DIR)
+
     async def index(request: Request):
-        return FileResponse(STATIC_DIR / "index.html")
+        return HTMLResponse(index_html, headers=REVALIDATE)
 
     routes = [
         Route("/api/live", live),
@@ -452,7 +455,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None)
         Route("/docs", docs),
         Route("/metrics", prometheus),
         Route("/", index),
-        Mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static"),
+        Mount("/static", RevalidatedStaticFiles(directory=str(STATIC_DIR)), name="static"),
     ]
 
     middleware = [
@@ -645,6 +648,35 @@ SWAGGER_HTML = """<!doctype html>
 <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
 <script>window.onload=()=>{SwaggerUIBundle({url:'/openapi.json',dom_id:'#swagger-ui',deepLinking:true});};</script>
 </body></html>"""
+
+
+# Without this, browsers decide for themselves how long to reuse a file, and after an upgrade could
+# run a new page with an old script: the old router sent new links back to the sessions page.
+REVALIDATE = {"Cache-Control": "no-cache"}
+
+
+class RevalidatedStaticFiles(StaticFiles):
+    """Static files that browsers check before reusing: a 304 when unchanged."""
+
+    async def get_response(self, path: str, scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers.update(REVALIDATE)
+        return response
+
+
+def fingerprinted_index(static_dir: Path) -> str:
+    """``index.html`` with a hash of each local script and stylesheet in its URL.
+
+    A copy cached before the files were served with :data:`REVALIDATE` has no such URL, so it can
+    never be paired with a newer page.
+    """
+
+    def versioned(match: re.Match) -> str:
+        digest = hashlib.sha256((static_dir / match.group(1)).read_bytes()).hexdigest()[:12]
+        return f"/static/{match.group(1)}?v={digest}"
+
+    html = (static_dir / "index.html").read_text()
+    return re.sub(r"/static/([\w./-]+\.(?:js|css))", versioned, html)
 
 
 def documented_routes(app: Starlette) -> set[tuple[str, str]]:

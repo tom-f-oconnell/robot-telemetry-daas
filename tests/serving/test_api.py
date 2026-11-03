@@ -335,6 +335,28 @@ def test_meta_routes(client):
     assert client.get("/api/nope").status_code == 404
 
 
+def test_the_page_names_its_scripts_by_content_so_a_cached_one_cannot_be_reused(client):
+    """A new page with a cached old app.js sent new links to the sessions page."""
+    import hashlib
+
+    from rtdaas.serving.app import STATIC_DIR
+
+    page = client.get("/")
+    assert page.headers["cache-control"] == "no-cache"
+    for name in ("app.js", "styles.css"):
+        digest = hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:12]
+        assert f"/static/{name}?v={digest}" in page.text
+        served = client.get(f"/static/{name}?v={digest}")
+        assert served.status_code == 200 and served.headers["cache-control"] == "no-cache"
+    assert "https://cdn.plot.ly/" in page.text  # other sites' URLs are left alone
+
+
+def test_unchanged_static_files_revalidate_cheaply(client):
+    first = client.get("/static/app.js")
+    again = client.get("/static/app.js", headers={"If-None-Match": first.headers["etag"]})
+    assert again.status_code == 304
+
+
 def _robot_id(client):
     return client.get("/api/robots").json()["robots"][0]["robot_id"]
 
